@@ -8,15 +8,19 @@ import {
   LogOut,
   Layers,
   CheckCircle2,
-  FileText
+  FileText,
+  ShieldAlert,
+  AlertTriangle,
+  ShieldCheck
 } from 'lucide-react';
-import { Student, AttendanceRecord, StudentEvaluation, AppSettings } from '../types';
+import { Student, AttendanceRecord, StudentEvaluation, AppSettings, BehaviorViolation } from '../types';
 
 interface ParentPortalViewProps {
   student: Student;
   attendance: AttendanceRecord[];
   evaluations: StudentEvaluation[];
   settings: AppSettings;
+  violations?: BehaviorViolation[];
   isLoggedInStudent?: boolean;
   onLogout?: () => void;
 }
@@ -26,11 +30,15 @@ export const ParentPortalView: React.FC<ParentPortalViewProps> = ({
   attendance,
   evaluations,
   settings,
+  violations = [],
   isLoggedInStudent,
   onLogout
 }) => {
   const studentAttendance = attendance.filter(a => a.studentId === student.id);
   const studentEvaluations = evaluations.filter(e => e.studentId === student.id);
+  const studentViolations = violations.filter(
+    v => v.studentId === student.id && (v.showInPortal ?? true)
+  );
 
   const presentsCount = studentAttendance.filter(a => a.status === 'حاضر').length;
   const attendanceRate =
@@ -197,6 +205,85 @@ export const ParentPortalView: React.FC<ParentPortalViewProps> = ({
                   {latestEvaluation.recitationDetails.teacherNotes}
                 </div>
               )}
+            </div>
+          </div>
+        )}
+
+        {/* Behavioral & Pedagogical Guidance Section for Parents */}
+        {studentViolations.length > 0 && (
+          <div className="bg-[#064e3b]/60 border border-amber-500/40 rounded-[32px] p-6 space-y-4 shadow-xl backdrop-blur-md">
+            <div className="flex items-center justify-between pb-3 border-b border-[#065f46]">
+              <h3 className="text-base font-bold font-heading text-white flex items-center gap-2">
+                <ShieldAlert className="w-5 h-5 text-[#fbbf24]" />
+                <span>ملاحظات السلوك والتوجيه التربوي للحلقة ({studentViolations.length})</span>
+              </h3>
+              <span className="text-xs px-2.5 py-1 rounded-full bg-amber-500/20 text-[#fbbf24] border border-amber-500/30 font-bold">
+                متابعة مشتركة مع الأسرة
+              </span>
+            </div>
+
+            <div className="space-y-3">
+              {studentViolations.map(viol => {
+                const isResolved = viol.status === 'تم التوجيه والمعالجة';
+
+                return (
+                  <div
+                    key={viol.id}
+                    className="p-4 rounded-2xl bg-[#022c22] border border-[#065f46] space-y-2.5 text-xs"
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-white text-sm">
+                          {viol.violationType}
+                        </span>
+                        <span
+                          className={`text-[10px] px-2 py-0.5 rounded-full font-bold border ${
+                            viol.severity === 'تنبيه'
+                              ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
+                              : 'bg-amber-500/20 text-amber-300 border-amber-500/30'
+                          }`}
+                        >
+                          {viol.severity}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-2 text-[11px] text-[#86efac]/80">
+                        <span>تاريخ: {viol.date}</span>
+                        {isResolved ? (
+                          <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-bold flex items-center gap-1">
+                            <ShieldCheck className="w-3 h-3" />
+                            <span>تم التوجيه والمعالجة</span>
+                          </span>
+                        ) : (
+                          <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-bold">
+                            قيد المتابعة
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    {viol.description && (
+                      <div className="text-slate-200 leading-relaxed bg-[#064e3b]/30 p-2.5 rounded-xl border border-[#065f46]/50">
+                        <strong className="text-[#86efac]">توجيه الشيخ وتفاصيل الملاحظة: </strong>
+                        {viol.description}
+                      </div>
+                    )}
+
+                    {viol.actionTaken && (
+                      <div className="text-[#86efac]">
+                        <strong className="text-emerald-300">الإجراء المتخذ: </strong>
+                        {viol.actionTaken}
+                      </div>
+                    )}
+
+                    {viol.messageText && (
+                      <div className="text-slate-300 italic pt-1 border-t border-[#065f46]/60">
+                        "{viol.messageText}"
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}

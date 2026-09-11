@@ -24,6 +24,7 @@ import {
   ChatMessage,
   UserAccount,
   TeacherAccount,
+  BehaviorViolation,
   FullBackupData
 } from '../types';
 
@@ -227,6 +228,30 @@ export const INITIAL_STUDENTS: Student[] = [
   }
 ];
 
+// Initial Sample Behavior Violations
+export const INITIAL_VIOLATIONS: BehaviorViolation[] = [
+  {
+    id: 'viol-sample-1',
+    studentId: 'std-3',
+    studentName: 'عبدالرحمن الدوسري',
+    date: new Date().toISOString().split('T')[0],
+    time: '16:45',
+    violationType: 'الكلام الجانبي والتشويش أثناء التلاوة',
+    severity: 'تنبيه',
+    description: 'التحدث مع الزملاء أثناء ورد التسميع بالحلقة وتشتيت انتباه المجموعة.',
+    actionTaken: 'تنبيه شفهي وتوجيه تربوي مع تذكير بآداب مجلس القرآن الكريم.',
+    pointsDeducted: 1,
+    status: 'تم التوجيه والمعالجة',
+    parentNotified: true,
+    parentNotificationDate: new Date().toISOString().split('T')[0],
+    parentNotificationPhone: '0503344556',
+    messageText: 'السلام عليكم ورحمة الله وبركاته.. ولي أمر الطالب الفاضل عبدالرحمن حفظه الله، نحيطكم علماً بأنه تم توجيه الطالب اليوم برفق حول التحدث الجانبي أثناء التسميع، ونشكر كريم تعاونكم في حثه على أدب مجالس القرآن الكريم، بارك الله فيكم ونفع به.',
+    teacherName: 'محمد منتصر',
+    showInPortal: true,
+    createdAt: new Date().toISOString()
+  }
+];
+
 // LocalStorage helpers to provide instant offline-first sync
 const LS_KEYS = {
   STUDENTS: 'omran_students_data',
@@ -235,7 +260,8 @@ const LS_KEYS = {
   CRITERIA: 'omran_criteria_data',
   SETTINGS: 'omran_settings_data',
   CHATS: 'omran_chats_data',
-  TEACHERS: 'omran_teachers_data'
+  TEACHERS: 'omran_teachers_data',
+  VIOLATIONS: 'omran_violations_data'
 };
 
 export const getLocalData = <T>(key: string, fallback: T): T => {
@@ -625,6 +651,80 @@ export class OmranDataService {
     }
   }
 
+  // Load Behavior Violations
+  static async loadViolations(): Promise<BehaviorViolation[]> {
+    try {
+      const snap = await getDocs(collection(db, 'violations'));
+      if (!snap.empty) {
+        const list: BehaviorViolation[] = [];
+        snap.forEach(d => list.push(d.data() as BehaviorViolation));
+        list.sort((a, b) => new Date(b.createdAt || b.date).getTime() - new Date(a.createdAt || a.date).getTime());
+        setLocalData(LS_KEYS.VIOLATIONS, list);
+        return list;
+      }
+    } catch (e) {
+      console.warn('Firestore loadViolations error, fallback to local:', e);
+    }
+    const raw = localStorage.getItem(LS_KEYS.VIOLATIONS);
+    if (raw !== null) {
+      try {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) return parsed;
+      } catch {}
+    }
+    return [];
+  }
+
+  // Save Behavior Violation
+  static async saveViolation(violation: BehaviorViolation): Promise<void> {
+    const raw = localStorage.getItem(LS_KEYS.VIOLATIONS);
+    let localList: BehaviorViolation[] = raw ? JSON.parse(raw) : [];
+    const idx = localList.findIndex(v => v.id === violation.id);
+    if (idx >= 0) {
+      localList[idx] = violation;
+    } else {
+      localList.unshift(violation);
+    }
+    setLocalData(LS_KEYS.VIOLATIONS, localList);
+
+    try {
+      const cleanViolation = JSON.parse(JSON.stringify(violation));
+      await setDoc(doc(db, 'violations', violation.id), cleanViolation);
+    } catch (e) {
+      console.warn('Firestore saveViolation fallback to local:', e);
+    }
+  }
+
+  // Delete Behavior Violation
+  static async deleteViolation(violationId: string): Promise<void> {
+    const raw = localStorage.getItem(LS_KEYS.VIOLATIONS);
+    let localList: BehaviorViolation[] = raw ? JSON.parse(raw) : [];
+    const updated = localList.filter(v => v.id !== violationId);
+    setLocalData(LS_KEYS.VIOLATIONS, updated);
+
+    try {
+      await deleteDoc(doc(db, 'violations', violationId));
+    } catch (e) {
+      console.warn('Firestore deleteViolation fallback to local:', e);
+    }
+  }
+
+  static subscribeViolations(callback: (violations: BehaviorViolation[]) => void): () => void {
+    try {
+      return onSnapshot(collection(db, 'violations'), snap => {
+        const list: BehaviorViolation[] = [];
+        snap.forEach(d => list.push(d.data() as BehaviorViolation));
+        list.sort((a, b) => new Date(b.createdAt || b.date).getTime() - new Date(a.createdAt || a.date).getTime());
+        setLocalData(LS_KEYS.VIOLATIONS, list);
+        callback(list);
+      }, err => {
+        console.warn('Realtime violations listener notice:', err);
+      });
+    } catch (e) {
+      return () => {};
+    }
+  }
+
   // Find student by ID or name or phone directly (for portal access)
   static async findStudentByIdOrQuery(lookup: string): Promise<Student | null> {
     if (!lookup) return null;
@@ -790,7 +890,7 @@ export class OmranDataService {
 
   // Export Full Database (Complete & Lossless)
   static async exportFullBackup(): Promise<FullBackupData> {
-    const [students, attendance, evaluations, evaluationCriteria, settings, chatMessages, teachers] =
+    const [students, attendance, evaluations, evaluationCriteria, settings, chatMessages, teachers, violations] =
       await Promise.all([
         this.loadStudents(),
         this.loadAttendance(),
@@ -798,11 +898,12 @@ export class OmranDataService {
         this.loadCriteria(),
         this.loadSettings(),
         this.loadChats(),
-        this.loadTeachers()
+        this.loadTeachers(),
+        this.loadViolations()
       ]);
 
     return {
-      version: '1.3.0',
+      version: '1.4.0',
       exportDate: new Date().toISOString(),
       students,
       attendance,
@@ -811,6 +912,7 @@ export class OmranDataService {
       settings,
       chatMessages,
       teachers,
+      violations,
       userAccounts: [
         {
           id: 'admin-1',
@@ -830,6 +932,7 @@ export class OmranDataService {
     evaluationsCount: number;
     criteriaCount: number;
     teachersCount: number;
+    violationsCount?: number;
   }> {
     if (!backup || typeof backup !== 'object') {
       throw new Error('ملف النسخة الاحتياطية غير صالح أو تالف.');
@@ -846,6 +949,7 @@ export class OmranDataService {
     const teachersList = Array.isArray(backup.teachers) && backup.teachers.length > 0
       ? backup.teachers
       : INITIAL_TEACHERS;
+    const violationsList = Array.isArray(backup.violations) ? backup.violations : [];
 
     // 1. Immediately Save to LocalStorage for zero-delay offline reliability
     setLocalData(LS_KEYS.STUDENTS, studentsList);
@@ -855,6 +959,9 @@ export class OmranDataService {
     setLocalData(LS_KEYS.SETTINGS, settingsData);
     setLocalData(LS_KEYS.CHATS, chatList);
     setLocalData(LS_KEYS.TEACHERS, teachersList);
+    if (violationsList.length > 0) {
+      setLocalData(LS_KEYS.VIOLATIONS, violationsList);
+    }
 
     // 2. Persist to Firestore concurrently
     try {
@@ -875,6 +982,9 @@ export class OmranDataService {
       for (const t of teachersList) {
         if (t?.id) promises.push(setDoc(doc(db, 'teachers', t.id), t));
       }
+      for (const v of violationsList) {
+        if (v?.id) promises.push(setDoc(doc(db, 'violations', v.id), v));
+      }
       if (settingsData) {
         promises.push(setDoc(doc(db, 'settings', 'main'), settingsData));
       }
@@ -889,7 +999,8 @@ export class OmranDataService {
       attendanceCount: attendanceList.length,
       evaluationsCount: evaluationsList.length,
       criteriaCount: criteriaList.length,
-      teachersCount: teachersList.length
+      teachersCount: teachersList.length,
+      violationsCount: violationsList.length
     };
   }
 }

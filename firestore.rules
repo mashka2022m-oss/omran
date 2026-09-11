@@ -68,6 +68,14 @@ service cloud.firestore {
       allow create, update: if isValidId(chatId);
       allow delete: if isValidId(chatId);
     }
+
+    // Behavioral Violations & Pedagogical Guidance
+    match /violations/{violationId} {
+      allow read: if true;
+      allow create, update: if isValidId(violationId)
+        && request.resource.data.studentId is string;
+      allow delete: if isValidId(violationId);
+    }
   }
 }
 

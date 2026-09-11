@@ -16,7 +16,8 @@ import {
   Volume2,
   UserPlus,
   ShieldCheck,
-  RefreshCw
+  RefreshCw,
+  ShieldAlert
 } from 'lucide-react';
 import { Student, AttendanceRecord, StudentEvaluation, AppSettings, TeacherAccount } from '../../types';
 
@@ -336,6 +337,19 @@ export const HomeTab: React.FC<HomeTabProps> = ({
                   <span>إدارة الطلاب وتسجيلهم</span>
                 </div>
                 <ArrowLeft className="w-3.5 h-3.5 text-[#86efac]" />
+              </button>
+
+              <button
+                onClick={() => onNavigateTab('behavior')}
+                className="w-full p-3 rounded-2xl bg-[#022c22]/70 hover:bg-[#022c22] border border-amber-500/30 flex items-center justify-between text-right transition-all text-xs font-bold text-[#f0f9f6] cursor-pointer"
+              >
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-xl bg-amber-500/20 text-amber-300 flex items-center justify-center border border-amber-500/40">
+                    <ShieldAlert className="w-4 h-4" />
+                  </div>
+                  <span>المخالفات والتوجيهات السلوكية</span>
+                </div>
+                <ArrowLeft className="w-3.5 h-3.5 text-amber-400" />
               </button>
 
               <button

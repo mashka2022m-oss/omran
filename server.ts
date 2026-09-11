@@ -17,6 +17,11 @@ const PORT = 3000;
 
 app.use(express.json({ limit: "10mb" }));
 
+// Health check route
+app.get("/api/health", (req, res) => {
+  res.json({ status: "ok" });
+});
+
 // Initialize Google GenAI
 const ai = new GoogleGenAI({
   apiKey: process.env.GEMINI_API_KEY || "",
@@ -109,7 +114,7 @@ app.post("/api/gemini/generate-plan", async (req, res) => {
 }`;
 
     const response = await ai.models.generateContent({
-      model: "gemini-3.7-flash",
+      model: "gemini-3.8-flash",
       contents: prompt,
       config: {
         responseMimeType: "application/json",
@@ -180,7 +185,7 @@ app.post("/api/gemini/evaluate-progress", async (req, res) => {
 }`;
 
     const response = await ai.models.generateContent({
-      model: "gemini-3.7-flash",
+      model: "gemini-3.8-flash",
       contents: prompt,
       config: {
         responseMimeType: "application/json",
@@ -203,29 +208,109 @@ app.post("/api/gemini/evaluate-progress", async (req, res) => {
   }
 });
 
-// Helper: Calculate Smart Next-Day Assignment based on 3-day history & Quran logic
-function calculateSmart3DayPlan(student: any, recentEvaluations: any[], todayRecitation?: any) {
-  // Determine current position (from today's recitation if provided, otherwise student profile)
-  let currentSurahNum = Number(todayRecitation?.todayNewToSurah || student.currentSurah || 78);
-  let currentEndAyah = Number(todayRecitation?.todayNewToAyah || student.currentAyah || 1);
-  
+// Generate Polite & Pedagogical Violation Message for Parent via Gemini
+app.post("/api/gemini/generate-violation-message", async (req, res) => {
+  try {
+    const { studentName, violationType, severity, description, actionTaken, teacherName, halaqahName } = req.body || {};
+
+    const fallbackMessage = `السلام عليكم ورحمة الله وبركاته، ولي أمر الطالب الفاضل ${studentName || 'الكريم'} حفظكم الله..\nنود إحاطة عنايتكم بأنه لوحظ على الطالب اليوم في الحلقة (${violationType || 'ملاحظة سلوكية'})، وتم توجيهه تربوياً بحكمة (${actionTaken || 'تنبيه شفهي وتذكير بآداب الحلقة'}).\nشاكرين لكم عظيم حرصكم ومتابعتكم المستمرة في البيت، ونحن شركاء في بناء جيل قرآني متميز خلقاً وعلماً.\nمع تحيات: ${teacherName || 'معلم الحلقة'} - ${halaqahName || 'حلقة تحفيظ القرآن الكريم'}`;
+
+    if (!ai) {
+      return res.json({ message: fallbackMessage });
+    }
+
+    const prompt = `أنت مستشار تربوي خبير في حلقات تحفيظ القرآن الكريم والمدارس القرآنية.
+المطلوب منك صياغة رسالة واتساب / رسالة نصية تربوية راقية جداً ومهذبة يرسلها معلم الحلقة إلى ولي أمر الطالب لإشعاره بمخالفة أو ملاحظة سلوكية حدثت اليوم في الحلقة والتنسيق معه لخير الطالب.
+
+بيانات الملاحظة:
+- اسم الطالب: ${studentName || 'الطالب'}
+- اسم الحلقة: ${halaqahName || 'حلقة القرآن الكريم'}
+- اسم المعلم: ${teacherName || 'معلم الحلقة'}
+- نوع الملاحظة/المخالفة: ${violationType || 'ملاحظة سلوكية'}
+- مستوى الشدة: ${severity || 'تنبيه'}
+- تفاصيل ما حدث وتوجيه الشيخ: ${description || 'توجيه سلوكي أثناء الحلقة'}
+- الإجراء المتخذ: ${actionTaken || 'تنبيه وتوجيه'}
+
+إرشادات الصياغة:
+1. البداية بتحية إسلامية رقيقة والدعاء لولي الأمر وللطالب بالبركة والتوفيق.
+2. استخدام أسلوب حكيم يجمع بين اللين والرفق التربوي دون جرح مشاعر الطالب أو ولي أمره.
+3. التذكير بعظمة مجلس القرآن الكريم وآدابه، وبيان أن هذه الملاحظة نابعة من حب المعلم للطالب وحرصه على أدبه ونبوغه.
+4. بيان الملاحظة بوضوح وإيجاز وما تم اتخاذه بلطف، مع دعوة ولي الأمر للحديث الودي مع ابنه وتشجيعه في المنزل.
+5. تجنب التوبيخ أو الشكوى السلبية نهائياً، واعتمد لغة الشراكة والتعاون الإيجابي لمصلحة الابن.
+6. اختم بالدعاء والتوقيع باسم المعلم والحلقة.
+7. أرجع نص الرسالة النهائي فقط بدون مقدمات خارجية أو أقواس.`;
+
+    const response = await ai.models.generateContent({
+      model: "gemini-3.8-flash",
+      contents: prompt,
+    });
+
+    const generated = response.text?.trim() || fallbackMessage;
+    res.json({ message: generated });
+  } catch (error) {
+    console.error("Generate violation message error:", error);
+    const { studentName, violationType, actionTaken, teacherName, halaqahName } = req.body || {};
+    const fallbackMessage = `السلام عليكم ورحمة الله وبركاته، ولي أمر الطالب الفاضل ${studentName || 'الكريم'} حفظكم الله..\nنود إحاطة عنايتكم بأنه لوحظ على الطالب اليوم في الحلقة (${violationType || 'ملاحظة سلوكية'})، وتم توجيهه تربوياً بحكمة (${actionTaken || 'تنبيه شفهي وتذكير بآداب الحلقة'}).\nشاكرين لكم عظيم حرصكم ومتابعتكم المستمرة في البيت، ونحن شركاء في بناء جيل قرآني متميز خلقاً وعلماً.\nمع تحيات: ${teacherName || 'معلم الحلقة'} - ${halaqahName || 'حلقة تحفيظ القرآن الكريم'}`;
+    res.json({ message: fallbackMessage });
+  }
+});
+
+// Helper: Calculate Smart Next-Day Assignment based on last actual recitation records (bypassing trips, holidays, and gap days)
+function calculateSmartAssignmentFromRecords(student: any, recentEvaluations: any[], todayRecitation?: any) {
+  // 1. Filter evaluations to get actual recitation records only (ignoring empty days, sudden holidays, or trips where no recitation occurred)
+  const actualRecitationRecords = (recentEvaluations || [])
+    .filter((e: any) => {
+      const hasItem = e.recitationDetails?.todayNewItem?.surahNumber ||
+        e.recitationDetails?.todayReviewItem?.surahNumber ||
+        e.recitationDetails?.newMemorizationAchieved ||
+        (e.criteriaValues && Object.keys(e.criteriaValues).length > 0);
+      return Boolean(hasItem);
+    })
+    .sort((a: any, b: any) => (b.date || "").localeCompare(a.date || ""));
+
+  const lastActualRecord = actualRecitationRecords[0];
+
+  // 2. Determine student's current/last completed recitation position
+  let currentSurahNum = 78;
+  let currentEndAyah = 1;
+
+  if (todayRecitation?.todayNewToSurah) {
+    // Current session was just recorded today
+    currentSurahNum = Number(todayRecitation.todayNewToSurah);
+    currentEndAyah = Number(todayRecitation.todayNewToAyah || 1);
+  } else if (todayRecitation?.todayNewSurah) {
+    currentSurahNum = Number(todayRecitation.todayNewSurah);
+    currentEndAyah = Number(todayRecitation.todayNewToAyah || todayRecitation.todayNewFromAyah || 1);
+  } else if (lastActualRecord?.recitationDetails?.todayNewItem?.toSurahNumber) {
+    // Take the last actual session record (even if from last week or before an unexpected trip/vacation)
+    currentSurahNum = Number(lastActualRecord.recitationDetails.todayNewItem.toSurahNumber);
+    currentEndAyah = Number(lastActualRecord.recitationDetails.todayNewItem.toAyah || 1);
+  } else if (lastActualRecord?.recitationDetails?.todayNewItem?.surahNumber) {
+    currentSurahNum = Number(lastActualRecord.recitationDetails.todayNewItem.surahNumber);
+    currentEndAyah = Number(lastActualRecord.recitationDetails.todayNewItem.toAyah || lastActualRecord.recitationDetails.todayNewItem.fromAyah || 1);
+  } else if (student.currentSurah) {
+    currentSurahNum = Number(student.currentSurah);
+    currentEndAyah = Number(student.currentAyah || 1);
+  }
+
   if (!currentSurahNum || currentSurahNum < 1 || currentSurahNum > 114) {
     currentSurahNum = 78;
   }
-  
+
   const curSurahInfo = getSurahInfo(currentSurahNum);
   const totalAyahs = curSurahInfo.numberOfAyahs;
-  
-  // Analyze last 3 evaluations to determine pace & strength
-  const evals3 = (recentEvaluations || []).slice(0, 3);
+  currentEndAyah = Math.min(Math.max(1, currentEndAyah), totalAyahs);
+
+  // 3. Analyze the last N actual recitation records for pace and strength
+  const lastNRecords = actualRecitationRecords.slice(0, 3);
   let highPerformance = true;
   let totalScoreSum = 0;
   let scoreCount = 0;
 
-  evals3.forEach(ev => {
+  lastNRecords.forEach((ev: any) => {
     if (ev.criteriaValues) {
       Object.values(ev.criteriaValues).forEach((val: any) => {
-        if (typeof val === 'number') {
+        if (typeof val === "number") {
           totalScoreSum += val;
           scoreCount++;
         }
@@ -246,15 +331,14 @@ function calculateSmart3DayPlan(student: any, recentEvaluations: any[], todayRec
     step = Math.max(step - 2, 3);
   }
 
-  // Calculate Next Day's New Memorization
+  // 4. Calculate Next Session's New Memorization Portion
   let nextNewSurah = currentSurahNum;
   let nextNewFromAyah = currentEndAyah + 1;
   let nextNewToSurah = currentSurahNum;
   let nextNewToAyah = currentEndAyah + step;
 
   if (nextNewFromAyah > totalAyahs) {
-    // Current surah completed! Move to next surah (or previous in descending Juz 'Amma sequence)
-    // Most halaqat proceed either 78 -> 114 or 114 -> 1 or 1 -> 114
+    // Current surah completed! Move to next surah in sequence
     const nextSurahId = currentSurahNum < 114 ? currentSurahNum + 1 : 1;
     const nextInfo = getSurahInfo(nextSurahId);
     nextNewSurah = nextSurahId;
@@ -268,30 +352,29 @@ function calculateSmart3DayPlan(student: any, recentEvaluations: any[], todayRec
   const nextStartInfo = getSurahInfo(nextNewSurah);
   const nextEndInfo = getSurahInfo(nextNewToSurah);
 
-  const formattedNew = nextNewSurah === nextNewToSurah && nextNewFromAyah === 1 && nextNewToAyah >= nextStartInfo.numberOfAyahs
-    ? `سورة ${nextStartInfo.name} كاملة (الآيات 1 - ${nextStartInfo.numberOfAyahs})`
-    : `سورة ${nextStartInfo.name}: من الآية (${nextNewFromAyah}) إلى الآية (${nextNewToAyah})`;
+  const formattedNew =
+    nextNewSurah === nextNewToSurah && nextNewFromAyah === 1 && nextNewToAyah >= nextStartInfo.numberOfAyahs
+      ? `سورة ${nextStartInfo.name} كاملة (الآيات 1 - ${nextStartInfo.numberOfAyahs})`
+      : `سورة ${nextStartInfo.name}: من الآية (${nextNewFromAyah}) إلى الآية (${nextNewToAyah})`;
 
-  // Calculate Next Day's Review (Covers the last 3 days of new recitation + previous surahs)
+  // 5. Calculate Review
   let revSurah = currentSurahNum;
   let revFrom = 1;
   let revTo = currentEndAyah;
   const revInfo = getSurahInfo(revSurah);
-
   const formattedReview = `مراجعة صغرى: سورة ${revInfo.name} من الآية (${revFrom}) إلى الآية (${revTo})`;
 
-  const daysCount = evals3.length;
-  const analysisText = daysCount >= 3
-    ? `بناءً على دراسة سجلات الطالب للأيام الثلاثة الماضية (${evals3.map(e => e.date).join(', ')}): أظهر الطالب التزاماً بمعدل إتقان (${avgScore >= 8.5 ? "ممتاز" : "جيد"}) مع وتيرة حفظ مطردة. تم ضبط المقدار الجديد لغد ليتناسب مع سرعة استيعابه وتثبيت ما تم حفظه مؤخراً.`
-    : daysCount > 0
-    ? `بناءً على دراسة التسميعات المسجلة للطالب: تم حساب خطة الغد تلقائياً لمواصلة سورة ${nextStartInfo.name} مع ربط وتثبيت الآيات السابقة.`
-    : `تم وضع خطة الغد وفق المستوى الأكاديمي للطالب (${student.level || "متوسط"}) ومعدل حفظه اليومي المقرر.`;
+  const recordsCount = lastNRecords.length;
+  const analysisText = recordsCount > 0
+    ? `تمت المتابعة وتحديد المقرر بناءً على آخر تسجيلات التسميع الفعلية للبطل (${lastNRecords.map((e: any) => e.date).join("، ")})${actualRecitationRecords.length < (recentEvaluations || []).length ? " (متجاوزاً أيام الرحلات أو الإجازات السابقة التي لم يحصل فيها تسميع)" : ""}: أظهر الطالب معدل إتقان (${avgScore >= 8.5 ? "ممتاز" : "جيد"})، وتم احتساب المقرر انطلاقاً من آخر موضع أنجزه فعلياً في سورة ${curSurahInfo.name} (آية ${currentEndAyah}).`
+    : `تم تحديد المقرر القادم بناءً على آخر موضع مسجل في ملف الطالب (سورة ${curSurahInfo.name} آية ${currentEndAyah}) متجاوزاً أي فترات انقطاع أو إجازات سابقة.`;
 
   return {
     threeDayAnalysis: analysisText,
+    recordsAnalysis: analysisText,
     pedagogicalReasoning: highPerformance
-      ? `نظراً لجودة الحفظ وحسن الأداء في الأيام الماضية، يستطيع الطالب إنجاز (${nextNewToAyah - nextNewFromAyah + 1}) آيات جديدة مع تثبيت الآيات السابقة.`
-      : `تم تقليص وتيرة الجديد للتركيز على إتقان المخارج وضبط الآيات السابقة قبل الانتقال للمقاطع التالية.`,
+      ? `نظراً لجودة الحفظ وحسن الأداء في آخر تسجيلات التسميع الفعلية، يستطيع الطالب إنجاز (${nextNewToAyah - nextNewFromAyah + 1}) آيات جديدة مع ربط وتثبيت ما سبق.`
+      : `تم ضبط وتيرة الجديد للتركيز على إتقان المخارج والتثبيت قبل الانتقال للآيات التالية.`,
     tomorrowNew: {
       surahNumber: nextNewSurah,
       surahName: nextStartInfo.name,
@@ -299,7 +382,7 @@ function calculateSmart3DayPlan(student: any, recentEvaluations: any[], todayRec
       toSurahNumber: nextNewToSurah,
       toSurahName: nextEndInfo.name,
       toAyah: nextNewToAyah,
-      formattedText: formattedNew
+      formattedText: formattedNew,
     },
     tomorrowReview: {
       type: "مراجعة صغرى (السور القريبة)",
@@ -309,15 +392,15 @@ function calculateSmart3DayPlan(student: any, recentEvaluations: any[], todayRec
       toSurahNumber: revSurah,
       toSurahName: revInfo.name,
       toAyah: revTo,
-      formattedText: formattedReview
+      formattedText: formattedReview,
     },
     suggestedSheikh: student.level === "ضعيف" ? "الشيخ محمد صديق المنشاوي (المصحف المعلم)" : "الشيخ محمود خليل الحصري (المصحف المعلم)",
-    tajweedFocus: "مراعاة أحكام النون الساكنة والتنوين والمدود الطبيعية",
-    dailyHomeNote: "الاستماع للشيخ المعلم 3 مرات وتكرار الآيات قبل النوم والتسميع على ولي الأمر."
+    tajweedFocus: "مراعاة أحكام النون الساكنة والتنوين والمدود الطبيعية والوصل",
+    dailyHomeNote: "الاستماع للشيخ المعلم 3 مرات وتكرار الآيات قبل النوم والتسميع على ولي الأمر.",
   };
 }
 
-// 2.5 Calculate Smart Next-Day Assignment studying past 3 days & records
+// 2.5 Calculate Smart Next-Day Assignment studying past actual records (bypassing trips & holidays)
 app.post("/api/gemini/calculate-smart-assignment", async (req, res) => {
   try {
     const { student, recentEvaluations, attendanceRecords, todayRecitation } = req.body;
@@ -325,67 +408,76 @@ app.post("/api/gemini/calculate-smart-assignment", async (req, res) => {
       return res.status(400).json({ error: "بيانات الطالب مطلوبة" });
     }
 
-    const fallbackResult = calculateSmart3DayPlan(student, recentEvaluations || [], todayRecitation);
+    const fallbackResult = calculateSmartAssignmentFromRecords(student, recentEvaluations || [], todayRecitation);
 
     if (!process.env.GEMINI_API_KEY) {
       return res.json({ result: fallbackResult });
     }
 
     // Determine current point
-    const curSurah = getSurahInfo(todayRecitation?.todayNewToSurah || student.currentSurah || 78);
-    const curAyah = todayRecitation?.todayNewToAyah || student.currentAyah || 1;
+    const curSurah = getSurahInfo(fallbackResult.tomorrowNew.surahNumber || student.currentSurah || 78);
+    const startAyah = fallbackResult.tomorrowNew.fromAyah || 1;
 
-    // Summarize past 3 evaluations for Gemini prompt
-    const past3 = (recentEvaluations || []).slice(0, 3).map((e: any) => ({
-      date: e.date,
-      newMemorization: e.recitationDetails?.newMemorizationAchieved || "غير محدد",
-      review: e.recitationDetails?.reviewAchieved || "غير محدد",
-      criteriaScores: e.criteriaValues || {},
-      teacherNotes: e.recitationDetails?.teacherNotes || "لا توجد"
-    }));
+    // Summarize past actual records for Gemini prompt
+    const actualRecitationRecords = (recentEvaluations || [])
+      .filter((e: any) => {
+        const hasItem = e.recitationDetails?.todayNewItem?.surahNumber ||
+          e.recitationDetails?.todayReviewItem?.surahNumber ||
+          e.recitationDetails?.newMemorizationAchieved ||
+          (e.criteriaValues && Object.keys(e.criteriaValues).length > 0);
+        return Boolean(hasItem);
+      })
+      .slice(0, 3)
+      .map((e: any) => ({
+        date: e.date,
+        newMemorization: e.recitationDetails?.newMemorizationAchieved || e.recitationDetails?.todayNewItem?.formattedText || "غير محدد",
+        review: e.recitationDetails?.reviewAchieved || e.recitationDetails?.todayReviewItem?.formattedText || "غير محدد",
+        criteriaScores: e.criteriaValues || {},
+        teacherNotes: e.recitationDetails?.teacherNotes || "لا توجد"
+      }));
 
-    const prompt = `أنت الموجه التربوي والمقرئ الذكي لحلقات الصحابي الزبير بن العوام رضي الله عنه.
-المطلوب منك: دراسة أداء الطالب وسجلاته لآخر 3 أيام بالتفصيل، ثم حساب ما يجب أن يسمعه غداً تلقائياً (حفظ جديد + مراجعة) بدقة قرآنية ملزمة 100%.
+    const prompt = `أنت الموجه التربوي والمقرئ الذكي لحلقات تحفيظ القرآن الكريم.
+المطلوب منك: دراسة أداء الطالب وسجلاته بناءً على **آخر تسجيلات التسميع الفعلية للبطل** (متجاوزاً تماماً أيام الرحلات أو الإجازات المفاجئة التي لم يحصل فيها تسميع)، ثم حساب ما يجب أن يسمعه في الجلسة القادمة تلقائياً (حفظ جديد + مراجعة) بدقة قرآنية ملزمة 100%.
 
 بيانات الطالب:
 - اسم الطالب: ${student.name} (العمر: ${student.age} سنة، المستوى: ${student.level})
 - طاقة الحفظ اليومي: ${student.dailyNewTarget}
 - طاقة المراجعة: ${student.dailyReviewTarget}
-- موضع الوقوف الحالي: سورة ${curSurah.name} (رقم السورة: ${curSurah.number}، إجمالي آياتها: ${curSurah.numberOfAyahs} آية فقط، يقف عند الآية ${curAyah})
+- موضع الوقوف الفعلي الأخير: سورة ${curSurah.name} (رقم السورة: ${curSurah.number}، إجمالي آياتها: ${curSurah.numberOfAyahs} آية فقط)
 - ما سمعه الطالب اليوم بالتفصيل (إن وجد): ${JSON.stringify(todayRecitation || {})}
 
-سجل التسميعات والتقييمات لآخر 3 أيام:
-${JSON.stringify(past3, null, 2)}
+سجل آخر تسجيلات التسميع الفعلية للطالب (المعتمدة بعد استبعاد فترات الانقطاع والرحلات):
+${JSON.stringify(actualRecitationRecords, null, 2)}
 
 قواعد قرآنية وتربوية صارمة:
 1. إجمالي آيات سورة ${curSurah.name} هو ${curSurah.numberOfAyahs} آية فقط. لا تتجاوز هذا الرقم أبداً.
-2. احسب ما سيبدأ به غداً في الحفظ الجديد من الآية التالية مباشرة (مثلاً: إذا كان يقف عند الآية ${curAyah}، يبدأ غداً من الآية ${curAyah < curSurah.numberOfAyahs ? curAyah + 1 : 1}).
-3. إذا انتهت السورة الحالية، انتقل للسورة التالية في ترتيب المصحف (أو الجزء) من الآية 1.
-4. حدد ورد المراجعة لغد (مراجعة صغرى لآيات الأيام الثلاثة الأخيرة أو مراجعة سورة سابقة للتثبيت).
-5. قدّم تحليلاً تربوياً لأداء الطالب خلال الأيام الثلاثة الماضية ونقاط قوته.
+2. احسب المقرر الجديد انطلاقاً من الموضع الفعلي الأخير متجاوزاً أي أيام انقطاع أو رحلات.
+3. إذا انتهت السورة الحالية، انتقل للسورة التالية في ترتيب المصحف من الآية 1.
+4. حدد ورد المراجعة لتثبيت ما تم حفظه مؤخراً.
+5. وضّح في التحليل التربوي أن المتابعة تمت على أساس آخر التسجيلات الفعلية للبطل.
 
 أخرج النتيجة بصيغة JSON فقط:
 {
-  "threeDayAnalysis": "تحليل تربوي دقيق لدراسة أداء الطالب لآخر 3 أيام وسجلاته السابقة",
-  "pedagogicalReasoning": "السبب التعليمي لحساب مقدار ورد الغد",
+  "threeDayAnalysis": "تحليل تربوي دقيق لدراسة أداء الطالب بناءً على آخر تسجيلات التسميع الفعلية متجاوزاً أي رحلات أو إجازات",
+  "pedagogicalReasoning": "السبب التعليمي لحساب مقدار ورد الجلسة القادمة",
   "tomorrowNew": {
-    "surahNumber": ${curSurah.number},
-    "surahName": "${curSurah.name}",
-    "fromAyah": ${curAyah < curSurah.numberOfAyahs ? curAyah + 1 : 1},
-    "toSurahNumber": ${curSurah.number},
-    "toSurahName": "${curSurah.name}",
-    "toAyah": ${Math.min(curAyah + 8, curSurah.numberOfAyahs)},
-    "formattedText": "نص التسميع المنسق للحفظ الجديد لغد"
+    "surahNumber": ${fallbackResult.tomorrowNew.surahNumber},
+    "surahName": "${fallbackResult.tomorrowNew.surahName}",
+    "fromAyah": ${fallbackResult.tomorrowNew.fromAyah},
+    "toSurahNumber": ${fallbackResult.tomorrowNew.toSurahNumber},
+    "toSurahName": "${fallbackResult.tomorrowNew.toSurahName}",
+    "toAyah": ${fallbackResult.tomorrowNew.toAyah},
+    "formattedText": "${fallbackResult.tomorrowNew.formattedText}"
   },
   "tomorrowReview": {
     "type": "مراجعة صغرى (السور القريبة)",
-    "surahNumber": ${curSurah.number},
-    "surahName": "${curSurah.name}",
-    "fromAyah": 1,
-    "toSurahNumber": ${curSurah.number},
-    "toSurahName": "${curSurah.name}",
-    "toAyah": ${curAyah},
-    "formattedText": "نص ورد المراجعة لغد"
+    "surahNumber": ${fallbackResult.tomorrowReview.surahNumber},
+    "surahName": "${fallbackResult.tomorrowReview.surahName}",
+    "fromAyah": ${fallbackResult.tomorrowReview.fromAyah},
+    "toSurahNumber": ${fallbackResult.tomorrowReview.toSurahNumber},
+    "toSurahName": "${fallbackResult.tomorrowReview.toSurahName}",
+    "toAyah": ${fallbackResult.tomorrowReview.toAyah},
+    "formattedText": "${fallbackResult.tomorrowReview.formattedText}"
   },
   "suggestedSheikh": "اسم الشيخ المقترح للاستماع له",
   "tajweedFocus": "الحكم التجويدي المطلوب التركيز عليه",
@@ -393,7 +485,7 @@ ${JSON.stringify(past3, null, 2)}
 }`;
 
     const response = await ai.models.generateContent({
-      model: "gemini-3.7-flash",
+      model: "gemini-3.8-flash",
       contents: prompt,
       config: {
         responseMimeType: "application/json",
@@ -405,7 +497,7 @@ ${JSON.stringify(past3, null, 2)}
     res.json({ result: { ...fallbackResult, ...result } });
   } catch (error) {
     console.error("Gemini calculate-smart-assignment error:", error);
-    const fallbackResult = calculateSmart3DayPlan(req.body?.student || {}, req.body?.recentEvaluations || [], req.body?.todayRecitation);
+    const fallbackResult = calculateSmartAssignmentFromRecords(req.body?.student || {}, req.body?.recentEvaluations || [], req.body?.todayRecitation);
     res.json({ result: fallbackResult });
   }
 });
@@ -427,6 +519,29 @@ app.post("/api/gemini/generate-whatsapp-message", async (req, res) => {
     const dailyNote = student.aiPlan?.currentDailyAssignment?.dailyNote || "الاستماع للقارئ وتكرار الورد 3 مرات قبل النوم.";
 
     if (!process.env.GEMINI_API_KEY) {
+      if (attendanceStatus === "غائب") {
+        const absentMsg = `السلام عليكم ورحمة الله وبركاته 🌿
+حياكم الله ولي أمر بطلنا الغالي / *${student.name}* حفظكم الله ورعاكم..
+
+افتقدنا بطلنا اليوم في حلقة القرآن الكريم، وعسى المانع خيراً إن شاء الله وطمئنونا عليه 🌸
+مكان البطل في الحلقة محفوظ ومكانه بيننا غالٍ، ونحن بشوق كبير لرؤيته وإشراقة وجهه وسماع تلاوته العذبة في الجلسة القادمة بإذن الله لمواصلة تميزه وإنجازه المبارك.
+
+نسأل الله العظيم أن يحفظه ويبارك فيه ويجعله قرة عين لكم 🤲
+معلم الحلقة: *${teacherName || "الشيخ محمد منتصر"}* - *${halaqahName || "حلقة القرآن الكريم"}*`;
+        return res.json({ message: absentMsg });
+      }
+
+      if (attendanceStatus === "معتذر") {
+        const excuseMsg = `السلام عليكم ورحمة الله وبركاته 🌿
+حياكم الله ولي أمر بطلنا النجيب / *${student.name}* حفظكم الله..
+
+وصلنا عذركم المقبول لعدم تمكن البطل من حضور حلقة اليوم، شكر الله لكم حرصكم وتواصلكم، ونسأل الله له تمام العافية والتوفيق 🌸
+نحن في انتظار لقائه وسماع تلاوته الطيبة في الجلسة القادمة بإذن الله تعالى.
+
+مع تحيات معلم الحلقة: *${teacherName || "الشيخ محمد منتصر"}* - *${halaqahName || "حلقة القرآن الكريم"}*`;
+        return res.json({ message: excuseMsg });
+      }
+
       let defaultMsg = `السلام عليكم ورحمة الله وبركاته 🌿\n`;
       defaultMsg += `تحية مباركة لولي أمر الطالب النجيب / *${student.name}*\n`;
       defaultMsg += `نشارككم التقرير اليومي لـ *${halaqahName || "حلقة القرآن الكريم"}*:\n\n`;
@@ -453,6 +568,30 @@ app.post("/api/gemini/generate-whatsapp-message", async (req, res) => {
       return res.json({ message: defaultMsg });
     }
 
+    if (attendanceStatus === "غائب") {
+      const absentPrompt = `أنت معلم ومربٍ في حلقة تحفيظ القرآن الكريم.
+المطلوب صياغة رسالة واتساب قصيرة وبسيطة، دافئة جداً ولطيفة وغير رسمية لولي أمر طالب غاب اليوم عن الحلقة.
+اسم الطالب: ${student.name}
+اسم ولي الأمر: ${student.parentName || "ولي أمر الطالب"}
+اسم الحلقة: ${halaqahName || "حلقة القرآن الكريم"}
+اسم المعلم: ${teacherName || "الشيخ محمد منتصر"}
+
+شروط وإرشادات الصياغة الصارمة:
+1. الرسالة يجب ألا تكون إشعاراً إدارياً جافاً (ممنوع تماماً صياغة مثل: "إعلام لولي الأمر أن ابنه غائب" أو جداول ومصطلحات إدارية).
+2. صغ الرسالة بأسلوب تربوي لطيف وأبوي يسأل عن البطل ويطمئن عليه مثل: "لماذا غاب البطل اليوم؟ افتقدنا بطلنا اليوم في حلقة القرآن الكريم وعسى المانع خيراً وطمئنونا عليه".
+3. بيّن أن مكان البطل في الحلقة محفوظ ومكانه بيننا غالٍ، ونحن بشوق كبير لرؤيته في الجلسة القادمة.
+4. ادعُ له بالبركة والحفظ ولأسرته الكريمة.
+5. نسق الرسالة بعلامات الواتساب (*عريض*) وإيموجيز لطيفة.
+6. أخرج نص الرسالة فقط بدون أي مقدمات أو تعليقات خارجية.`;
+
+      const response = await ai.models.generateContent({
+        model: "gemini-3.8-flash",
+        contents: absentPrompt,
+      });
+
+      return res.json({ message: response.text?.trim() });
+    }
+
     const prompt = `أنت المعلم المشرف على حلقة تحفيظ القرآن الكريم.
 المطلوب صياغة رسالة واتساب مفصلة وراقية، إسلامية، ومحفزة جداً لولي أمر الطالب باللغة العربية مع تنسيق علامات الواتساب (*عريض*) وإيموجيز قرآنية:
 
@@ -461,7 +600,7 @@ app.post("/api/gemini/generate-whatsapp-message", async (req, res) => {
 - اسم ولي الأمر: ${student.parentName || "ولي أمر الطالب"}
 - اسم الحلقة: ${halaqahName || "حلقة القرآن الكريم"}
 - اسم المعلم: ${teacherName || "الشيخ محمد منتصر"}
-- حالة الحضور اليوم: ${attendanceStatus} (حاضر / غائب / متأخر / معتذر)
+- حالة الحضور اليوم: ${attendanceStatus} (حاضر / متأخر)
 - تفاصيل ما سمعه الطالب اليوم بالتفصيل:
   * في الحفظ الجديد اليوم: ${todayNewRecited}
   * في المراجعة اليوم: ${todayReviewRecited}
@@ -485,7 +624,7 @@ app.post("/api/gemini/generate-whatsapp-message", async (req, res) => {
 6. اجعل الرسالة مكتملة ومنسقة دون أي حقول ناقصة.`;
 
     const response = await ai.models.generateContent({
-      model: "gemini-3.7-flash",
+      model: "gemini-3.8-flash",
       contents: prompt,
     });
 
@@ -537,7 +676,7 @@ app.post("/api/gemini/generate-report", async (req, res) => {
 }`;
 
     const response = await ai.models.generateContent({
-      model: "gemini-3.7-flash",
+      model: "gemini-3.8-flash",
       contents: prompt,
       config: {
         responseMimeType: "application/json",
@@ -587,21 +726,25 @@ app.post("/api/gemini/chat", async (req, res) => {
 4. التحدث بلغة عربية فصيحة، وقورة، دافئة وداعمة ومحفزة.
 5. إذا طلب المعلم تعديل خطة طالب محدد، أعطه خطة واضحة ومقترحة بالآيات والسور.`;
 
-    const chat = ai.chats.create({
-      model: "gemini-3.7-flash",
-      config: {
-        systemInstruction,
-      },
-    });
-
-    // Send previous messages if any
+    const formattedHistory: any[] = [];
     if (Array.isArray(history)) {
-      for (const h of history.slice(-6)) {
-        if (h.sender === "user") {
-          // message history
+      for (const h of history.slice(-10)) {
+        if (h.text && (h.sender === "user" || h.sender === "assistant")) {
+          formattedHistory.push({
+            role: h.sender === "user" ? "user" : "model",
+            parts: [{ text: h.text }],
+          });
         }
       }
     }
+
+    const chat = ai.chats.create({
+      model: "gemini-3.8-flash",
+      config: {
+        systemInstruction,
+      },
+      history: formattedHistory,
+    });
 
     const response = await chat.sendMessage({
       message: message || "السلام عليكم",

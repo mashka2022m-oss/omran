@@ -12,7 +12,8 @@ import {
   LogOut,
   Calendar,
   Lock,
-  Unlock
+  Unlock,
+  ShieldAlert
 } from 'lucide-react';
 import {
   Student,
@@ -22,7 +23,8 @@ import {
   AppSettings,
   ChatMessage,
   UserRole,
-  TeacherAccount
+  TeacherAccount,
+  BehaviorViolation
 } from './types';
 import {
   OmranDataService,
@@ -41,6 +43,7 @@ import { HomeTab } from './components/tabs/HomeTab';
 import { StudentsTab } from './components/tabs/StudentsTab';
 import { AttendanceTab } from './components/tabs/AttendanceTab';
 import { EvaluationTab } from './components/tabs/EvaluationTab';
+import { BehaviorTab } from './components/tabs/BehaviorTab';
 import { ParentsWhatsAppTab } from './components/tabs/ParentsWhatsAppTab';
 import { ReportsTab } from './components/tabs/ReportsTab';
 import { AICoachTab } from './components/tabs/AICoachTab';
@@ -73,6 +76,7 @@ export function App() {
   const [activeTab, setActiveTab] = useState<string>('home');
   const [targetStudentForEval, setTargetStudentForEval] = useState<string | undefined>();
   const [targetStudentForWhatsApp, setTargetStudentForWhatsApp] = useState<string | undefined>();
+  const [targetStudentForBehavior, setTargetStudentForBehavior] = useState<string | undefined>();
 
   // Teachers State & Modal
   const [teachers, setTeachers] = useState<TeacherAccount[]>(INITIAL_TEACHERS);
@@ -82,6 +86,7 @@ export function App() {
   const [students, setStudents] = useState<Student[]>([]);
   const [attendance, setAttendance] = useState<AttendanceRecord[]>([]);
   const [evaluations, setEvaluations] = useState<StudentEvaluation[]>([]);
+  const [violations, setViolations] = useState<BehaviorViolation[]>([]);
   const [criteria, setCriteria] = useState<EvaluationCriteria[]>(DEFAULT_CRITERIA);
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
   const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
@@ -166,7 +171,8 @@ export function App() {
         loadedCriteria,
         loadedSettings,
         loadedChats,
-        loadedTeachers
+        loadedTeachers,
+        loadedViolations
       ] = await Promise.all([
         OmranDataService.loadStudents(),
         OmranDataService.loadAttendance(),
@@ -174,7 +180,8 @@ export function App() {
         OmranDataService.loadCriteria(),
         OmranDataService.loadSettings(),
         OmranDataService.loadChats(),
-        OmranDataService.loadTeachers()
+        OmranDataService.loadTeachers(),
+        OmranDataService.loadViolations()
       ]);
 
       setStudents(loadedStudents);
@@ -184,6 +191,7 @@ export function App() {
       setSettings(loadedSettings);
       setChatHistory(loadedChats);
       setTeachers(loadedTeachers);
+      setViolations(loadedViolations);
     } catch (e) {
       console.error('Error loading initial data:', e);
     } finally {
@@ -214,6 +222,9 @@ export function App() {
     const unsubTeachers = OmranDataService.subscribeTeachers(newTeach => {
       setTeachers(newTeach);
     });
+    const unsubViolations = OmranDataService.subscribeViolations(newViolations => {
+      setViolations(newViolations);
+    });
 
     return () => {
       unsubStudents();
@@ -222,6 +233,7 @@ export function App() {
       unsubCriteria();
       unsubSettings();
       unsubTeachers();
+      unsubViolations();
     };
   }, []);
 
@@ -444,7 +456,26 @@ export function App() {
     setChatHistory([]);
   };
 
-  // 12. Navigation Handlers
+  // 12. Violation Handlers
+  const handleSaveViolation = async (violation: BehaviorViolation) => {
+    setViolations(prev => {
+      const idx = prev.findIndex(v => v.id === violation.id);
+      if (idx >= 0) {
+        const copy = [...prev];
+        copy[idx] = violation;
+        return copy;
+      }
+      return [violation, ...prev];
+    });
+    await OmranDataService.saveViolation(violation);
+  };
+
+  const handleDeleteViolation = async (id: string) => {
+    setViolations(prev => prev.filter(v => v.id !== id));
+    await OmranDataService.deleteViolation(id);
+  };
+
+  // 13. Navigation Handlers
   const handleNavigateTab = (tab: string) => {
     setActiveTab(tab);
   };
@@ -457,6 +488,11 @@ export function App() {
   const handleNavigateToWhatsApp = (studentId: string) => {
     setTargetStudentForWhatsApp(studentId);
     setActiveTab('parents');
+  };
+
+  const handleNavigateToBehavior = (studentId: string) => {
+    setTargetStudentForBehavior(studentId);
+    setActiveTab('behavior');
   };
 
   // If URL contains portal query param or logged in as student:
@@ -504,6 +540,7 @@ export function App() {
           attendance={attendance}
           evaluations={evaluations}
           settings={settings}
+          violations={violations}
           isLoggedInStudent={!!currentUser}
           onLogout={handleLogout}
         />
@@ -570,6 +607,7 @@ export function App() {
     { id: 'students', label: 'الطلاب والتسجيل', icon: Users, badge: students.length },
     { id: 'attendance', label: 'الحضور والغياب', icon: UserCheck },
     { id: 'evaluation', label: 'تقييم التسميع', icon: BookOpen },
+    { id: 'behavior', label: 'المخالفات السلوكية', icon: ShieldAlert, badge: violations.length > 0 ? violations.length : undefined },
     { id: 'parents', label: 'رسائل الواتساب', icon: MessageCircle },
     { id: 'reports', label: 'التقارير الدورية', icon: Award },
     { id: 'aicoach', label: 'المستشار الذكي', icon: Sparkles, isHighlight: true },
@@ -674,6 +712,19 @@ export function App() {
             onDeleteCriteria={handleDeleteCriteria}
             onUpdateStudentAIPlan={handleUpdateStudentAIPlan}
             onNavigateToWhatsApp={handleNavigateToWhatsApp}
+            onNavigateToBehavior={handleNavigateToBehavior}
+          />
+        )}
+
+        {activeTab === 'behavior' && (
+          <BehaviorTab
+            students={students}
+            violations={violations}
+            settings={settings}
+            teacherName={currentUser?.username || settings.teacherName}
+            onSaveViolation={handleSaveViolation}
+            onDeleteViolation={handleDeleteViolation}
+            preselectedStudentId={targetStudentForBehavior}
           />
         )}
 

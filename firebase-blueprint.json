@@ -95,6 +95,32 @@
         "timestamp": { "type": "string", "maxLength": 50 }
       },
       "required": ["id", "sender", "text"]
+    },
+    "BehaviorViolation": {
+      "title": "BehaviorViolation",
+      "description": "سجل مخالفة سلوكية أو توجيه تربوي وإشعار ولي الأمر",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "studentId": { "type": "string", "maxLength": 128 },
+        "studentName": { "type": "string", "maxLength": 150 },
+        "date": { "type": "string", "maxLength": 30 },
+        "time": { "type": "string", "maxLength": 30 },
+        "violationType": { "type": "string", "maxLength": 200 },
+        "severity": { "type": "string", "enum": ["تنبيه", "بسيطة", "متوسطة", "جسيمة"] },
+        "description": { "type": "string", "maxLength": 2000 },
+        "actionTaken": { "type": "string", "maxLength": 500 },
+        "pointsDeducted": { "type": "number" },
+        "status": { "type": "string", "enum": ["تم الإشعار", "قيد المتابعة", "تم التوجيه والمعالجة"] },
+        "parentNotified": { "type": "boolean" },
+        "parentNotificationDate": { "type": "string", "maxLength": 50 },
+        "parentNotificationPhone": { "type": "string", "maxLength": 50 },
+        "messageText": { "type": "string", "maxLength": 3000 },
+        "teacherName": { "type": "string", "maxLength": 150 },
+        "showInPortal": { "type": "boolean" },
+        "createdAt": { "type": "string", "maxLength": 50 }
+      },
+      "required": ["id", "studentId", "date", "violationType", "severity"]
     }
   },
   "firestore": {
@@ -121,6 +147,10 @@
     "/chats/{chatId}": {
       "schema": "ChatMessage",
       "description": "سجل رسائل مستشار عمران القرآني"
+    },
+    "/violations/{violationId}": {
+      "schema": "BehaviorViolation",
+      "description": "سجلات المخالفات السلوكية والتوجيهات التربوية"
     },
     "/test/{testId}": {
       "schema": {

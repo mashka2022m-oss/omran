@@ -26,7 +26,8 @@ import {
   ArrowLeftRight,
   Brain,
   Zap,
-  Info
+  Info,
+  ShieldAlert
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import {
@@ -60,6 +61,7 @@ interface EvaluationTabProps {
     updatedPosition?: { surahNumber: number; surahName: string; ayah: number }
   ) => Promise<void>;
   onNavigateToWhatsApp?: (studentId: string) => void;
+  onNavigateToBehavior?: (studentId: string) => void;
 }
 
 export const EvaluationTab: React.FC<EvaluationTabProps> = ({
@@ -72,7 +74,8 @@ export const EvaluationTab: React.FC<EvaluationTabProps> = ({
   onSaveCriteria,
   onDeleteCriteria,
   onUpdateStudentAIPlan,
-  onNavigateToWhatsApp
+  onNavigateToWhatsApp,
+  onNavigateToBehavior
 }) => {
   const todayStr = new Date().toISOString().split('T')[0];
 
@@ -244,16 +247,21 @@ export const EvaluationTab: React.FC<EvaluationTabProps> = ({
       }
     } else {
       // 2. No evaluation exists for this date yet!
-      // Check if there is a previous evaluation before selectedDate to automatically load yesterday's planned tomorrow targets!
-      const pastEvals = evaluations
-        .filter(e => e.studentId === activeStudent.id && e.date < selectedDate)
+      // Check for the LAST ACTUAL recitation record before selectedDate,
+      // intentionally bypassing empty days, unexpected trips, or sudden holidays!
+      const actualPastEvals = evaluations
+        .filter(e => e.studentId === activeStudent.id && e.date < selectedDate && (
+          e.recitationDetails?.tomorrowNewItem ||
+          e.recitationDetails?.todayNewItem ||
+          e.recitationDetails?.newMemorizationAchieved
+        ))
         .sort((a, b) => b.date.localeCompare(a.date));
 
-      const latestPastEval = pastEvals[0];
+      const latestActualRecord = actualPastEvals[0];
 
-      if (latestPastEval && latestPastEval.recitationDetails?.tomorrowNewItem) {
-        // AUTOMATIC PLAN LOADING FROM YESTERDAY'S PLAN!
-        const yNew = latestPastEval.recitationDetails.tomorrowNewItem;
+      if (latestActualRecord && latestActualRecord.recitationDetails?.tomorrowNewItem) {
+        // AUTOMATIC PLAN LOADING FROM LAST ACTUAL RECORD'S PLANNED TOMORROW!
+        const yNew = latestActualRecord.recitationDetails.tomorrowNewItem;
         const sNum = yNew.surahNumber || 78;
         const toSNum = yNew.toSurahNumber || sNum;
         const fAyah = yNew.fromAyah || 1;
@@ -274,11 +282,11 @@ export const EvaluationTab: React.FC<EvaluationTabProps> = ({
           getSurahInfo(toSNum).numberOfAyahs
         );
 
-        setAutoFilledNotice(`تم ضبط المقرر تلقائياً بناءً على خطة التسميع المعتمدة في يوم (${latestPastEval.date}): ${loadedPortionText}`);
+        setAutoFilledNotice(`تم ضبط المقرر تلقائياً بناءً على آخر تسجيل تسميع للطالب بتاريخ (${latestActualRecord.date}): ${loadedPortionText}`);
 
         // Also load review item if available
-        if (latestPastEval.recitationDetails?.tomorrowReviewItem) {
-          const yRev = latestPastEval.recitationDetails.tomorrowReviewItem;
+        if (latestActualRecord.recitationDetails?.tomorrowReviewItem) {
+          const yRev = latestActualRecord.recitationDetails.tomorrowReviewItem;
           setTodayReviews([
             {
               id: `rev_auto_${Date.now()}`,
@@ -316,6 +324,66 @@ export const EvaluationTab: React.FC<EvaluationTabProps> = ({
         setTomReviewFromAyah(fAyah);
         setTomReviewToSurah(toSNum);
         setTomReviewToAyah(tAyah);
+      } else if (latestActualRecord && latestActualRecord.recitationDetails?.todayNewItem) {
+        // Fallback to continuing directly from what student recited on their last active recitation session
+        const lastRecited = latestActualRecord.recitationDetails.todayNewItem;
+        const curSurah = lastRecited.toSurahNumber || lastRecited.surahNumber || 78;
+        const lastAyah = lastRecited.toAyah || 1;
+        const curSurahInfo = getSurahInfo(curSurah);
+        const step = activeStudent.level === 'ضعيف' ? 4 : activeStudent.level === 'قوي' ? 12 : 7;
+
+        let startS = curSurah;
+        let startA = lastAyah + 1;
+        let endS = curSurah;
+        let endA = lastAyah + step;
+
+        if (startA > curSurahInfo.numberOfAyahs) {
+          startS = curSurah < 114 ? curSurah + 1 : 1;
+          startA = 1;
+          endS = startS;
+          endA = Math.min(step, getSurahInfo(startS).numberOfAyahs);
+        } else {
+          endA = Math.min(endA, curSurahInfo.numberOfAyahs);
+        }
+
+        setTodayNewSurah(startS);
+        setTodayNewFromAyah(startA);
+        setTodayNewToSurah(endS);
+        setTodayNewToAyah(endA);
+
+        const loadedPortionText = formatQuranPortion(
+          getSurahInfo(startS).name,
+          startA,
+          endA,
+          getSurahInfo(startS).numberOfAyahs,
+          'حفظ جديد',
+          getSurahInfo(endS).name,
+          getSurahInfo(endS).numberOfAyahs
+        );
+
+        setAutoFilledNotice(`تم ضبط المقرر تلقائياً استناداً إلى آخر جلسة تسميع مسجلة بتاريخ (${latestActualRecord.date}): ${loadedPortionText}`);
+
+        // Set tomorrow from today
+        const tomStep = step;
+        const endInfo = getSurahInfo(endS);
+        if (endA < endInfo.numberOfAyahs) {
+          setTomNewSurah(endS);
+          setTomNewFromAyah(endA + 1);
+          setTomNewToSurah(endS);
+          setTomNewToAyah(Math.min(endA + tomStep, endInfo.numberOfAyahs));
+        } else {
+          const nextS = endS < 114 ? endS + 1 : 1;
+          setTomNewSurah(nextS);
+          setTomNewFromAyah(1);
+          setTomNewToSurah(nextS);
+          setTomNewToAyah(Math.min(tomStep, getSurahInfo(nextS).numberOfAyahs));
+        }
+
+        setTomReviewType(REVIEW_TYPES[0]);
+        setTomReviewSurah(startS);
+        setTomReviewFromAyah(startA);
+        setTomReviewToSurah(endS);
+        setTomReviewToAyah(endA);
       } else {
         // Fallback default initialization from student profile
         const studentSurah = activeStudent.currentSurah || 78;
@@ -2031,16 +2099,29 @@ export const EvaluationTab: React.FC<EvaluationTabProps> = ({
 
               {/* Action Buttons */}
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-3 border-t border-[#065f46]">
-                {onNavigateToWhatsApp && (
-                  <button
-                    type="button"
-                    onClick={() => onNavigateToWhatsApp(activeStudent.id)}
-                    className="px-5 py-3 rounded-2xl bg-[#022c22] hover:bg-[#022c22]/80 border border-[#065f46] text-[#fbbf24] text-xs font-bold flex items-center justify-center gap-2 transition-colors cursor-pointer"
-                  >
-                    <Send className="w-4 h-4 text-[#fbbf24]" />
-                    <span>تجهيز وإرسال رسالة الواتساب لولي الأمر</span>
-                  </button>
-                )}
+                <div className="flex flex-wrap items-center gap-2">
+                  {onNavigateToWhatsApp && (
+                    <button
+                      type="button"
+                      onClick={() => onNavigateToWhatsApp(activeStudent.id)}
+                      className="px-4 py-3 rounded-2xl bg-[#022c22] hover:bg-[#022c22]/80 border border-[#065f46] text-[#fbbf24] text-xs font-bold flex items-center justify-center gap-2 transition-colors cursor-pointer"
+                    >
+                      <Send className="w-4 h-4 text-[#fbbf24]" />
+                      <span>رسالة واتساب اليومية</span>
+                    </button>
+                  )}
+
+                  {onNavigateToBehavior && (
+                    <button
+                      type="button"
+                      onClick={() => onNavigateToBehavior(activeStudent.id)}
+                      className="px-4 py-3 rounded-2xl bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-amber-300 text-xs font-bold flex items-center justify-center gap-2 transition-colors cursor-pointer"
+                    >
+                      <ShieldAlert className="w-4 h-4 text-amber-400" />
+                      <span>تسجيل مخالفة/ملاحظة سلوكية</span>
+                    </button>
+                  )}
+                </div>
 
                 <button
                   type="button"

@@ -141,6 +141,29 @@ export interface ChatMessage {
   actionTaken?: string;
 }
 
+export type ViolationSeverity = 'تنبيه' | 'بسيطة' | 'متوسطة' | 'جسيمة';
+
+export interface BehaviorViolation {
+  id: string;
+  studentId: string;
+  studentName: string;
+  date: string; // YYYY-MM-DD
+  time?: string;
+  violationType: string;
+  severity: ViolationSeverity;
+  description: string;
+  actionTaken: string;
+  pointsDeducted?: number;
+  status: 'تم الإشعار' | 'قيد المتابعة' | 'تم التوجيه والمعالجة';
+  parentNotified: boolean;
+  parentNotificationDate?: string;
+  parentNotificationPhone?: string;
+  messageText?: string;
+  teacherName?: string;
+  showInPortal?: boolean;
+  createdAt: string;
+}
+
 export interface FullBackupData {
   version: string;
   exportDate: string;
@@ -152,4 +175,5 @@ export interface FullBackupData {
   chatMessages: ChatMessage[];
   userAccounts: UserAccount[];
   teachers?: TeacherAccount[];
+  violations?: BehaviorViolation[];
 }
