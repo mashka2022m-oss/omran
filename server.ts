@@ -255,20 +255,26 @@ app.post("/api/gemini/generate-violation-message", async (req, res) => {
   }
 });
 
-// Helper: Calculate Smart Next-Day Assignment based on last actual recitation records (bypassing trips, holidays, and gap days)
+// Helper: Calculate Smart Next-Day Assignment based on student's last 3 actual recitation records (student-centric, teacher-independent, reviewing past portions)
 function calculateSmartAssignmentFromRecords(student: any, recentEvaluations: any[], todayRecitation?: any) {
-  // 1. Filter evaluations to get actual recitation records only (ignoring empty days, sudden holidays, or trips where no recitation occurred)
+  // 1. Filter evaluations to get actual recitation records only for this student
+  // Bypassing empty days, unexpected trips, or sudden holidays where no recitation occurred.
+  // CRITICAL: The plan belongs to the STUDENT, regardless of which teacher recorded it or which halaqah they attended.
   const actualRecitationRecords = (recentEvaluations || [])
     .filter((e: any) => {
       const hasItem = e.recitationDetails?.todayNewItem?.surahNumber ||
         e.recitationDetails?.todayReviewItem?.surahNumber ||
+        (e.recitationDetails?.todayReviewItems && e.recitationDetails.todayReviewItems.length > 0) ||
         e.recitationDetails?.newMemorizationAchieved ||
+        e.recitationDetails?.reviewAchieved ||
         (e.criteriaValues && Object.keys(e.criteriaValues).length > 0);
       return Boolean(hasItem);
     })
     .sort((a: any, b: any) => (b.date || "").localeCompare(a.date || ""));
 
-  const lastActualRecord = actualRecitationRecords[0];
+  // The last 3 actual recitation sessions for the student
+  const last3Records = actualRecitationRecords.slice(0, 3);
+  const latestActualRecord = last3Records[0];
 
   // 2. Determine student's current/last completed recitation position
   let currentSurahNum = 78;
@@ -281,13 +287,13 @@ function calculateSmartAssignmentFromRecords(student: any, recentEvaluations: an
   } else if (todayRecitation?.todayNewSurah) {
     currentSurahNum = Number(todayRecitation.todayNewSurah);
     currentEndAyah = Number(todayRecitation.todayNewToAyah || todayRecitation.todayNewFromAyah || 1);
-  } else if (lastActualRecord?.recitationDetails?.todayNewItem?.toSurahNumber) {
-    // Take the last actual session record (even if from last week or before an unexpected trip/vacation)
-    currentSurahNum = Number(lastActualRecord.recitationDetails.todayNewItem.toSurahNumber);
-    currentEndAyah = Number(lastActualRecord.recitationDetails.todayNewItem.toAyah || 1);
-  } else if (lastActualRecord?.recitationDetails?.todayNewItem?.surahNumber) {
-    currentSurahNum = Number(lastActualRecord.recitationDetails.todayNewItem.surahNumber);
-    currentEndAyah = Number(lastActualRecord.recitationDetails.todayNewItem.toAyah || lastActualRecord.recitationDetails.todayNewItem.fromAyah || 1);
+  } else if (latestActualRecord?.recitationDetails?.todayNewItem?.toSurahNumber) {
+    // Take the last actual session record (even if from last week or recorded by another teacher)
+    currentSurahNum = Number(latestActualRecord.recitationDetails.todayNewItem.toSurahNumber);
+    currentEndAyah = Number(latestActualRecord.recitationDetails.todayNewItem.toAyah || 1);
+  } else if (latestActualRecord?.recitationDetails?.todayNewItem?.surahNumber) {
+    currentSurahNum = Number(latestActualRecord.recitationDetails.todayNewItem.surahNumber);
+    currentEndAyah = Number(latestActualRecord.recitationDetails.todayNewItem.toAyah || latestActualRecord.recitationDetails.todayNewItem.fromAyah || 1);
   } else if (student.currentSurah) {
     currentSurahNum = Number(student.currentSurah);
     currentEndAyah = Number(student.currentAyah || 1);
@@ -301,13 +307,12 @@ function calculateSmartAssignmentFromRecords(student: any, recentEvaluations: an
   const totalAyahs = curSurahInfo.numberOfAyahs;
   currentEndAyah = Math.min(Math.max(1, currentEndAyah), totalAyahs);
 
-  // 3. Analyze the last N actual recitation records for pace and strength
-  const lastNRecords = actualRecitationRecords.slice(0, 3);
+  // 3. Analyze the last 3 actual records for performance, consistency and mastery
   let highPerformance = true;
   let totalScoreSum = 0;
   let scoreCount = 0;
 
-  lastNRecords.forEach((ev: any) => {
+  last3Records.forEach((ev: any) => {
     if (ev.criteriaValues) {
       Object.values(ev.criteriaValues).forEach((val: any) => {
         if (typeof val === "number") {
@@ -323,7 +328,7 @@ function calculateSmartAssignmentFromRecords(student: any, recentEvaluations: an
     highPerformance = false;
   }
 
-  // Step size calculation (ayahs per day)
+  // Step size calculation (ayahs per day) based on the 3-record trend
   let step = student.level === "ضعيف" ? 4 : student.level === "قوي" ? 12 : 7;
   if (highPerformance && student.level !== "ضعيف") {
     step = Math.min(step + 2, 15);
@@ -357,24 +362,55 @@ function calculateSmartAssignmentFromRecords(student: any, recentEvaluations: an
       ? `سورة ${nextStartInfo.name} كاملة (الآيات 1 - ${nextStartInfo.numberOfAyahs})`
       : `سورة ${nextStartInfo.name}: من الآية (${nextNewFromAyah}) إلى الآية (${nextNewToAyah})`;
 
-  // 5. Calculate Review
+  // 5. Calculate Comprehensive Review based on the last 3 recitation records (تثبيت ومراجعة التسجيلات السابقة)
+  // Extract portions recited in the last 3 records so the student rigorously reviews their previous lessons
   let revSurah = currentSurahNum;
-  let revFrom = 1;
-  let revTo = currentEndAyah;
-  const revInfo = getSurahInfo(revSurah);
-  const formattedReview = `مراجعة صغرى: سورة ${revInfo.name} من الآية (${revFrom}) إلى الآية (${revTo})`;
+  let revFromAyah = 1;
+  let revToSurah = currentSurahNum;
+  let revToAyah = currentEndAyah;
+  let revType = "مراجعة صغرى (تثبيت آخر 3 تسجيلات)";
 
-  const recordsCount = lastNRecords.length;
+  // If we have past records among the 3, find the oldest recited point among them to build a continuous cumulative review loop
+  const oldestOf3 = last3Records[last3Records.length - 1];
+  if (oldestOf3?.recitationDetails?.todayNewItem?.surahNumber) {
+    const oldestSurah = Number(oldestOf3.recitationDetails.todayNewItem.surahNumber);
+    const oldestAyah = Number(oldestOf3.recitationDetails.todayNewItem.fromAyah || 1);
+    revSurah = oldestSurah;
+    revFromAyah = oldestAyah;
+    revToSurah = currentSurahNum;
+    revToAyah = currentEndAyah;
+  } else if (currentEndAyah > 15) {
+    // Review the preceding 15-20 ayahs
+    revFromAyah = Math.max(1, currentEndAyah - 15);
+  }
+
+  const revStartInfo = getSurahInfo(revSurah);
+  const revEndInfo = getSurahInfo(revToSurah);
+
+  let formattedReview = "";
+  if (revSurah === revToSurah) {
+    formattedReview = revFromAyah === 1 && revToAyah >= revStartInfo.numberOfAyahs
+      ? `مراجعة وتثبيت: سورة ${revStartInfo.name} كاملة (1 - ${revStartInfo.numberOfAyahs})`
+      : `مراجعة وتثبيت ما سبق: سورة ${revStartInfo.name} من الآية (${revFromAyah}) إلى الآية (${revToAyah})`;
+  } else {
+    formattedReview = `مراجعة تراكمية لآخر 3 تسجيلات: من سورة ${revStartInfo.name} (آية ${revFromAyah}) إلى سورة ${revEndInfo.name} (آية ${revToAyah})`;
+  }
+
+  const recordsDatesStr = last3Records.map((e: any) => e.date).join("، ");
+  const recordsCount = last3Records.length;
+
   const analysisText = recordsCount > 0
-    ? `تمت المتابعة وتحديد المقرر بناءً على آخر تسجيلات التسميع الفعلية للبطل (${lastNRecords.map((e: any) => e.date).join("، ")})${actualRecitationRecords.length < (recentEvaluations || []).length ? " (متجاوزاً أيام الرحلات أو الإجازات السابقة التي لم يحصل فيها تسميع)" : ""}: أظهر الطالب معدل إتقان (${avgScore >= 8.5 ? "ممتاز" : "جيد"})، وتم احتساب المقرر انطلاقاً من آخر موضع أنجزه فعلياً في سورة ${curSurahInfo.name} (آية ${currentEndAyah}).`
-    : `تم تحديد المقرر القادم بناءً على آخر موضع مسجل في ملف الطالب (سورة ${curSurahInfo.name} آية ${currentEndAyah}) متجاوزاً أي فترات انقطاع أو إجازات سابقة.`;
+    ? `خطة الطالب الذاتية المعتمدة على آخر ${recordsCount} تسجيلات تسميع فعلية (${recordsDatesStr}): أظهر الطالب معدل إتقان (${avgScore >= 8.5 ? "ممتاز وتفوق" : avgScore >= 7 ? "جيد ومستقر" : "يحتاج تثبيت ومتابعة"})، وتم تدقيق ومراجعة التسجيلات القديمة السابقة لربطها وتثبيتها انطلاقاً من آخر موضع أنجزه فعلياً في سورة ${curSurahInfo.name} (آية ${currentEndAyah})، بغض النظر عن المعلم المسجل فالخطة للطالب أولاً وأخيراً.`
+    : `تم تحديد المقرر القادم بناءً على موضع الطالب المعتمد في ملفه الشخصي (سورة ${curSurahInfo.name} آية ${currentEndAyah}) مع مراجعة وتثبيت ما سبقه بصورة تراكمية.`;
 
   return {
     threeDayAnalysis: analysisText,
     recordsAnalysis: analysisText,
+    analyzedRecordsCount: recordsCount,
+    analyzedDates: last3Records.map((e: any) => e.date),
     pedagogicalReasoning: highPerformance
-      ? `نظراً لجودة الحفظ وحسن الأداء في آخر تسجيلات التسميع الفعلية، يستطيع الطالب إنجاز (${nextNewToAyah - nextNewFromAyah + 1}) آيات جديدة مع ربط وتثبيت ما سبق.`
-      : `تم ضبط وتيرة الجديد للتركيز على إتقان المخارج والتثبيت قبل الانتقال للآيات التالية.`,
+      ? `بناءً على دراسة آخر ${recordsCount} تسجيلات للطالب، يستمر البطل بوتيرة متقدمة (${nextNewToAyah - nextNewFromAyah + 1} آيات جديدة) مع مراجعة التسجيلات القديمة بدقة لضمان رسوخ الحفظ وعدم التفلت.`
+      : `بناءً على رصد آخر ${recordsCount} تسجيلات للطالب، تم تركيز الجهد على مراجعة وتثبيت المحفوظات السابقة وضبط الوتيرة لتمكين الحفظ في الصدر.`,
     tomorrowNew: {
       surahNumber: nextNewSurah,
       surahName: nextStartInfo.name,
@@ -385,18 +421,18 @@ function calculateSmartAssignmentFromRecords(student: any, recentEvaluations: an
       formattedText: formattedNew,
     },
     tomorrowReview: {
-      type: "مراجعة صغرى (السور القريبة)",
+      type: revType,
       surahNumber: revSurah,
-      surahName: revInfo.name,
-      fromAyah: revFrom,
-      toSurahNumber: revSurah,
-      toSurahName: revInfo.name,
-      toAyah: revTo,
+      surahName: revStartInfo.name,
+      fromAyah: revFromAyah,
+      toSurahNumber: revToSurah,
+      toSurahName: revEndInfo.name,
+      toAyah: revToAyah,
       formattedText: formattedReview,
     },
     suggestedSheikh: student.level === "ضعيف" ? "الشيخ محمد صديق المنشاوي (المصحف المعلم)" : "الشيخ محمود خليل الحصري (المصحف المعلم)",
-    tajweedFocus: "مراعاة أحكام النون الساكنة والتنوين والمدود الطبيعية والوصل",
-    dailyHomeNote: "الاستماع للشيخ المعلم 3 مرات وتكرار الآيات قبل النوم والتسميع على ولي الأمر.",
+    tajweedFocus: "مراعاة أحكام التجويد والمدود والوقف والابتداء ومراجعة التسجيلات السابقة",
+    dailyHomeNote: "الاستماع للشيخ المعلم 3 مرات، وتكرار المحفوظ الجديد 5 مرات، وتسميع مراجعة التسجيلات السابقة على ولي الأمر.",
   };
 }
 
@@ -418,12 +454,14 @@ app.post("/api/gemini/calculate-smart-assignment", async (req, res) => {
     const curSurah = getSurahInfo(fallbackResult.tomorrowNew.surahNumber || student.currentSurah || 78);
     const startAyah = fallbackResult.tomorrowNew.fromAyah || 1;
 
-    // Summarize past actual records for Gemini prompt
+    // Summarize past actual records for Gemini prompt (student-centric: last 3 actual records)
     const actualRecitationRecords = (recentEvaluations || [])
       .filter((e: any) => {
         const hasItem = e.recitationDetails?.todayNewItem?.surahNumber ||
           e.recitationDetails?.todayReviewItem?.surahNumber ||
+          (e.recitationDetails?.todayReviewItems && e.recitationDetails.todayReviewItems.length > 0) ||
           e.recitationDetails?.newMemorizationAchieved ||
+          e.recitationDetails?.reviewAchieved ||
           (e.criteriaValues && Object.keys(e.criteriaValues).length > 0);
         return Boolean(hasItem);
       })
@@ -437,7 +475,9 @@ app.post("/api/gemini/calculate-smart-assignment", async (req, res) => {
       }));
 
     const prompt = `أنت الموجه التربوي والمقرئ الذكي لحلقات تحفيظ القرآن الكريم.
-المطلوب منك: دراسة أداء الطالب وسجلاته بناءً على **آخر تسجيلات التسميع الفعلية للبطل** (متجاوزاً تماماً أيام الرحلات أو الإجازات المفاجئة التي لم يحصل فيها تسميع)، ثم حساب ما يجب أن يسمعه في الجلسة القادمة تلقائياً (حفظ جديد + مراجعة) بدقة قرآنية ملزمة 100%.
+المطلوب منك: دراسة أداء الطالب وسجلاته بناءً على **آخر 3 تسجيلات تسميع فعلية للبطل**، مع تدقيق ومراجعة التسجيلات القديمة السابقة لربطها وتثبيتها.
+ملاحظة أساسية: خطة الحفظ والمراجعة هي **خطة الطالب وليست خطة المعلم**؛ فسواء سجّل الطالب تسميعه عند معلمه الأصلي أو عند معلم آخر بديل أو في حلقة أخرى، فإن الخطة تتبع مسار الطالب التراكمي دون أي انقطاع أو تضارب.
+تجاوز تماماً أيام الرحلات أو الإجازات المفاجئة التي لم يحصل فيها تسميع، ثم احسب ما يجب أن يسمعه الطالب في الجلسة القادمة تلقائياً (حفظ جديد + مراجعة التسجيلات القديمة) بدقة قرآنية ملزمة 100%.
 
 بيانات الطالب:
 - اسم الطالب: ${student.name} (العمر: ${student.age} سنة، المستوى: ${student.level})
@@ -446,19 +486,19 @@ app.post("/api/gemini/calculate-smart-assignment", async (req, res) => {
 - موضع الوقوف الفعلي الأخير: سورة ${curSurah.name} (رقم السورة: ${curSurah.number}، إجمالي آياتها: ${curSurah.numberOfAyahs} آية فقط)
 - ما سمعه الطالب اليوم بالتفصيل (إن وجد): ${JSON.stringify(todayRecitation || {})}
 
-سجل آخر تسجيلات التسميع الفعلية للطالب (المعتمدة بعد استبعاد فترات الانقطاع والرحلات):
+سجل آخر 3 تسجيلات تسميع فعلية للطالب (المعتمدة بعد استبعاد فترات الانقطاع والرحلات):
 ${JSON.stringify(actualRecitationRecords, null, 2)}
 
 قواعد قرآنية وتربوية صارمة:
 1. إجمالي آيات سورة ${curSurah.name} هو ${curSurah.numberOfAyahs} آية فقط. لا تتجاوز هذا الرقم أبداً.
-2. احسب المقرر الجديد انطلاقاً من الموضع الفعلي الأخير متجاوزاً أي أيام انقطاع أو رحلات.
+2. احسب المقرر الجديد انطلاقاً من الموضع الفعلي الأخير للطالب بغض النظر عن المعلم المسجل.
 3. إذا انتهت السورة الحالية، انتقل للسورة التالية في ترتيب المصحف من الآية 1.
-4. حدد ورد المراجعة لتثبيت ما تم حفظه مؤخراً.
-5. وضّح في التحليل التربوي أن المتابعة تمت على أساس آخر التسجيلات الفعلية للبطل.
+4. مراجعة التسجيلات القديمة: حدد ورد المراجعة بناءً على السور والآيات التي سمّعها الطالب في تسجيلاته القديمة السابقة لربطها وتمكينها وتثبيتها.
+5. وضّح في التحليل التربوي أن الخطة هي ملك للطالب وتعتمد على دراسة آخر 3 تسجيلات فعلية له ومراجعة محفوظاته القديمة.
 
 أخرج النتيجة بصيغة JSON فقط:
 {
-  "threeDayAnalysis": "تحليل تربوي دقيق لدراسة أداء الطالب بناءً على آخر تسجيلات التسميع الفعلية متجاوزاً أي رحلات أو إجازات",
+  "threeDayAnalysis": "تحليل تربوي دقيق لدراسة أداء الطالب بناءً على آخر 3 تسجيلات تسميع فعلية ومراجعة تسجيلاته القديمة السابقة",
   "pedagogicalReasoning": "السبب التعليمي لحساب مقدار ورد الجلسة القادمة",
   "tomorrowNew": {
     "surahNumber": ${fallbackResult.tomorrowNew.surahNumber},
@@ -470,7 +510,7 @@ ${JSON.stringify(actualRecitationRecords, null, 2)}
     "formattedText": "${fallbackResult.tomorrowNew.formattedText}"
   },
   "tomorrowReview": {
-    "type": "مراجعة صغرى (السور القريبة)",
+    "type": "${fallbackResult.tomorrowReview.type}",
     "surahNumber": ${fallbackResult.tomorrowReview.surahNumber},
     "surahName": "${fallbackResult.tomorrowReview.surahName}",
     "fromAyah": ${fallbackResult.tomorrowReview.fromAyah},
@@ -481,7 +521,7 @@ ${JSON.stringify(actualRecitationRecords, null, 2)}
   },
   "suggestedSheikh": "اسم الشيخ المقترح للاستماع له",
   "tajweedFocus": "الحكم التجويدي المطلوب التركيز عليه",
-  "dailyHomeNote": "توجيه منزلي للربط والتكرار"
+  "dailyHomeNote": "توجيه منزلي للربط والتكرار ومراجعة القديم"
 }`;
 
     const response = await ai.models.generateContent({

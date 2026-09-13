@@ -1596,10 +1596,10 @@ export const EvaluationTab: React.FC<EvaluationTabProps> = ({
                   <div>
                     <h4 className="text-sm font-bold text-[#fbbf24] font-heading flex items-center gap-2">
                       <Compass className="w-4 h-4 text-[#fbbf24]" />
-                      <span>2. المقرر المطلوب تسميعه غداً (حفظ جديد + مراجعة):</span>
+                      <span>2. المقرر المطلوب تسميعه غداً (حفظ جديد + مراجعة التسجيلات السابقة):</span>
                     </h4>
                     <p className="text-[11px] text-[#86efac]/80 mt-0.5">
-                      يتم حسابه وضبطه تلقائياً بالذكاء الاصطناعي بدراسة آخر 3 أيام وسجلات الطالب
+                      خطة الطالب التراكمية المستقلة: تُحسب تلقائياً بدراسة آخر 3 تسجيلات تسميع فعلية ومراجعة تسجيلاته القديمة (سواء سُجلت من قبلك أو من قِبل معلم آخر)
                     </p>
                   </div>
 
@@ -1614,13 +1614,13 @@ export const EvaluationTab: React.FC<EvaluationTabProps> = ({
                       {isGeneratingSmartPlan ? (
                         <>
                           <Clock className="w-4 h-4 animate-spin text-[#064e3b]" />
-                          <span>جاري دراسة أداء 3 أيام وحساب الخطة...</span>
+                          <span>جاري دراسة آخر 3 تسجيلات ومراجعة القديم...</span>
                         </>
                       ) : (
                         <>
                           <Brain className="w-4 h-4 text-[#064e3b]" />
                           <Sparkles className="w-3.5 h-3.5 text-[#064e3b]" />
-                          <span>توليد الخطة الذكية للغد (دراسة 3 أيام)</span>
+                          <span>توليد الخطة الذكية (اعتماد آخر 3 تسجيلات ومراجعة القديم)</span>
                         </>
                       )}
                     </button>
