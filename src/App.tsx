@@ -254,6 +254,79 @@ export function App() {
     };
   }, []);
 
+  // Identify Teacher and Supervisor Roles (MUST run before any conditional returns)
+  const currentTeacher = useMemo(() => {
+    if (!currentUser || currentUser.role !== 'admin') return null;
+    const cleanUser = currentUser.username.trim().toLowerCase();
+    const tid = currentUser.teacherId || currentUser.studentId;
+    return teachers.find(
+      t => (tid && t.id === tid) ||
+           t.username.trim().toLowerCase() === cleanUser ||
+           t.name.trim().toLowerCase() === cleanUser
+    );
+  }, [currentUser, teachers]);
+
+  const isSupervisor = useMemo(() => {
+    if (!currentUser || currentUser.role !== 'admin') return false;
+    const cleanUser = currentUser.username.trim().toLowerCase();
+    if (
+      cleanUser === 'محمد منتصر' ||
+      cleanUser === 'الشيخ محمد منتصر' ||
+      cleanUser === 'admin' ||
+      cleanUser === 'المشرف العام'
+    ) {
+      return true;
+    }
+    if (currentTeacher?.isPrimary) {
+      return true;
+    }
+    return false;
+  }, [currentUser, currentTeacher]);
+
+  const assignedHalaqahs = useMemo(() => {
+    if (isSupervisor) {
+      return halaqahs;
+    }
+    if (!currentTeacher) {
+      return [];
+    }
+    const idSet = new Set<string>();
+    if (Array.isArray(currentTeacher.halaqahIds)) {
+      currentTeacher.halaqahIds.forEach(id => {
+        if (id) idSet.add(id);
+      });
+    }
+    if (currentTeacher.halaqahId) {
+      idSet.add(currentTeacher.halaqahId);
+    }
+    halaqahs.forEach(h => {
+      if (h.teacherIds?.includes(currentTeacher.id)) {
+        idSet.add(h.id);
+      }
+      if (
+        h.primaryTeacherName &&
+        currentTeacher.name &&
+        h.primaryTeacherName.trim().toLowerCase() === currentTeacher.name.trim().toLowerCase()
+      ) {
+        idSet.add(h.id);
+      }
+    });
+    return halaqahs.filter(h => idSet.has(h.id));
+  }, [isSupervisor, halaqahs, currentTeacher]);
+
+  // Auto-switch to assigned halaqah for teacher if currently invalid or 'all'
+  useEffect(() => {
+    if (currentUser?.role === 'admin') {
+      if (!isSupervisor) {
+        if (assignedHalaqahs.length > 0) {
+          if (!activeHalaqahId || activeHalaqahId === 'all' || !assignedHalaqahs.some(h => h.id === activeHalaqahId)) {
+            setActiveHalaqahId(assignedHalaqahs[0].id);
+          }
+        }
+      }
+    }
+  }, [currentUser, isSupervisor, assignedHalaqahs, activeHalaqahId]);
+
   // Save session on login
   const handleLoginSuccess = (user: { username: string; role: UserRole; studentId?: string; teacherId?: string }) => {
     setCurrentUser(user);
@@ -645,79 +718,6 @@ export function App() {
       </div>
     );
   }
-
-  // Identify Teacher and Supervisor Roles
-  const currentTeacher = useMemo(() => {
-    if (!currentUser || currentUser.role !== 'admin') return null;
-    const cleanUser = currentUser.username.trim().toLowerCase();
-    const tid = currentUser.teacherId || currentUser.studentId;
-    return teachers.find(
-      t => (tid && t.id === tid) ||
-           t.username.trim().toLowerCase() === cleanUser ||
-           t.name.trim().toLowerCase() === cleanUser
-    );
-  }, [currentUser, teachers]);
-
-  const isSupervisor = useMemo(() => {
-    if (!currentUser || currentUser.role !== 'admin') return false;
-    const cleanUser = currentUser.username.trim().toLowerCase();
-    if (
-      cleanUser === 'محمد منتصر' ||
-      cleanUser === 'الشيخ محمد منتصر' ||
-      cleanUser === 'admin' ||
-      cleanUser === 'المشرف العام'
-    ) {
-      return true;
-    }
-    if (currentTeacher?.isPrimary) {
-      return true;
-    }
-    return false;
-  }, [currentUser, currentTeacher]);
-
-  const assignedHalaqahs = useMemo(() => {
-    if (isSupervisor) {
-      return halaqahs;
-    }
-    if (!currentTeacher) {
-      return [];
-    }
-    const idSet = new Set<string>();
-    if (Array.isArray(currentTeacher.halaqahIds)) {
-      currentTeacher.halaqahIds.forEach(id => {
-        if (id) idSet.add(id);
-      });
-    }
-    if (currentTeacher.halaqahId) {
-      idSet.add(currentTeacher.halaqahId);
-    }
-    halaqahs.forEach(h => {
-      if (h.teacherIds?.includes(currentTeacher.id)) {
-        idSet.add(h.id);
-      }
-      if (
-        h.primaryTeacherName &&
-        currentTeacher.name &&
-        h.primaryTeacherName.trim().toLowerCase() === currentTeacher.name.trim().toLowerCase()
-      ) {
-        idSet.add(h.id);
-      }
-    });
-    return halaqahs.filter(h => idSet.has(h.id));
-  }, [isSupervisor, halaqahs, currentTeacher]);
-
-  // Auto-switch to assigned halaqah for teacher if currently invalid or 'all'
-  useEffect(() => {
-    if (currentUser?.role === 'admin') {
-      if (!isSupervisor) {
-        if (assignedHalaqahs.length > 0) {
-          if (!activeHalaqahId || activeHalaqahId === 'all' || !assignedHalaqahs.some(h => h.id === activeHalaqahId)) {
-            setActiveHalaqahId(assignedHalaqahs[0].id);
-          }
-        }
-      }
-    }
-  }, [currentUser, isSupervisor, assignedHalaqahs, activeHalaqahId]);
 
   // If user is a teacher with no assigned halaqah yet:
   if (currentUser?.role === 'admin' && !isSupervisor && assignedHalaqahs.length === 0) {
