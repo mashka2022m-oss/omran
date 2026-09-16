@@ -5,6 +5,8 @@ export interface Halaqah {
   name: string; // e.g. "حلقة الصحابي الزبير بن العوام رضي الله عنه"
   description?: string;
   primaryTeacherName?: string;
+  teacherIds?: string[]; // Teacher IDs linked to this halaqah
+  teacherNames?: string[]; // Cached teacher names
   createdAt: string;
   isDefault?: boolean;
 }
@@ -17,8 +19,10 @@ export interface TeacherAccount {
   phone: string; // teacher's phone number
   title?: string; // e.g. "المعلم الأساسي", "معلم شريك / ثانٍ", "محفظ ومساعد"
   isPrimary?: boolean;
-  halaqahId?: string; // ID of the halaqah this teacher is assigned to (optional if unassigned)
-  halaqahName?: string; // Cached display name of halaqah
+  halaqahId?: string; // Legacy single halaqah id
+  halaqahName?: string; // Legacy single halaqah name
+  halaqahIds?: string[]; // All halaqahs this teacher teaches (supports multiple halaqahs)
+  halaqahNames?: string[]; // Display names of those halaqahs
   createdAt: string;
 }
 

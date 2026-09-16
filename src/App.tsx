@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Home,
   Users,
@@ -13,7 +13,8 @@ import {
   Calendar,
   Lock,
   Unlock,
-  ShieldAlert
+  ShieldAlert,
+  Layers
 } from 'lucide-react';
 import {
   Student,
@@ -41,6 +42,7 @@ import { LoginModal } from './components/LoginModal';
 import { ParentPortalView } from './components/ParentPortalView';
 import { TeacherManagementModal } from './components/TeacherManagementModal';
 import { SettingsModal } from './components/SettingsModal';
+import { UnassignedTeacherView } from './components/UnassignedTeacherView';
 import { getSurahInfo } from './data/quranData';
 import { HomeTab } from './components/tabs/HomeTab';
 import { StudentsTab } from './components/tabs/StudentsTab';
@@ -644,10 +646,126 @@ export function App() {
     );
   }
 
-  // Filter students based on active halaqah selection (or show all)
+  // Identify Teacher and Supervisor Roles
+  const currentTeacher = useMemo(() => {
+    if (!currentUser || currentUser.role !== 'admin') return null;
+    const cleanUser = currentUser.username.trim().toLowerCase();
+    const tid = currentUser.teacherId || currentUser.studentId;
+    return teachers.find(
+      t => (tid && t.id === tid) ||
+           t.username.trim().toLowerCase() === cleanUser ||
+           t.name.trim().toLowerCase() === cleanUser
+    );
+  }, [currentUser, teachers]);
+
+  const isSupervisor = useMemo(() => {
+    if (!currentUser || currentUser.role !== 'admin') return false;
+    const cleanUser = currentUser.username.trim().toLowerCase();
+    if (
+      cleanUser === 'محمد منتصر' ||
+      cleanUser === 'الشيخ محمد منتصر' ||
+      cleanUser === 'admin' ||
+      cleanUser === 'المشرف العام'
+    ) {
+      return true;
+    }
+    if (currentTeacher?.isPrimary) {
+      return true;
+    }
+    return false;
+  }, [currentUser, currentTeacher]);
+
+  const assignedHalaqahs = useMemo(() => {
+    if (isSupervisor) {
+      return halaqahs;
+    }
+    if (!currentTeacher) {
+      return [];
+    }
+    const idSet = new Set<string>();
+    if (Array.isArray(currentTeacher.halaqahIds)) {
+      currentTeacher.halaqahIds.forEach(id => {
+        if (id) idSet.add(id);
+      });
+    }
+    if (currentTeacher.halaqahId) {
+      idSet.add(currentTeacher.halaqahId);
+    }
+    halaqahs.forEach(h => {
+      if (h.teacherIds?.includes(currentTeacher.id)) {
+        idSet.add(h.id);
+      }
+      if (
+        h.primaryTeacherName &&
+        currentTeacher.name &&
+        h.primaryTeacherName.trim().toLowerCase() === currentTeacher.name.trim().toLowerCase()
+      ) {
+        idSet.add(h.id);
+      }
+    });
+    return halaqahs.filter(h => idSet.has(h.id));
+  }, [isSupervisor, halaqahs, currentTeacher]);
+
+  // Auto-switch to assigned halaqah for teacher if currently invalid or 'all'
+  useEffect(() => {
+    if (currentUser?.role === 'admin') {
+      if (!isSupervisor) {
+        if (assignedHalaqahs.length > 0) {
+          if (!activeHalaqahId || activeHalaqahId === 'all' || !assignedHalaqahs.some(h => h.id === activeHalaqahId)) {
+            setActiveHalaqahId(assignedHalaqahs[0].id);
+          }
+        }
+      }
+    }
+  }, [currentUser, isSupervisor, assignedHalaqahs, activeHalaqahId]);
+
+  // If user is a teacher with no assigned halaqah yet:
+  if (currentUser?.role === 'admin' && !isSupervisor && assignedHalaqahs.length === 0) {
+    return (
+      <div className="min-h-screen bg-[#022c22] text-[#f0f9f6] font-sans selection:bg-[#fbbf24] selection:text-[#064e3b]" dir="rtl">
+        <AnimatedBackground />
+        <Navbar
+          currentUser={currentUser}
+          onLogout={handleLogout}
+          settings={settings}
+          studentsCount={0}
+          teachersCount={teachers.length}
+          halaqahs={halaqahs}
+          assignedHalaqahs={[]}
+          isSupervisor={false}
+          activeHalaqahId=""
+          onSwitchHalaqah={() => {}}
+          onOpenTeacherManagement={() => setIsSettingsModalOpen(true)}
+          onOpenSettings={() => setIsSettingsModalOpen(true)}
+        />
+        <main className="max-w-4xl mx-auto px-4 py-8 relative z-10">
+          <UnassignedTeacherView
+            teacherName={currentTeacher?.name || currentUser.username}
+            onRefresh={loadAllData}
+            onLogout={handleLogout}
+            settings={settings}
+          />
+        </main>
+      </div>
+    );
+  }
+
+  // Filter students based on active halaqah selection (or show all for supervisor)
   const displayedStudents = (activeHalaqahId && activeHalaqahId !== 'all')
     ? students.filter(s => s.halaqahId === activeHalaqahId || (!s.halaqahId && activeHalaqahId === 'halaqah-zubeir'))
-    : students;
+    : (isSupervisor ? students : (assignedHalaqahs.length > 0 ? students.filter(s => s.halaqahId === assignedHalaqahs[0].id) : students));
+
+  // Scope attendance, evaluations, and violations based on displayed students
+  const displayedStudentIds = new Set(displayedStudents.map(s => s.id));
+  const displayedAttendance = activeHalaqahId === 'all' && isSupervisor
+    ? attendance
+    : attendance.filter(a => displayedStudentIds.has(a.studentId));
+  const displayedEvaluations = activeHalaqahId === 'all' && isSupervisor
+    ? evaluations
+    : evaluations.filter(e => displayedStudentIds.has(e.studentId));
+  const displayedViolations = activeHalaqahId === 'all' && isSupervisor
+    ? violations
+    : violations.filter(v => displayedStudentIds.has(v.studentId));
 
   // Navigation Items for Admin/Teacher
   const navItems = [
@@ -655,7 +773,7 @@ export function App() {
     { id: 'students', label: 'الطلاب والتسجيل', icon: Users, badge: displayedStudents.length },
     { id: 'attendance', label: 'الحضور والغياب', icon: UserCheck },
     { id: 'evaluation', label: 'تقييم التسميع', icon: BookOpen },
-    { id: 'behavior', label: 'المخالفات السلوكية', icon: ShieldAlert, badge: violations.length > 0 ? violations.length : undefined },
+    { id: 'behavior', label: 'المخالفات السلوكية', icon: ShieldAlert, badge: displayedViolations.length > 0 ? displayedViolations.length : undefined },
     { id: 'parents', label: 'رسائل الواتساب', icon: MessageCircle },
     { id: 'reports', label: 'التقارير الدورية', icon: Award },
     { id: 'aicoach', label: 'المستشار الذكي', icon: Sparkles, isHighlight: true },
@@ -674,6 +792,8 @@ export function App() {
         studentsCount={displayedStudents.length}
         teachersCount={teachers.length}
         halaqahs={halaqahs}
+        assignedHalaqahs={assignedHalaqahs}
+        isSupervisor={isSupervisor}
         activeHalaqahId={activeHalaqahId}
         onSwitchHalaqah={setActiveHalaqahId}
         onOpenTeacherManagement={() => setIsSettingsModalOpen(true)}
@@ -681,6 +801,85 @@ export function App() {
       />
 
       <main className="max-w-7xl mx-auto px-4 lg:px-8 pt-6 relative z-10 space-y-6">
+        {/* Active Halaqah Header & Switcher Banner */}
+        <div className="bg-gradient-to-r from-[#064e3b] via-[#022c22] to-[#064e3b] p-3.5 sm:p-4 rounded-2xl border border-[#065f46] shadow-md flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-[#fbbf24]/20 border border-[#fbbf24]/40 text-[#fbbf24] flex items-center justify-center shrink-0 shadow-sm">
+              <Layers className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-xs text-[#86efac] font-bold">الحلقة الحالية:</span>
+                <span className="text-sm sm:text-base font-extrabold text-white font-heading">
+                  {activeHalaqahId === 'all'
+                    ? `جميع الحلقات (${displayedStudents.length} طالباً)`
+                    : halaqahs.find(h => h.id === activeHalaqahId)?.name || 'الحلقة المختارة'}
+                </span>
+                {activeHalaqahId !== 'all' && (
+                  <span className="text-[11px] px-2.5 py-0.5 rounded-full bg-[#fbbf24]/15 text-[#fbbf24] border border-[#fbbf24]/30 font-bold">
+                    {displayedStudents.length} طلاب
+                  </span>
+                )}
+              </div>
+              <p className="text-[11px] text-slate-300 mt-0.5">
+                {isSupervisor
+                  ? 'أنت في وضع المشرف العام: يمكنك التصفح بين جميع الحلقات أو اختيار حلقة لمشاهدة طلابها فقط.'
+                  : `أنت في وضع المعلم: يتم عرض طلاب وسجلات الحلقة المحددة فقط.`}
+              </p>
+            </div>
+          </div>
+
+          {/* Quick Switching Buttons */}
+          <div className="flex items-center gap-1.5 flex-wrap self-stretch sm:self-auto justify-end">
+            {isSupervisor ? (
+              <div className="flex items-center gap-1 bg-[#022c22] p-1 rounded-xl border border-[#065f46] flex-wrap">
+                <button
+                  onClick={() => setActiveHalaqahId('all')}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    activeHalaqahId === 'all'
+                      ? 'bg-[#fbbf24] text-[#064e3b] shadow-sm'
+                      : 'text-[#86efac] hover:text-white'
+                  }`}
+                >
+                  الكل
+                </button>
+                {halaqahs.map(h => (
+                  <button
+                    key={h.id}
+                    onClick={() => setActiveHalaqahId(h.id)}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                      activeHalaqahId === h.id
+                        ? 'bg-[#fbbf24] text-[#064e3b] shadow-sm'
+                        : 'text-[#86efac] hover:text-white'
+                    }`}
+                  >
+                    {h.name}
+                  </button>
+                ))}
+              </div>
+            ) : (
+              assignedHalaqahs.length > 1 && (
+                <div className="flex items-center gap-1.5 bg-[#022c22] p-1 rounded-xl border border-[#065f46]">
+                  <span className="text-[10px] text-amber-300 font-bold px-1.5">تنقل بين حلقاتك:</span>
+                  {assignedHalaqahs.map(h => (
+                    <button
+                      key={h.id}
+                      onClick={() => setActiveHalaqahId(h.id)}
+                      className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                        activeHalaqahId === h.id
+                          ? 'bg-[#fbbf24] text-[#064e3b] shadow-sm'
+                          : 'text-[#86efac] hover:text-white'
+                      }`}
+                    >
+                      {h.name}
+                    </button>
+                  ))}
+                </div>
+              )
+            )}
+          </div>
+        </div>
+
         {/* Navigation Tabs Bar */}
         <div className="flex items-center gap-1.5 overflow-x-auto pb-2 scrollbar-none bg-[#064e3b]/80 p-1.5 rounded-2xl border border-[#065f46] backdrop-blur-md shadow-lg">
           {navItems.map(item => {
@@ -721,8 +920,8 @@ export function App() {
         {activeTab === 'home' && (
           <HomeTab
             students={displayedStudents}
-            attendance={attendance}
-            evaluations={evaluations}
+            attendance={displayedAttendance}
+            evaluations={displayedEvaluations}
             settings={settings}
             teachers={teachers}
             currentUserName={currentUser?.username}
@@ -749,7 +948,7 @@ export function App() {
         {activeTab === 'attendance' && (
           <AttendanceTab
             students={displayedStudents}
-            attendanceRecords={attendance}
+            attendanceRecords={displayedAttendance}
             onSaveAttendance={handleSaveAttendance}
           />
         )}
@@ -757,8 +956,8 @@ export function App() {
         {activeTab === 'evaluation' && (
           <EvaluationTab
             students={displayedStudents}
-            attendance={attendance}
-            evaluations={evaluations}
+            attendance={displayedAttendance}
+            evaluations={displayedEvaluations}
             criteria={criteria}
             selectedStudentId={targetStudentForEval}
             onSaveEvaluation={handleSaveEvaluation}
@@ -773,7 +972,7 @@ export function App() {
         {activeTab === 'behavior' && (
           <BehaviorTab
             students={displayedStudents}
-            violations={violations}
+            violations={displayedViolations}
             settings={settings}
             teacherName={currentUser?.username || settings.teacherName}
             onSaveViolation={handleSaveViolation}
@@ -785,8 +984,8 @@ export function App() {
         {activeTab === 'parents' && (
           <ParentsWhatsAppTab
             students={displayedStudents}
-            attendance={attendance}
-            evaluations={evaluations}
+            attendance={displayedAttendance}
+            evaluations={displayedEvaluations}
             settings={settings}
             preselectedStudentId={targetStudentForWhatsApp}
           />
@@ -795,8 +994,8 @@ export function App() {
         {activeTab === 'reports' && (
           <ReportsTab
             students={displayedStudents}
-            attendance={attendance}
-            evaluations={evaluations}
+            attendance={displayedAttendance}
+            evaluations={displayedEvaluations}
             settings={settings}
             onUpdateSettings={handleUpdateSettings}
           />

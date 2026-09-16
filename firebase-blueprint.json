@@ -131,6 +131,11 @@
         "name": { "type": "string", "maxLength": 150 },
         "description": { "type": "string", "maxLength": 500 },
         "primaryTeacherName": { "type": "string", "maxLength": 150 },
+        "teacherIds": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "معرفات المعلمين المنتسبين للحلقة"
+        },
         "isDefault": { "type": "boolean" },
         "createdAt": { "type": "string", "maxLength": 50 }
       },
@@ -149,6 +154,11 @@
         "role": { "type": "string", "enum": ["معلم أساسي", "مساعد معلم", "مشرف عام", "معلم تجويد"] },
         "halaqahId": { "type": "string", "maxLength": 128 },
         "halaqahName": { "type": "string", "maxLength": 150 },
+        "halaqahIds": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "قائمة الحلقات التي ينتمي إليها المعلم"
+        },
         "isPrimary": { "type": "boolean" },
         "createdAt": { "type": "string", "maxLength": 50 }
       },

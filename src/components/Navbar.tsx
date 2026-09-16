@@ -22,6 +22,8 @@ interface NavbarProps {
   studentsCount: number;
   teachersCount?: number;
   halaqahs?: Halaqah[];
+  assignedHalaqahs?: Halaqah[];
+  isSupervisor?: boolean;
   activeHalaqahId?: string;
   onSwitchHalaqah?: (halaqahId: string) => void;
   onOpenTeacherManagement?: () => void;
@@ -35,6 +37,8 @@ export const Navbar: React.FC<NavbarProps> = ({
   studentsCount,
   teachersCount = 1,
   halaqahs = [],
+  assignedHalaqahs = [],
+  isSupervisor = false,
   activeHalaqahId,
   onSwitchHalaqah,
   onOpenTeacherManagement,
@@ -47,7 +51,9 @@ export const Navbar: React.FC<NavbarProps> = ({
     day: 'numeric'
   }).format(new Date());
 
-  const currentHalaqah = halaqahs.find(h => h.id === activeHalaqahId) || halaqahs[0];
+  // Determine which halaqahs can be selected by this user
+  const selectableHalaqahs = isSupervisor ? halaqahs : assignedHalaqahs;
+  const currentHalaqah = halaqahs.find(h => h.id === activeHalaqahId) || selectableHalaqahs[0] || halaqahs[0];
   const displayHalaqahName = currentHalaqah ? currentHalaqah.name : settings.halaqahName;
 
   return (
@@ -70,22 +76,63 @@ export const Navbar: React.FC<NavbarProps> = ({
             </div>
 
             {/* Halaqah selector / label */}
-            {currentUser?.role === 'admin' && halaqahs.length > 1 && onSwitchHalaqah ? (
-              <div className="flex items-center gap-1 mt-0.5">
-                <select
-                  value={activeHalaqahId || currentHalaqah?.id || ''}
-                  onChange={e => onSwitchHalaqah(e.target.value)}
-                  className="text-xs text-[#86efac] font-medium bg-[#022c22] border border-[#065f46] rounded-lg px-1.5 py-0.5 cursor-pointer focus:border-[#fbbf24] focus:outline-none"
-                >
-                  <option value="all">جميع الحلقات ({studentsCount} طالب)</option>
-                  {halaqahs.map(h => (
-                    <option key={h.id} value={h.id}>
-                      {h.name}
-                    </option>
-                  ))}
-                </select>
+            {currentUser?.role === 'admin' && (
+              <div className="flex items-center gap-1.5 mt-0.5">
+                {isSupervisor ? (
+                  /* Supervisor Selector: Can view all halaqahs combined or filter to a specific halaqah */
+                  halaqahs.length > 0 && onSwitchHalaqah ? (
+                    <div className="flex items-center gap-1">
+                      <span className="text-[10px] text-amber-300/80 font-bold hidden sm:inline">الحلقة:</span>
+                      <select
+                        value={activeHalaqahId || 'all'}
+                        onChange={e => onSwitchHalaqah(e.target.value)}
+                        className="text-xs text-[#86efac] font-medium bg-[#022c22] border border-[#065f46] rounded-lg px-2 py-0.5 cursor-pointer focus:border-[#fbbf24] focus:outline-none"
+                      >
+                        <option value="all">جميع الحلقات ({studentsCount} طالب)</option>
+                        {halaqahs.map(h => (
+                          <option key={h.id} value={h.id}>
+                            {h.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  ) : (
+                    <p className="text-xs text-[#86efac]/90 font-medium line-clamp-1">
+                      {displayHalaqahName}
+                    </p>
+                  )
+                ) : (
+                  /* Teacher View: restricted to assigned halaqahs only */
+                  assignedHalaqahs.length > 1 && onSwitchHalaqah ? (
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[10px] text-amber-300 font-bold">التبديل بين حلقاتك:</span>
+                      <select
+                        value={activeHalaqahId || assignedHalaqahs[0]?.id || ''}
+                        onChange={e => onSwitchHalaqah(e.target.value)}
+                        className="text-xs text-[#fbbf24] font-bold bg-[#022c22] border border-[#fbbf24]/50 rounded-lg px-2 py-0.5 cursor-pointer focus:border-[#fbbf24] focus:outline-none"
+                      >
+                        {assignedHalaqahs.map(h => (
+                          <option key={h.id} value={h.id}>
+                            {h.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  ) : assignedHalaqahs.length === 1 ? (
+                    <div className="inline-flex items-center gap-1 text-xs text-[#86efac] font-semibold bg-[#022c22] px-2 py-0.5 rounded-lg border border-[#065f46]">
+                      <span className="text-[#fbbf24]">الحلقة:</span>
+                      <span className="line-clamp-1">{assignedHalaqahs[0].name}</span>
+                    </div>
+                  ) : (
+                    <span className="text-[11px] text-amber-300 font-bold bg-amber-950/60 border border-amber-500/40 px-2 py-0.5 rounded-lg">
+                      لم يتم تعيينك في حلقة بعد
+                    </span>
+                  )
+                )}
               </div>
-            ) : (
+            )}
+
+            {currentUser?.role === 'student' && (
               <p className="text-xs text-[#86efac]/90 font-medium line-clamp-1">
                 {displayHalaqahName}
               </p>

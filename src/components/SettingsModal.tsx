@@ -201,8 +201,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       password: '123',
       phone: '0500000000',
       title: 'معلم ومحفظ',
-      halaqahId: halaqahs[0]?.id || '',
-      halaqahName: halaqahs[0]?.name || '',
+      halaqahIds: [],
+      halaqahNames: [],
+      halaqahId: '',
+      halaqahName: '',
       isPrimary: false,
       createdAt: new Date().toISOString()
     });
@@ -211,7 +213,18 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
   const handleStartEditTeacher = (t: TeacherAccount) => {
     setIsNewTeacher(false);
-    setEditingTeacher({ ...t });
+    const assignedIds = t.halaqahIds && t.halaqahIds.length > 0
+      ? t.halaqahIds
+      : (t.halaqahId ? [t.halaqahId] : []);
+    const assignedNames = halaqahs
+      .filter(h => assignedIds.includes(h.id))
+      .map(h => h.name);
+
+    setEditingTeacher({
+      ...t,
+      halaqahIds: assignedIds,
+      halaqahNames: assignedNames
+    });
     setStatusMsg(null);
   };
 
@@ -235,7 +248,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
     try {
       setIsSubmitting(true);
-      const selectedHalaqah = halaqahs.find(h => h.id === editingTeacher.halaqahId);
+      const selectedHalaqahIds = editingTeacher.halaqahIds || [];
+      const selectedHalaqahs = halaqahs.filter(h => selectedHalaqahIds.includes(h.id));
+      const selectedHalaqahNames = selectedHalaqahs.map(h => h.name);
+
       const fullTeacher: TeacherAccount = {
         id: editingTeacher.id || `teacher-${Date.now()}`,
         name: editingTeacher.name.trim(),
@@ -243,18 +259,43 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         password: editingTeacher.password?.trim() || '123',
         phone: editingTeacher.phone?.trim() || '0500000000',
         title: editingTeacher.title?.trim() || 'معلم ومحفظ',
-        halaqahId: editingTeacher.halaqahId || (selectedHalaqah ? selectedHalaqah.id : undefined),
-        halaqahName: selectedHalaqah ? selectedHalaqah.name : editingTeacher.halaqahName,
+        halaqahIds: selectedHalaqahIds,
+        halaqahNames: selectedHalaqahNames,
+        halaqahId: selectedHalaqahIds[0] || '',
+        halaqahName: selectedHalaqahNames[0] || '',
         isPrimary: editingTeacher.isPrimary ?? false,
         createdAt: editingTeacher.createdAt || new Date().toISOString()
       };
 
       await onSaveTeacher(fullTeacher);
+
+      // Synchronize halaqahs in Firestore
+      for (const h of halaqahs) {
+        const isAssigned = selectedHalaqahIds.includes(h.id);
+        const currentTeacherIds = h.teacherIds || [];
+        const currentTeacherNames = h.teacherNames || [];
+        const hasTeacher = currentTeacherIds.includes(fullTeacher.id);
+
+        if (isAssigned && !hasTeacher) {
+          await onSaveHalaqah({
+            ...h,
+            teacherIds: [...currentTeacherIds, fullTeacher.id],
+            teacherNames: [...currentTeacherNames, fullTeacher.name]
+          });
+        } else if (!isAssigned && hasTeacher) {
+          await onSaveHalaqah({
+            ...h,
+            teacherIds: currentTeacherIds.filter(id => id !== fullTeacher.id),
+            teacherNames: currentTeacherNames.filter(name => name !== fullTeacher.name)
+          });
+        }
+      }
+
       setStatusMsg({
         type: 'success',
         text: isNewTeacher
-          ? `تمت إضافة حساب المعلم (${fullTeacher.name}) بنجاح!`
-          : `تم تحديث بيانات المعلم (${fullTeacher.name}) بنجاح!`
+          ? `تمت إضافة حساب المعلم (${fullTeacher.name}) وتحديث ارتباط الحلقات بنجاح!`
+          : `تم تحديث بيانات المعلم (${fullTeacher.name}) وارتباط الحلقات بنجاح!`
       });
       setEditingTeacher(null);
       setIsNewTeacher(false);
@@ -568,7 +609,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
               {halaqahs.map(h => {
                 const halaqahStudents = students.filter(s => s.halaqahId === h.id);
-                const halaqahTeachers = teachers.filter(t => t.halaqahId === h.id);
+                const halaqahTeachers = teachers.filter(
+                  t => (t.halaqahIds && t.halaqahIds.includes(h.id)) ||
+                       t.halaqahId === h.id ||
+                       (h.teacherIds && h.teacherIds.includes(t.id)) ||
+                       (h.primaryTeacherName && t.name.trim().toLowerCase() === h.primaryTeacherName.trim().toLowerCase())
+                );
                 const isCurrentActive = activeHalaqahId === h.id;
 
                 return (
@@ -601,6 +647,25 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                               {h.description}
                             </p>
                           )}
+
+                          {/* Teachers Badges for this halaqah */}
+                          <div className="flex items-center gap-1 flex-wrap mt-2">
+                            <span className="text-[10px] text-[#fbbf24] font-bold">المعلمون:</span>
+                            {halaqahTeachers.length > 0 ? (
+                              halaqahTeachers.map(t => (
+                                <span
+                                  key={t.id}
+                                  className="text-[10px] px-2 py-0.5 rounded-md bg-[#064e3b] text-[#86efac] border border-[#065f46]"
+                                >
+                                  {t.name}
+                                </span>
+                              ))
+                            ) : (
+                              <span className="text-[10px] text-amber-300/80 italic">
+                                لم يُعيَّن معلمون بعد
+                              </span>
+                            )}
+                          </div>
                         </div>
 
                         {/* Actions */}
@@ -797,33 +862,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     />
                   </div>
 
-                  {/* Assigned Halaqah */}
-                  <div>
-                    <label className="block text-xs font-bold text-[#86efac] mb-1">
-                      الحلقة المرتبط بها (اختياري)
-                    </label>
-                    <select
-                      value={editingTeacher.halaqahId || ''}
-                      onChange={e => {
-                        const hId = e.target.value;
-                        const hObj = halaqahs.find(h => h.id === hId);
-                        setEditingTeacher({
-                          ...editingTeacher,
-                          halaqahId: hId,
-                          halaqahName: hObj ? hObj.name : ''
-                        });
-                      }}
-                      className="w-full bg-[#064e3b] border border-[#065f46] rounded-xl px-3 py-2 text-white text-xs focus:border-[#fbbf24] focus:outline-none cursor-pointer"
-                    >
-                      <option value="">-- غير مرتبط بحلقة حالياً --</option>
-                      {halaqahs.map(h => (
-                        <option key={h.id} value={h.id}>
-                          {h.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
                   {/* Title */}
                   <div>
                     <label className="block text-xs font-bold text-[#86efac] mb-1">
@@ -836,6 +874,105 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       onChange={e => setEditingTeacher({ ...editingTeacher, title: e.target.value })}
                       className="w-full bg-[#064e3b] border border-[#065f46] rounded-xl px-3 py-2 text-white text-xs focus:border-[#fbbf24] focus:outline-none"
                     />
+                  </div>
+
+                  {/* Multi-Halaqah Assignment */}
+                  <div className="sm:col-span-2 space-y-2.5 bg-[#064e3b]/50 p-4 rounded-2xl border border-[#065f46]">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                      <div>
+                        <label className="block text-xs font-bold text-[#fbbf24]">
+                          الحلقات المسندة لهذا المعلم (يمكن تعيينه في أكثر من حلقة)
+                        </label>
+                        <p className="text-[11px] text-[#86efac]/90">
+                          المعلم المعين في أكثر من حلقة سيتمكن من التبديل بينها في شريط التصفح، وكل حلقة ستعرض طلابها فقط. وإذا لم يُعين في أي حلقة سيظهر له: «لم يتم تعيينك في حلقة بعد».
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2 self-start sm:self-auto">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditingTeacher({
+                              ...editingTeacher,
+                              halaqahIds: halaqahs.map(h => h.id),
+                              halaqahNames: halaqahs.map(h => h.name)
+                            });
+                          }}
+                          className="text-[11px] px-2.5 py-1 rounded-lg bg-[#022c22] text-[#86efac] hover:text-white border border-[#065f46] cursor-pointer transition-colors"
+                        >
+                          تحديد الكل
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditingTeacher({
+                              ...editingTeacher,
+                              halaqahIds: [],
+                              halaqahNames: []
+                            });
+                          }}
+                          className="text-[11px] px-2.5 py-1 rounded-lg bg-amber-950/50 text-amber-300 hover:text-white border border-amber-600/50 cursor-pointer transition-colors"
+                        >
+                          إلغاء التعيين (غير مسند)
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+                      {halaqahs.map(h => {
+                        const isChecked = editingTeacher.halaqahIds?.includes(h.id) ?? false;
+                        const count = students.filter(s => s.halaqahId === h.id).length;
+                        return (
+                          <label
+                            key={h.id}
+                            className={`flex items-center justify-between p-3 rounded-xl border transition-all cursor-pointer ${
+                              isChecked
+                                ? 'bg-[#fbbf24]/15 border-[#fbbf24] text-white shadow-sm'
+                                : 'bg-[#022c22]/80 border-[#065f46] text-[#86efac] hover:border-emerald-500/50'
+                            }`}
+                          >
+                            <div className="flex items-center gap-3">
+                              <input
+                                type="checkbox"
+                                checked={isChecked}
+                                onChange={() => {
+                                  const current = editingTeacher.halaqahIds || [];
+                                  const nextIds = isChecked
+                                    ? current.filter(id => id !== h.id)
+                                    : [...current, h.id];
+                                  const nextNames = halaqahs
+                                    .filter(item => nextIds.includes(item.id))
+                                    .map(item => item.name);
+                                  setEditingTeacher({
+                                    ...editingTeacher,
+                                    halaqahIds: nextIds,
+                                    halaqahNames: nextNames
+                                  });
+                                }}
+                                className="w-4 h-4 rounded text-[#fbbf24] focus:ring-[#fbbf24] bg-[#022c22] border-[#065f46] cursor-pointer"
+                              />
+                              <div className="text-right">
+                                <span className="text-xs font-bold block">{h.name}</span>
+                                <span className="text-[10px] text-slate-300">
+                                  المشرف: {h.primaryTeacherName || 'الشيخ محمد منتصر'}
+                                </span>
+                              </div>
+                            </div>
+                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#022c22] text-[#fbbf24] border border-[#065f46] font-mono">
+                              {count} طلاب
+                            </span>
+                          </label>
+                        );
+                      })}
+                    </div>
+
+                    {(!editingTeacher.halaqahIds || editingTeacher.halaqahIds.length === 0) && (
+                      <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-xs text-amber-300 flex items-center gap-2">
+                        <AlertCircle className="w-4 h-4 shrink-0" />
+                        <span>
+                          تنبيه: هذا المعلم غير مسند لأي حلقة حالياً. عند تسجيل دخوله ستظهر له رسالة: <strong>«لم يتم تعيينك في حلقة بعد»</strong>.
+                        </span>
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -864,7 +1001,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             {/* List of Teachers */}
             <div className="space-y-3">
               {teachers.map(t => {
-                const assignedHalaqah = t.halaqahName || (t.halaqahId ? halaqahs.find(h => h.id === t.halaqahId)?.name : 'غير مرتبط');
+                const assignedHalaqahIds = t.halaqahIds && t.halaqahIds.length > 0
+                  ? t.halaqahIds
+                  : (t.halaqahId ? [t.halaqahId] : []);
+                const assignedHalaqahs = halaqahs.filter(h => assignedHalaqahIds.includes(h.id));
                 return (
                   <div
                     key={t.id}
@@ -874,7 +1014,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       <div className="w-10 h-10 rounded-xl bg-emerald-500/20 text-[#fbbf24] flex items-center justify-center font-bold border border-emerald-500/30 shrink-0">
                         {t.name.charAt(0)}
                       </div>
-                      <div>
+                      <div className="space-y-1">
                         <div className="flex items-center gap-2 flex-wrap">
                           <h4 className="text-sm font-bold text-white">{t.name}</h4>
                           {t.isPrimary && (
@@ -882,9 +1022,29 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                               المشرف الأول
                             </span>
                           )}
-                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#064e3b] text-[#86efac] border border-[#065f46]">
-                            الحلقة: {assignedHalaqah}
+                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#064e3b] text-slate-300 border border-[#065f46]">
+                            {t.title || 'معلم ومحفظ'}
                           </span>
+                        </div>
+
+                        {/* Assigned Halaqahs Badges */}
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          {assignedHalaqahs.length > 0 ? (
+                            assignedHalaqahs.map(h => (
+                              <span
+                                key={h.id}
+                                className="text-[10px] px-2 py-0.5 rounded-full bg-[#064e3b] text-[#86efac] border border-[#065f46] flex items-center gap-1"
+                              >
+                                <Layers className="w-2.5 h-2.5 text-[#fbbf24]" />
+                                <span>{h.name}</span>
+                              </span>
+                            ))
+                          ) : (
+                            <span className="text-[10px] px-2.5 py-0.5 rounded-full bg-amber-950/60 text-amber-300 border border-amber-500/40 font-bold flex items-center gap-1">
+                              <AlertCircle className="w-2.5 h-2.5" />
+                              <span>لم يتم تعيينه في حلقة بعد</span>
+                            </span>
+                          )}
                         </div>
                         <div className="flex items-center gap-3 text-xs text-[#86efac]/80 mt-1 flex-wrap">
                           <span className="flex items-center gap-1 font-mono">
