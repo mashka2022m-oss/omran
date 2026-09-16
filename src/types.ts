@@ -1,5 +1,14 @@
 export type UserRole = 'admin' | 'student';
 
+export interface Halaqah {
+  id: string;
+  name: string; // e.g. "حلقة الصحابي الزبير بن العوام رضي الله عنه"
+  description?: string;
+  primaryTeacherName?: string;
+  createdAt: string;
+  isDefault?: boolean;
+}
+
 export interface TeacherAccount {
   id: string;
   name: string; // e.g. "الشيخ محمد منتصر", "الشيخ عبد الله بن فهد"
@@ -8,6 +17,8 @@ export interface TeacherAccount {
   phone: string; // teacher's phone number
   title?: string; // e.g. "المعلم الأساسي", "معلم شريك / ثانٍ", "محفظ ومساعد"
   isPrimary?: boolean;
+  halaqahId?: string; // ID of the halaqah this teacher is assigned to (optional if unassigned)
+  halaqahName?: string; // Cached display name of halaqah
   createdAt: string;
 }
 
@@ -72,6 +83,8 @@ export interface Student {
   level: StudentLevel;
   aiPlan?: StudentAIPlan;
   notes?: string;
+  halaqahId?: string; // ID of the halaqah this student belongs to
+  halaqahName?: string; // Cached display name of halaqah
   createdAt: string;
 }
 
@@ -175,5 +188,6 @@ export interface FullBackupData {
   chatMessages: ChatMessage[];
   userAccounts: UserAccount[];
   teachers?: TeacherAccount[];
+  halaqahs?: Halaqah[];
   violations?: BehaviorViolation[];
 }

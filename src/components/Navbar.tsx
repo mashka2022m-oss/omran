@@ -8,9 +8,12 @@ import {
   ShieldAlert,
   Moon,
   Clock,
-  Users
+  Users,
+  Settings,
+  Layers,
+  ChevronDown
 } from 'lucide-react';
-import { UserRole, AppSettings } from '../types';
+import { UserRole, AppSettings, Halaqah } from '../types';
 
 interface NavbarProps {
   currentUser: { username: string; role: UserRole; studentId?: string } | null;
@@ -18,7 +21,11 @@ interface NavbarProps {
   settings: AppSettings;
   studentsCount: number;
   teachersCount?: number;
+  halaqahs?: Halaqah[];
+  activeHalaqahId?: string;
+  onSwitchHalaqah?: (halaqahId: string) => void;
   onOpenTeacherManagement?: () => void;
+  onOpenSettings?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -27,7 +34,11 @@ export const Navbar: React.FC<NavbarProps> = ({
   settings,
   studentsCount,
   teachersCount = 1,
-  onOpenTeacherManagement
+  halaqahs = [],
+  activeHalaqahId,
+  onSwitchHalaqah,
+  onOpenTeacherManagement,
+  onOpenSettings
 }) => {
   const todayArabic = new Intl.DateTimeFormat('ar-SA', {
     weekday: 'long',
@@ -35,6 +46,9 @@ export const Navbar: React.FC<NavbarProps> = ({
     month: 'long',
     day: 'numeric'
   }).format(new Date());
+
+  const currentHalaqah = halaqahs.find(h => h.id === activeHalaqahId) || halaqahs[0];
+  const displayHalaqahName = currentHalaqah ? currentHalaqah.name : settings.halaqahName;
 
   return (
     <header className="sticky top-0 z-40 bg-[#064e3b]/95 backdrop-blur-xl border-b border-[#065f46] px-4 lg:px-8 py-3.5 shadow-2xl transition-all">
@@ -54,9 +68,28 @@ export const Navbar: React.FC<NavbarProps> = ({
                 </span>
               </h1>
             </div>
-            <p className="text-xs text-[#86efac]/90 font-medium line-clamp-1">
-              {settings.halaqahName}
-            </p>
+
+            {/* Halaqah selector / label */}
+            {currentUser?.role === 'admin' && halaqahs.length > 1 && onSwitchHalaqah ? (
+              <div className="flex items-center gap-1 mt-0.5">
+                <select
+                  value={activeHalaqahId || currentHalaqah?.id || ''}
+                  onChange={e => onSwitchHalaqah(e.target.value)}
+                  className="text-xs text-[#86efac] font-medium bg-[#022c22] border border-[#065f46] rounded-lg px-1.5 py-0.5 cursor-pointer focus:border-[#fbbf24] focus:outline-none"
+                >
+                  <option value="all">جميع الحلقات ({studentsCount} طالب)</option>
+                  {halaqahs.map(h => (
+                    <option key={h.id} value={h.id}>
+                      {h.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : (
+              <p className="text-xs text-[#86efac]/90 font-medium line-clamp-1">
+                {displayHalaqahName}
+              </p>
+            )}
           </div>
         </div>
 
@@ -79,10 +112,22 @@ export const Navbar: React.FC<NavbarProps> = ({
 
         {/* Right User & Actions */}
         <div className="flex items-center gap-2.5">
-          {currentUser?.role === 'admin' && onOpenTeacherManagement && (
+          {/* Top Settings Button (Requested: زر إعدادات في الأعلى لإدارة المعلمين والحلقات ونقل الطلاب) */}
+          {currentUser?.role === 'admin' && onOpenSettings && (
+            <button
+              onClick={onOpenSettings}
+              title="إعدادات الحلقات والمعلمين ونقل الطلاب"
+              className="flex items-center gap-1.5 py-1.5 px-3 rounded-2xl bg-[#fbbf24] hover:bg-[#f59e0b] text-[#064e3b] text-xs font-black shadow-[0_0_15px_rgba(251,191,36,0.25)] transition-all cursor-pointer"
+            >
+              <Settings className="w-4 h-4" />
+              <span className="hidden sm:inline">الإعدادات</span>
+            </button>
+          )}
+
+          {currentUser?.role === 'admin' && !onOpenSettings && onOpenTeacherManagement && (
             <button
               onClick={onOpenTeacherManagement}
-              title="إدارة حسابات المعلمين وإضافة معلم ثانٍ"
+              title="إدارة حسابات المعلمين"
               className="flex items-center gap-1.5 py-1.5 px-3 rounded-2xl bg-[#022c22] hover:bg-[#065f46] border border-[#fbbf24]/30 hover:border-[#fbbf24] text-xs font-bold text-[#fbbf24] shadow-sm transition-all cursor-pointer"
             >
               <Users className="w-3.5 h-3.5 text-[#fbbf24]" />
@@ -103,7 +148,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                   {currentUser.username}
                 </div>
                 <div className="text-[10px] text-[#86efac]">
-                  {currentUser.role === 'admin' ? 'معلم / مشرف الحلقة' : 'حساب طالب'}
+                  {currentUser.role === 'admin' ? 'معلم / مشرف' : 'حساب طالب'}
                 </div>
               </div>
 

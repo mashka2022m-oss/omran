@@ -16,6 +16,14 @@ service cloud.firestore {
       allow read, write: if true;
     }
 
+    // Halaqahs collection
+    match /halaqahs/{halaqahId} {
+      allow read: if true;
+      allow create, update: if isValidId(halaqahId)
+        && request.resource.data.name is string;
+      allow delete: if isValidId(halaqahId);
+    }
+
     // Students collection - Read allowed for live portal, create/update/delete allowed
     match /students/{studentId} {
       allow read: if true;

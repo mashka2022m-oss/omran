@@ -16,14 +16,17 @@ import {
   CheckCircle,
   AlertCircle,
   HelpCircle,
-  Eye
+  Eye,
+  Layers
 } from 'lucide-react';
-import { Student, StudentLevel, AppSettings } from '../../types';
+import { Student, StudentLevel, AppSettings, Halaqah } from '../../types';
 import { QURAN_SURAHS } from '../../data/quranData';
 
 interface StudentsTabProps {
   students: Student[];
   settings: AppSettings;
+  halaqahs?: Halaqah[];
+  activeHalaqahId?: string;
   onAddStudent: (studentData: Partial<Student>) => Promise<boolean>;
   onUpdateStudent: (student: Student) => Promise<boolean>;
   onDeleteStudent: (studentId: string) => Promise<boolean>;
@@ -34,6 +37,8 @@ interface StudentsTabProps {
 export const StudentsTab: React.FC<StudentsTabProps> = ({
   students,
   settings,
+  halaqahs = [],
+  activeHalaqahId,
   onAddStudent,
   onUpdateStudent,
   onDeleteStudent,
@@ -61,6 +66,7 @@ export const StudentsTab: React.FC<StudentsTabProps> = ({
   const [formDailyNew, setFormDailyNew] = useState<string>('نصف وجه');
   const [formDailyReview, setFormDailyReview] = useState<string>('وجه واحد');
   const [formLevel, setFormLevel] = useState<StudentLevel>('متوسط');
+  const [formHalaqahId, setFormHalaqahId] = useState<string>(activeHalaqahId || halaqahs[0]?.id || '');
   const [formNotes, setFormNotes] = useState('');
   
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -80,6 +86,7 @@ export const StudentsTab: React.FC<StudentsTabProps> = ({
     setFormDailyNew('نصف وجه');
     setFormDailyReview('وجه واحد');
     setFormLevel('متوسط');
+    setFormHalaqahId(activeHalaqahId || halaqahs[0]?.id || '');
     setFormNotes('');
     setFormError('');
     setIsAddModalOpen(true);
@@ -99,6 +106,7 @@ export const StudentsTab: React.FC<StudentsTabProps> = ({
     setFormDailyNew(student.dailyNewTarget || 'نصف وجه');
     setFormDailyReview(student.dailyReviewTarget || 'وجه واحد');
     setFormLevel(student.level || 'متوسط');
+    setFormHalaqahId(student.halaqahId || halaqahs[0]?.id || '');
     setFormNotes(student.notes || '');
     setFormError('');
     setIsAddModalOpen(true);
@@ -130,6 +138,8 @@ export const StudentsTab: React.FC<StudentsTabProps> = ({
 
     const selectedSurah = QURAN_SURAHS.find(s => s.number === Number(formSurahNum));
     const validParentPhones = formParentPhones.map(p => p.trim()).filter(p => p.length > 0);
+    const chosenHalaqah = halaqahs.find(h => h.id === formHalaqahId);
+    const assignedHalaqahName = chosenHalaqah ? chosenHalaqah.name : settings.halaqahName;
 
     setIsSubmitting(true);
     try {
@@ -148,6 +158,8 @@ export const StudentsTab: React.FC<StudentsTabProps> = ({
           dailyNewTarget: formDailyNew,
           dailyReviewTarget: formDailyReview,
           level: formLevel,
+          halaqahId: formHalaqahId || editingStudent.halaqahId,
+          halaqahName: assignedHalaqahName || editingStudent.halaqahName,
           notes: formNotes
         };
         await onUpdateStudent(updated);
@@ -165,6 +177,8 @@ export const StudentsTab: React.FC<StudentsTabProps> = ({
           dailyNewTarget: formDailyNew,
           dailyReviewTarget: formDailyReview,
           level: formLevel,
+          halaqahId: formHalaqahId || halaqahs[0]?.id,
+          halaqahName: assignedHalaqahName,
           notes: formNotes
         });
       }
@@ -298,7 +312,7 @@ export const StudentsTab: React.FC<StudentsTabProps> = ({
                     </div>
                     <div>
                       <h3 className="text-sm font-bold text-white line-clamp-1">{student.name}</h3>
-                      <div className="flex items-center gap-2 mt-0.5 text-xs text-[#86efac]/80">
+                      <div className="flex items-center gap-2 mt-0.5 text-xs text-[#86efac]/80 flex-wrap">
                         <span>{student.age} سنة</span>
                         <span>•</span>
                         <span
@@ -312,6 +326,14 @@ export const StudentsTab: React.FC<StudentsTabProps> = ({
                         >
                           {student.level}
                         </span>
+                        {student.halaqahName && halaqahs.length > 1 && (
+                          <>
+                            <span>•</span>
+                            <span className="px-2 py-0.2 rounded-full text-[10px] font-medium bg-[#022c22] text-[#86efac] border border-[#065f46]">
+                              {student.halaqahName}
+                            </span>
+                          </>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -644,6 +666,26 @@ export const StudentsTab: React.FC<StudentsTabProps> = ({
                     </select>
                   </div>
                 </div>
+
+                {/* Halaqah Selection (if multi-halaqah exists) */}
+                {halaqahs.length > 0 && (
+                  <div>
+                    <label className="block text-xs font-semibold text-[#86efac] mb-1 text-right">
+                      الحلقة التابع لها الطالب
+                    </label>
+                    <select
+                      value={formHalaqahId}
+                      onChange={e => setFormHalaqahId(e.target.value)}
+                      className="w-full bg-[#022c22] border border-[#065f46] focus:border-[#fbbf24] rounded-2xl py-2.5 px-3 text-sm text-[#f0f9f6] outline-none cursor-pointer"
+                    >
+                      {halaqahs.map(h => (
+                        <option key={h.id} value={h.id} className="bg-[#064e3b] text-white">
+                          {h.name} (المعلم: {h.primaryTeacherName || 'محمد منتصر'})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
 
                 {/* Row 6: Notes */}
                 <div>

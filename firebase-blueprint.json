@@ -121,9 +121,49 @@
         "createdAt": { "type": "string", "maxLength": 50 }
       },
       "required": ["id", "studentId", "date", "violationType", "severity"]
+    },
+    "Halaqah": {
+      "title": "Halaqah",
+      "description": "سجل الحلقة القرآنية والمعلمين المنتسبين لها",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "name": { "type": "string", "maxLength": 150 },
+        "description": { "type": "string", "maxLength": 500 },
+        "primaryTeacherName": { "type": "string", "maxLength": 150 },
+        "isDefault": { "type": "boolean" },
+        "createdAt": { "type": "string", "maxLength": 50 }
+      },
+      "required": ["id", "name"]
+    },
+    "TeacherAccount": {
+      "title": "TeacherAccount",
+      "description": "بيانات حساب معلم أو مساعد معلم في الحلقات",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "name": { "type": "string", "maxLength": 150 },
+        "username": { "type": "string", "maxLength": 100 },
+        "password": { "type": "string", "maxLength": 100 },
+        "phone": { "type": "string", "maxLength": 50 },
+        "role": { "type": "string", "enum": ["معلم أساسي", "مساعد معلم", "مشرف عام", "معلم تجويد"] },
+        "halaqahId": { "type": "string", "maxLength": 128 },
+        "halaqahName": { "type": "string", "maxLength": 150 },
+        "isPrimary": { "type": "boolean" },
+        "createdAt": { "type": "string", "maxLength": 50 }
+      },
+      "required": ["id", "name", "username", "password"]
     }
   },
   "firestore": {
+    "/teachers/{teacherId}": {
+      "schema": "TeacherAccount",
+      "description": "حسابات وبيانات المعلمين والمشرفين"
+    },
+    "/halaqahs/{halaqahId}": {
+      "schema": "Halaqah",
+      "description": "قائمة الحلقات القرآنية في المركز"
+    },
     "/students/{studentId}": {
       "schema": "Student",
       "description": "مجموعة طلاب الحلقة وسجلاتهم"

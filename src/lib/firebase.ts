@@ -25,7 +25,8 @@ import {
   UserAccount,
   TeacherAccount,
   BehaviorViolation,
-  FullBackupData
+  FullBackupData,
+  Halaqah
 } from '../types';
 
 export { firebaseConfig };
@@ -112,11 +113,22 @@ export const DEFAULT_CRITERIA: EvaluationCriteria[] = [
   }
 ];
 
+export const DEFAULT_HALAQAHS: Halaqah[] = [
+  {
+    id: 'halaqah-zubeir',
+    name: 'حلقة الزبير بن العوام رضي الله عنه',
+    description: 'الحلقة الأساسية التابعة لمنظومة عمران',
+    primaryTeacherName: 'الشيخ محمد منتصر',
+    createdAt: new Date().toISOString(),
+    isDefault: true
+  }
+];
+
 export const DEFAULT_SETTINGS: AppSettings = {
   allowStudentRegistration: true,
   workDaysPerWeek: 5,
   workDaysNames: ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس'],
-  halaqahName: 'حلقات الصحابي الزبير بن العوام رضي الله عنه',
+  halaqahName: 'حلقة الزبير بن العوام رضي الله عنه',
   teacherName: 'الشيخ محمد منتصر'
 };
 
@@ -130,6 +142,8 @@ export const INITIAL_TEACHERS: TeacherAccount[] = [
     phone: '0500000000',
     title: 'المشرف الأساسي والمعلم الأول',
     isPrimary: true,
+    halaqahId: 'halaqah-zubeir',
+    halaqahName: 'حلقة الزبير بن العوام رضي الله عنه',
     createdAt: new Date().toISOString()
   }
 ];
@@ -150,6 +164,8 @@ export const INITIAL_STUDENTS: Student[] = [
     dailyNewTarget: 'وجه كامل',
     dailyReviewTarget: 'نصف جزء',
     level: 'قوي',
+    halaqahId: 'halaqah-zubeir',
+    halaqahName: 'حلقة الزبير بن العوام رضي الله عنه',
     aiPlan: {
       roadmapSummary: 'خطة حفظ سورة البقرة بمعدل وجه يومياً مع مراجعة نصف جزء من جزء عم وتبارك.',
       currentDailyAssignment: {
@@ -180,6 +196,8 @@ export const INITIAL_STUDENTS: Student[] = [
     dailyNewTarget: 'نصف وجه',
     dailyReviewTarget: 'سورة واحدة',
     level: 'متوسط',
+    halaqahId: 'halaqah-zubeir',
+    halaqahName: 'حلقة الزبير بن العوام رضي الله عنه',
     aiPlan: {
       roadmapSummary: 'إتمام جزء عم خلال 3 أسابيع بمعدل 6 إلى 8 آيات يومياً مع تكرار الاستماع.',
       currentDailyAssignment: {
@@ -210,6 +228,8 @@ export const INITIAL_STUDENTS: Student[] = [
     dailyNewTarget: '3 آيات',
     dailyReviewTarget: 'سورة قصيرة',
     level: 'ضعيف',
+    halaqahId: 'halaqah-zubeir',
+    halaqahName: 'حلقة الزبير بن العوام رضي الله عنه',
     aiPlan: {
       roadmapSummary: 'خطة تشجيعية وتيسيرية لقصار السور بمعدل 3 آيات يومياً مع تقنية التكرار المرحلي.',
       currentDailyAssignment: {
@@ -252,89 +272,81 @@ export const INITIAL_VIOLATIONS: BehaviorViolation[] = [
   }
 ];
 
-// LocalStorage helpers to provide instant offline-first sync
-const LS_KEYS = {
-  STUDENTS: 'omran_students_data',
-  ATTENDANCE: 'omran_attendance_data',
-  EVALUATIONS: 'omran_evaluations_data',
-  CRITERIA: 'omran_criteria_data',
-  SETTINGS: 'omran_settings_data',
-  CHATS: 'omran_chats_data',
-  TEACHERS: 'omran_teachers_data',
-  VIOLATIONS: 'omran_violations_data'
-};
-
-export const getLocalData = <T>(key: string, fallback: T): T => {
+// Clear any legacy local storage data to ensure pure Firebase Firestore operation
+export function clearLegacyLocalStorage() {
   try {
-    const raw = localStorage.getItem(key);
-    if (raw === null) return fallback;
-    return JSON.parse(raw) as T;
+    const keysToRemove = [
+      'omran_students_data',
+      'omran_attendance_data',
+      'omran_evaluations_data',
+      'omran_criteria_data',
+      'omran_settings_data',
+      'omran_chats_data',
+      'omran_teachers_data',
+      'omran_violations_data',
+      'omran_halaqahs_data'
+    ];
+    for (const k of keysToRemove) {
+      localStorage.removeItem(k);
+    }
   } catch (e) {
-    return fallback;
+    // Ignore in case localStorage is disabled or restricted
   }
-};
+}
 
-export const setLocalData = <T>(key: string, value: T) => {
-  try {
-    localStorage.setItem(key, JSON.stringify(value));
-  } catch (e) {
-    console.error('LocalStorage write error:', e);
-  }
-};
-
-// Firestore Sync & Service
+// Firestore Realtime Cloud Service (Direct Cloud-Only Architecture)
 export class OmranDataService {
-  // Check Connection and Seed initial data if empty
+  // Check Connection and Seed initial data in Firestore if empty
   static async testConnection() {
+    clearLegacyLocalStorage();
     try {
       await getDocFromServer(doc(db, 'test', 'connection'));
     } catch (e) {
-      // ignore
+      handleFirestoreError(e, OperationType.GET, 'test/connection');
     }
     await this.seedInitialDataIfEmpty();
     return true;
   }
 
+  // Seed baseline data directly into Firestore on first deployment
   static async seedInitialDataIfEmpty() {
     try {
-      const snap = await getDocs(collection(db, 'students'));
-      if (snap.empty) {
-        const raw = localStorage.getItem(LS_KEYS.STUDENTS);
-        if (raw === null) {
-          for (const s of INITIAL_STUDENTS) {
-            await setDoc(doc(db, 'students', s.id), s);
-          }
-          setLocalData(LS_KEYS.STUDENTS, INITIAL_STUDENTS);
+      // 1. Halaqahs
+      const halaqahSnap = await getDocs(collection(db, 'halaqahs'));
+      if (halaqahSnap.empty) {
+        for (const h of DEFAULT_HALAQAHS) {
+          await setDoc(doc(db, 'halaqahs', h.id), h);
         }
       }
 
-      const critSnap = await getDocs(collection(db, 'criteria'));
-      if (critSnap.empty) {
-        const rawCrit = localStorage.getItem(LS_KEYS.CRITERIA);
-        if (rawCrit === null) {
-          for (const c of DEFAULT_CRITERIA) {
-            await setDoc(doc(db, 'criteria', c.id), c);
-          }
-          setLocalData(LS_KEYS.CRITERIA, DEFAULT_CRITERIA);
-        }
-      }
-
-      // Teachers collection seeding
+      // 2. Teachers
       const teachSnap = await getDocs(collection(db, 'teachers'));
       if (teachSnap.empty) {
-        const rawTeach = localStorage.getItem(LS_KEYS.TEACHERS);
-        if (rawTeach === null) {
-          for (const t of INITIAL_TEACHERS) {
-            await setDoc(doc(db, 'teachers', t.id), t);
-          }
-          setLocalData(LS_KEYS.TEACHERS, INITIAL_TEACHERS);
+        for (const t of INITIAL_TEACHERS) {
+          await setDoc(doc(db, 'teachers', t.id), t);
         }
       }
 
+      // 3. Students
+      const snap = await getDocs(collection(db, 'students'));
+      if (snap.empty) {
+        for (const s of INITIAL_STUDENTS) {
+          await setDoc(doc(db, 'students', s.id), s);
+        }
+      }
+
+      // 4. Criteria
+      const critSnap = await getDocs(collection(db, 'criteria'));
+      if (critSnap.empty) {
+        for (const c of DEFAULT_CRITERIA) {
+          await setDoc(doc(db, 'criteria', c.id), c);
+        }
+      }
+
+      // 5. Settings
       const setSnap = await getDoc(doc(db, 'settings', 'main'));
       if (!setSnap.exists()) {
         await setDoc(doc(db, 'settings', 'main'), DEFAULT_SETTINGS);
-        setLocalData(LS_KEYS.SETTINGS, DEFAULT_SETTINGS);
       } else {
         const currentSet = setSnap.data() as AppSettings;
         if (!currentSet.halaqahName || currentSet.halaqahName.includes('الشاطبي')) {
@@ -343,425 +355,373 @@ export class OmranDataService {
             halaqahName: 'حلقات الصحابي الزبير بن العوام رضي الله عنه'
           };
           await setDoc(doc(db, 'settings', 'main'), updatedSet);
-          setLocalData(LS_KEYS.SETTINGS, updatedSet);
         }
       }
     } catch (e) {
-      console.warn('Seeding initial data error:', e);
+      handleFirestoreError(e, OperationType.WRITE, 'seedInitialData');
     }
   }
 
-  // Load Teachers (Multi-teacher shared halaqah)
+  // Load Teachers directly from Firestore
   static async loadTeachers(): Promise<TeacherAccount[]> {
     try {
       const snap = await getDocs(collection(db, 'teachers'));
-      if (!snap.empty) {
-        const list: TeacherAccount[] = [];
-        snap.forEach(d => list.push(d.data() as TeacherAccount));
-        setLocalData(LS_KEYS.TEACHERS, list);
-        return list;
+      const list: TeacherAccount[] = [];
+      snap.forEach(d => list.push(d.data() as TeacherAccount));
+      if (list.length === 0) {
+        for (const t of INITIAL_TEACHERS) {
+          await setDoc(doc(db, 'teachers', t.id), t);
+        }
+        return INITIAL_TEACHERS;
       }
+      return list;
     } catch (e) {
-      console.warn('Firestore loadTeachers error, fallback to local:', e);
-    }
-    const raw = localStorage.getItem(LS_KEYS.TEACHERS);
-    if (raw === null) {
-      setLocalData(LS_KEYS.TEACHERS, INITIAL_TEACHERS);
-      return INITIAL_TEACHERS;
-    }
-    try {
-      return JSON.parse(raw);
-    } catch {
-      return INITIAL_TEACHERS;
-    }
-  }
-
-  // Save Teacher
-  static async saveTeacher(teacher: TeacherAccount): Promise<void> {
-    const raw = localStorage.getItem(LS_KEYS.TEACHERS);
-    let localList: TeacherAccount[] = raw ? JSON.parse(raw) : [...INITIAL_TEACHERS];
-    const idx = localList.findIndex(t => t.id === teacher.id);
-    if (idx >= 0) {
-      localList[idx] = teacher;
-    } else {
-      localList.push(teacher);
-    }
-    setLocalData(LS_KEYS.TEACHERS, localList);
-
-    try {
-      await setDoc(doc(db, 'teachers', teacher.id), teacher);
-    } catch (e) {
-      console.warn('Firestore saveTeacher fallback to local:', e);
-    }
-  }
-
-  // Delete Teacher
-  static async deleteTeacher(teacherId: string): Promise<void> {
-    const raw = localStorage.getItem(LS_KEYS.TEACHERS);
-    let localList: TeacherAccount[] = raw ? JSON.parse(raw) : [...INITIAL_TEACHERS];
-    const updated = localList.filter(t => t.id !== teacherId);
-    setLocalData(LS_KEYS.TEACHERS, updated);
-
-    try {
-      await deleteDoc(doc(db, 'teachers', teacherId));
-    } catch (e) {
-      console.warn('Firestore deleteTeacher fallback to local:', e);
-    }
-  }
-
-  // Load Students
-  static async loadStudents(): Promise<Student[]> {
-    try {
-      const snap = await getDocs(collection(db, 'students'));
-      if (!snap.empty) {
-        const list: Student[] = [];
-        snap.forEach(d => list.push(d.data() as Student));
-        setLocalData(LS_KEYS.STUDENTS, list);
-        return list;
-      }
-    } catch (e) {
-      console.warn('Firestore loadStudents error, using local fallback:', e);
-    }
-    const raw = localStorage.getItem(LS_KEYS.STUDENTS);
-    if (raw === null) {
-      setLocalData(LS_KEYS.STUDENTS, INITIAL_STUDENTS);
-      return INITIAL_STUDENTS;
-    }
-    try {
-      return JSON.parse(raw);
-    } catch {
+      handleFirestoreError(e, OperationType.LIST, 'teachers');
       return [];
     }
   }
 
-  // Save Student
-  static async saveStudent(student: Student): Promise<void> {
-    const raw = localStorage.getItem(LS_KEYS.STUDENTS);
-    let localList: Student[] = raw ? JSON.parse(raw) : [...INITIAL_STUDENTS];
-    const idx = localList.findIndex(s => s.id === student.id);
-    if (idx >= 0) {
-      localList[idx] = student;
-    } else {
-      localList.push(student);
+  // Save Teacher directly in Firestore
+  static async saveTeacher(teacher: TeacherAccount): Promise<void> {
+    try {
+      await setDoc(doc(db, 'teachers', teacher.id), teacher);
+    } catch (e) {
+      handleFirestoreError(e, OperationType.WRITE, `teachers/${teacher.id}`);
+      throw e;
     }
-    setLocalData(LS_KEYS.STUDENTS, localList);
+  }
 
+  // Delete Teacher directly from Firestore
+  static async deleteTeacher(teacherId: string): Promise<void> {
+    try {
+      await deleteDoc(doc(db, 'teachers', teacherId));
+    } catch (e) {
+      handleFirestoreError(e, OperationType.DELETE, `teachers/${teacherId}`);
+      throw e;
+    }
+  }
+
+  // Load Halaqahs directly from Firestore
+  static async loadHalaqahs(): Promise<Halaqah[]> {
+    try {
+      const snap = await getDocs(collection(db, 'halaqahs'));
+      const list: Halaqah[] = [];
+      snap.forEach(d => list.push(d.data() as Halaqah));
+      if (list.length === 0) {
+        for (const h of DEFAULT_HALAQAHS) {
+          await setDoc(doc(db, 'halaqahs', h.id), h);
+        }
+        return DEFAULT_HALAQAHS;
+      }
+      return list;
+    } catch (e) {
+      handleFirestoreError(e, OperationType.LIST, 'halaqahs');
+      return DEFAULT_HALAQAHS;
+    }
+  }
+
+  // Save Halaqah directly in Firestore
+  static async saveHalaqah(halaqah: Halaqah): Promise<void> {
+    try {
+      await setDoc(doc(db, 'halaqahs', halaqah.id), halaqah);
+    } catch (e) {
+      handleFirestoreError(e, OperationType.WRITE, `halaqahs/${halaqah.id}`);
+      throw e;
+    }
+  }
+
+  // Delete Halaqah directly from Firestore
+  static async deleteHalaqah(halaqahId: string): Promise<void> {
+    try {
+      await deleteDoc(doc(db, 'halaqahs', halaqahId));
+    } catch (e) {
+      handleFirestoreError(e, OperationType.DELETE, `halaqahs/${halaqahId}`);
+      throw e;
+    }
+  }
+
+  // Transfer Student to another Halaqah directly in Firestore (preserves full records)
+  static async transferStudentToHalaqah(
+    studentId: string,
+    targetHalaqahId: string,
+    targetHalaqahName: string
+  ): Promise<Student | null> {
+    try {
+      const studentRef = doc(db, 'students', studentId);
+      const studentSnap = await getDoc(studentRef);
+      if (!studentSnap.exists()) return null;
+      const data = studentSnap.data() as Student;
+      const updatedStudent: Student = {
+        ...data,
+        halaqahId: targetHalaqahId,
+        halaqahName: targetHalaqahName
+      };
+      await setDoc(studentRef, updatedStudent);
+      return updatedStudent;
+    } catch (e) {
+      handleFirestoreError(e, OperationType.UPDATE, `students/${studentId}`);
+      throw e;
+    }
+  }
+
+  // Load Students directly from Firestore
+  static async loadStudents(): Promise<Student[]> {
+    try {
+      const snap = await getDocs(collection(db, 'students'));
+      const list: Student[] = [];
+      snap.forEach(d => list.push(d.data() as Student));
+      if (list.length === 0) {
+        for (const s of INITIAL_STUDENTS) {
+          await setDoc(doc(db, 'students', s.id), s);
+        }
+        return INITIAL_STUDENTS;
+      }
+      return list;
+    } catch (e) {
+      handleFirestoreError(e, OperationType.LIST, 'students');
+      return [];
+    }
+  }
+
+  // Save Student directly in Firestore
+  static async saveStudent(student: Student): Promise<void> {
     try {
       await setDoc(doc(db, 'students', student.id), student);
     } catch (e) {
-      console.warn('Firestore saveStudent fallback to local:', e);
+      handleFirestoreError(e, OperationType.WRITE, `students/${student.id}`);
+      throw e;
     }
   }
 
-  // Delete Student
+  // Delete Student directly from Firestore
   static async deleteStudent(studentId: string): Promise<void> {
-    const raw = localStorage.getItem(LS_KEYS.STUDENTS);
-    let localList: Student[] = raw ? JSON.parse(raw) : [...INITIAL_STUDENTS];
-    const updated = localList.filter(s => s.id !== studentId);
-    setLocalData(LS_KEYS.STUDENTS, updated);
-
     try {
       await deleteDoc(doc(db, 'students', studentId));
     } catch (e) {
-      console.warn('Firestore deleteStudent fallback to local:', e);
+      handleFirestoreError(e, OperationType.DELETE, `students/${studentId}`);
+      throw e;
     }
   }
 
-  // Load Attendance
+  // Load Attendance directly from Firestore
   static async loadAttendance(): Promise<AttendanceRecord[]> {
     try {
       const snap = await getDocs(collection(db, 'attendance'));
-      if (!snap.empty) {
-        const list: AttendanceRecord[] = [];
-        snap.forEach(d => list.push(d.data() as AttendanceRecord));
-        setLocalData(LS_KEYS.ATTENDANCE, list);
-        return list;
-      }
+      const list: AttendanceRecord[] = [];
+      snap.forEach(d => list.push(d.data() as AttendanceRecord));
+      return list;
     } catch (e) {
-      console.warn('Firestore loadAttendance error:', e);
+      handleFirestoreError(e, OperationType.LIST, 'attendance');
+      return [];
     }
-    return getLocalData<AttendanceRecord[]>(LS_KEYS.ATTENDANCE, []);
   }
 
-  // Save Batch Attendance
+  // Save Batch Attendance directly in Firestore
   static async saveAttendanceRecords(records: AttendanceRecord[]): Promise<void> {
-    const localList = getLocalData<AttendanceRecord[]>(LS_KEYS.ATTENDANCE, []);
-    const map = new Map<string, AttendanceRecord>();
-    localList.forEach(r => map.set(r.id, r));
-    records.forEach(r => map.set(r.id, r));
-    const merged = Array.from(map.values());
-    setLocalData(LS_KEYS.ATTENDANCE, merged);
-
     try {
       for (const rec of records) {
         await setDoc(doc(db, 'attendance', rec.id), rec);
       }
     } catch (e) {
-      console.warn('Firestore saveAttendanceRecords fallback to local:', e);
+      handleFirestoreError(e, OperationType.WRITE, 'attendance');
+      throw e;
     }
   }
 
-  // Load Evaluations
+  // Load Evaluations directly from Firestore
   static async loadEvaluations(): Promise<StudentEvaluation[]> {
     try {
       const snap = await getDocs(collection(db, 'evaluations'));
-      if (!snap.empty) {
-        const list: StudentEvaluation[] = [];
-        snap.forEach(d => list.push(d.data() as StudentEvaluation));
-        setLocalData(LS_KEYS.EVALUATIONS, list);
-        return list;
-      }
+      const list: StudentEvaluation[] = [];
+      snap.forEach(d => list.push(d.data() as StudentEvaluation));
+      return list;
     } catch (e) {
-      console.warn('Firestore loadEvaluations error:', e);
-    }
-    return getLocalData<StudentEvaluation[]>(LS_KEYS.EVALUATIONS, []);
-  }
-
-  // Save Evaluation
-  static async saveEvaluation(evaluation: StudentEvaluation): Promise<void> {
-    const localList = getLocalData<StudentEvaluation[]>(LS_KEYS.EVALUATIONS, []);
-    const idx = localList.findIndex(e => e.id === evaluation.id);
-    if (idx >= 0) {
-      localList[idx] = evaluation;
-    } else {
-      localList.push(evaluation);
-    }
-    setLocalData(LS_KEYS.EVALUATIONS, localList);
-
-    try {
-      await setDoc(doc(db, 'evaluations', evaluation.id), evaluation);
-    } catch (e) {
-      console.warn('Firestore saveEvaluation fallback to local:', e);
-    }
-  }
-
-  // Load Criteria
-  static async loadCriteria(): Promise<EvaluationCriteria[]> {
-    try {
-      const snap = await getDocs(collection(db, 'criteria'));
-      if (!snap.empty) {
-        const list: EvaluationCriteria[] = [];
-        snap.forEach(d => list.push(d.data() as EvaluationCriteria));
-        setLocalData(LS_KEYS.CRITERIA, list);
-        return list;
-      }
-    } catch (e) {
-      console.warn('Firestore loadCriteria error:', e);
-    }
-    const raw = localStorage.getItem(LS_KEYS.CRITERIA);
-    if (raw === null) {
-      setLocalData(LS_KEYS.CRITERIA, DEFAULT_CRITERIA);
-      return DEFAULT_CRITERIA;
-    }
-    try {
-      return JSON.parse(raw);
-    } catch {
+      handleFirestoreError(e, OperationType.LIST, 'evaluations');
       return [];
     }
   }
 
-  // Save Criteria List
+  // Save Evaluation directly in Firestore
+  static async saveEvaluation(evaluation: StudentEvaluation): Promise<void> {
+    try {
+      await setDoc(doc(db, 'evaluations', evaluation.id), evaluation);
+    } catch (e) {
+      handleFirestoreError(e, OperationType.WRITE, `evaluations/${evaluation.id}`);
+      throw e;
+    }
+  }
+
+  // Load Criteria directly from Firestore
+  static async loadCriteria(): Promise<EvaluationCriteria[]> {
+    try {
+      const snap = await getDocs(collection(db, 'criteria'));
+      const list: EvaluationCriteria[] = [];
+      snap.forEach(d => list.push(d.data() as EvaluationCriteria));
+      if (list.length === 0) {
+        for (const c of DEFAULT_CRITERIA) {
+          await setDoc(doc(db, 'criteria', c.id), c);
+        }
+        return DEFAULT_CRITERIA;
+      }
+      return list;
+    } catch (e) {
+      handleFirestoreError(e, OperationType.LIST, 'criteria');
+      return DEFAULT_CRITERIA;
+    }
+  }
+
+  // Save Criteria List directly in Firestore
   static async saveCriteriaList(list: EvaluationCriteria[]): Promise<void> {
-    setLocalData(LS_KEYS.CRITERIA, list);
     try {
       for (const item of list) {
         await setDoc(doc(db, 'criteria', item.id), item);
       }
     } catch (e) {
-      console.warn('Firestore saveCriteriaList fallback to local:', e);
+      handleFirestoreError(e, OperationType.WRITE, 'criteria');
+      throw e;
     }
   }
 
-  // Delete Criteria
+  // Delete Criteria directly from Firestore
   static async deleteCriteria(id: string): Promise<void> {
-    const raw = localStorage.getItem(LS_KEYS.CRITERIA);
-    let current: EvaluationCriteria[] = raw ? JSON.parse(raw) : [...DEFAULT_CRITERIA];
-    const updated = current.filter(c => c.id !== id);
-    setLocalData(LS_KEYS.CRITERIA, updated);
     try {
       await deleteDoc(doc(db, 'criteria', id));
     } catch (e) {
-      console.warn('Firestore deleteCriteria fallback to local:', e);
+      handleFirestoreError(e, OperationType.DELETE, `criteria/${id}`);
+      throw e;
     }
   }
 
-  // Load Settings
+  // Load Settings directly from Firestore
   static async loadSettings(): Promise<AppSettings> {
     try {
       const docSnap = await getDoc(doc(db, 'settings', 'main'));
       if (docSnap.exists()) {
-        const data = docSnap.data() as AppSettings;
-        setLocalData(LS_KEYS.SETTINGS, data);
-        return data;
+        return docSnap.data() as AppSettings;
       }
+      await setDoc(doc(db, 'settings', 'main'), DEFAULT_SETTINGS);
+      return DEFAULT_SETTINGS;
     } catch (e) {
-      console.warn('Firestore loadSettings error:', e);
+      handleFirestoreError(e, OperationType.GET, 'settings/main');
+      return DEFAULT_SETTINGS;
     }
-    return getLocalData<AppSettings>(LS_KEYS.SETTINGS, DEFAULT_SETTINGS);
   }
 
-  // Save Settings
+  // Save Settings directly in Firestore
   static async saveSettings(settings: AppSettings): Promise<void> {
-    setLocalData(LS_KEYS.SETTINGS, settings);
     try {
       await setDoc(doc(db, 'settings', 'main'), settings);
     } catch (e) {
-      console.warn('Firestore saveSettings fallback to local:', e);
+      handleFirestoreError(e, OperationType.WRITE, 'settings/main');
+      throw e;
     }
   }
 
-  // Load Chats
+  // Load Chats directly from Firestore
   static async loadChats(): Promise<ChatMessage[]> {
     try {
       const snap = await getDocs(collection(db, 'chats'));
-      if (!snap.empty) {
-        const list: ChatMessage[] = [];
-        snap.forEach(d => list.push(d.data() as ChatMessage));
-        setLocalData(LS_KEYS.CHATS, list);
-        return list;
-      }
+      const list: ChatMessage[] = [];
+      snap.forEach(d => list.push(d.data() as ChatMessage));
+      list.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+      return list;
     } catch (e) {
-      console.warn('Firestore loadChats error:', e);
+      handleFirestoreError(e, OperationType.LIST, 'chats');
+      return [];
     }
-    return getLocalData<ChatMessage[]>(LS_KEYS.CHATS, []);
   }
 
-  // Save Chat Message
+  // Save Chat Message directly in Firestore
   static async saveChatMessage(msg: ChatMessage): Promise<void> {
-    const list = getLocalData<ChatMessage[]>(LS_KEYS.CHATS, []);
-    list.push(msg);
-    setLocalData(LS_KEYS.CHATS, list);
     try {
       await setDoc(doc(db, 'chats', msg.id), msg);
     } catch (e) {
-      console.warn('Firestore saveChatMessage fallback to local:', e);
+      handleFirestoreError(e, OperationType.WRITE, `chats/${msg.id}`);
+      throw e;
     }
   }
 
-  // Clear Chats
+  // Clear Chats directly from Firestore
   static async clearChats(): Promise<void> {
-    setLocalData(LS_KEYS.CHATS, []);
     try {
       const snap = await getDocs(collection(db, 'chats'));
       for (const d of snap.docs) {
         await deleteDoc(d.ref);
       }
     } catch (e) {
-      console.warn('Firestore clearChats error:', e);
+      handleFirestoreError(e, OperationType.DELETE, 'chats');
+      throw e;
     }
   }
 
-  // Load Behavior Violations
+  // Load Behavior Violations directly from Firestore
   static async loadViolations(): Promise<BehaviorViolation[]> {
     try {
       const snap = await getDocs(collection(db, 'violations'));
-      if (!snap.empty) {
-        const list: BehaviorViolation[] = [];
-        snap.forEach(d => list.push(d.data() as BehaviorViolation));
-        list.sort((a, b) => new Date(b.createdAt || b.date).getTime() - new Date(a.createdAt || a.date).getTime());
-        setLocalData(LS_KEYS.VIOLATIONS, list);
-        return list;
-      }
+      const list: BehaviorViolation[] = [];
+      snap.forEach(d => list.push(d.data() as BehaviorViolation));
+      list.sort((a, b) => new Date(b.createdAt || b.date).getTime() - new Date(a.createdAt || a.date).getTime());
+      return list;
     } catch (e) {
-      console.warn('Firestore loadViolations error, fallback to local:', e);
+      handleFirestoreError(e, OperationType.LIST, 'violations');
+      return [];
     }
-    const raw = localStorage.getItem(LS_KEYS.VIOLATIONS);
-    if (raw !== null) {
-      try {
-        const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed)) return parsed;
-      } catch {}
-    }
-    return [];
   }
 
-  // Save Behavior Violation
+  // Save Behavior Violation directly in Firestore
   static async saveViolation(violation: BehaviorViolation): Promise<void> {
-    const raw = localStorage.getItem(LS_KEYS.VIOLATIONS);
-    let localList: BehaviorViolation[] = raw ? JSON.parse(raw) : [];
-    const idx = localList.findIndex(v => v.id === violation.id);
-    if (idx >= 0) {
-      localList[idx] = violation;
-    } else {
-      localList.unshift(violation);
-    }
-    setLocalData(LS_KEYS.VIOLATIONS, localList);
-
     try {
       const cleanViolation = JSON.parse(JSON.stringify(violation));
       await setDoc(doc(db, 'violations', violation.id), cleanViolation);
     } catch (e) {
-      console.warn('Firestore saveViolation fallback to local:', e);
+      handleFirestoreError(e, OperationType.WRITE, `violations/${violation.id}`);
+      throw e;
     }
   }
 
-  // Delete Behavior Violation
+  // Delete Behavior Violation directly from Firestore
   static async deleteViolation(violationId: string): Promise<void> {
-    const raw = localStorage.getItem(LS_KEYS.VIOLATIONS);
-    let localList: BehaviorViolation[] = raw ? JSON.parse(raw) : [];
-    const updated = localList.filter(v => v.id !== violationId);
-    setLocalData(LS_KEYS.VIOLATIONS, updated);
-
     try {
       await deleteDoc(doc(db, 'violations', violationId));
     } catch (e) {
-      console.warn('Firestore deleteViolation fallback to local:', e);
+      handleFirestoreError(e, OperationType.DELETE, `violations/${violationId}`);
+      throw e;
     }
   }
 
+  // Real-time listener for violations
   static subscribeViolations(callback: (violations: BehaviorViolation[]) => void): () => void {
     try {
       return onSnapshot(collection(db, 'violations'), snap => {
         const list: BehaviorViolation[] = [];
         snap.forEach(d => list.push(d.data() as BehaviorViolation));
         list.sort((a, b) => new Date(b.createdAt || b.date).getTime() - new Date(a.createdAt || a.date).getTime());
-        setLocalData(LS_KEYS.VIOLATIONS, list);
         callback(list);
       }, err => {
-        console.warn('Realtime violations listener notice:', err);
+        handleFirestoreError(err, OperationType.LIST, 'violations');
       });
     } catch (e) {
       return () => {};
     }
   }
 
-  // Find student by ID or name or phone directly (for portal access)
+  // Find student by ID or name or phone directly from Firestore (for live portal access)
   static async findStudentByIdOrQuery(lookup: string): Promise<Student | null> {
     if (!lookup) return null;
     const clean = decodeURIComponent(lookup).trim();
     const cleanNoSpaces = clean.replace(/\s+/g, '');
 
-    // 1. Check in local storage first
-    const localStudents = await this.loadStudents();
-    const localMatch = localStudents.find(
-      s =>
-        s.id === clean ||
-        s.id.toLowerCase() === clean.toLowerCase() ||
-        s.name.trim() === clean ||
-        s.name.replace(/\s+/g, '') === cleanNoSpaces ||
-        s.phone.replace(/\D/g, '') === clean.replace(/\D/g, '') ||
-        (s.parentPhones && s.parentPhones.some(p => p.replace(/\D/g, '') === clean.replace(/\D/g, '')))
-    );
-    if (localMatch) return localMatch;
-
-    // 2. Query Firestore directly by doc ID
+    // 1. Direct document fetch by ID
     try {
       const docSnap = await getDoc(doc(db, 'students', clean));
       if (docSnap.exists()) {
-        const student = docSnap.data() as Student;
-        // update local cache
-        const current = getLocalData<Student[]>(LS_KEYS.STUDENTS, []);
-        if (!current.some(s => s.id === student.id)) {
-          current.push(student);
-          setLocalData(LS_KEYS.STUDENTS, current);
-        }
-        return student;
+        return docSnap.data() as Student;
       }
     } catch (e) {
-      console.warn('Firestore getDoc student error:', e);
+      // Continue to query
     }
 
-    // 3. Query Firestore entire collection
+    // 2. Query Firestore entire collection
     try {
       const snap = await getDocs(collection(db, 'students'));
       for (const d of snap.docs) {
@@ -774,16 +734,11 @@ export class OmranDataService {
           s.phone.replace(/\D/g, '') === clean.replace(/\D/g, '') ||
           (s.parentPhones && s.parentPhones.some(p => p.replace(/\D/g, '') === clean.replace(/\D/g, '')))
         ) {
-          const current = getLocalData<Student[]>(LS_KEYS.STUDENTS, []);
-          const idx = current.findIndex(x => x.id === s.id);
-          if (idx >= 0) current[idx] = s;
-          else current.push(s);
-          setLocalData(LS_KEYS.STUDENTS, current);
           return s;
         }
       }
     } catch (e) {
-      console.warn('Firestore scan students error:', e);
+      handleFirestoreError(e, OperationType.LIST, 'students');
     }
 
     return null;
@@ -795,15 +750,11 @@ export class OmranDataService {
       return onSnapshot(collection(db, 'students'), snap => {
         const list: Student[] = [];
         snap.forEach(d => list.push(d.data() as Student));
-        if (list.length > 0) {
-          setLocalData(LS_KEYS.STUDENTS, list);
-          callback(list);
-        }
+        callback(list);
       }, err => {
-        console.warn('Realtime students listener notice:', err);
+        handleFirestoreError(err, OperationType.LIST, 'students');
       });
     } catch (e) {
-      console.warn('Failed to attach students realtime listener:', e);
       return () => {};
     }
   }
@@ -813,10 +764,9 @@ export class OmranDataService {
       return onSnapshot(collection(db, 'attendance'), snap => {
         const list: AttendanceRecord[] = [];
         snap.forEach(d => list.push(d.data() as AttendanceRecord));
-        setLocalData(LS_KEYS.ATTENDANCE, list);
         callback(list);
       }, err => {
-        console.warn('Realtime attendance listener notice:', err);
+        handleFirestoreError(err, OperationType.LIST, 'attendance');
       });
     } catch (e) {
       return () => {};
@@ -828,10 +778,9 @@ export class OmranDataService {
       return onSnapshot(collection(db, 'evaluations'), snap => {
         const list: StudentEvaluation[] = [];
         snap.forEach(d => list.push(d.data() as StudentEvaluation));
-        setLocalData(LS_KEYS.EVALUATIONS, list);
         callback(list);
       }, err => {
-        console.warn('Realtime evaluations listener notice:', err);
+        handleFirestoreError(err, OperationType.LIST, 'evaluations');
       });
     } catch (e) {
       return () => {};
@@ -843,12 +792,9 @@ export class OmranDataService {
       return onSnapshot(collection(db, 'criteria'), snap => {
         const list: EvaluationCriteria[] = [];
         snap.forEach(d => list.push(d.data() as EvaluationCriteria));
-        if (list.length > 0) {
-          setLocalData(LS_KEYS.CRITERIA, list);
-          callback(list);
-        }
+        callback(list);
       }, err => {
-        console.warn('Realtime criteria listener notice:', err);
+        handleFirestoreError(err, OperationType.LIST, 'criteria');
       });
     } catch (e) {
       return () => {};
@@ -859,12 +805,10 @@ export class OmranDataService {
     try {
       return onSnapshot(doc(db, 'settings', 'main'), snap => {
         if (snap.exists()) {
-          const data = snap.data() as AppSettings;
-          setLocalData(LS_KEYS.SETTINGS, data);
-          callback(data);
+          callback(snap.data() as AppSettings);
         }
       }, err => {
-        console.warn('Realtime settings listener notice:', err);
+        handleFirestoreError(err, OperationType.GET, 'settings/main');
       });
     } catch (e) {
       return () => {};
@@ -876,21 +820,32 @@ export class OmranDataService {
       return onSnapshot(collection(db, 'teachers'), snap => {
         const list: TeacherAccount[] = [];
         snap.forEach(d => list.push(d.data() as TeacherAccount));
-        if (list.length > 0) {
-          setLocalData(LS_KEYS.TEACHERS, list);
-          callback(list);
-        }
+        callback(list);
       }, err => {
-        console.warn('Realtime teachers listener notice:', err);
+        handleFirestoreError(err, OperationType.LIST, 'teachers');
       });
     } catch (e) {
       return () => {};
     }
   }
 
-  // Export Full Database (Complete & Lossless)
+  static subscribeHalaqahs(callback: (halaqahs: Halaqah[]) => void): () => void {
+    try {
+      return onSnapshot(collection(db, 'halaqahs'), snap => {
+        const list: Halaqah[] = [];
+        snap.forEach(d => list.push(d.data() as Halaqah));
+        callback(list);
+      }, err => {
+        handleFirestoreError(err, OperationType.LIST, 'halaqahs');
+      });
+    } catch (e) {
+      return () => {};
+    }
+  }
+
+  // Export Full Database (Complete Cloud Firestore Backup)
   static async exportFullBackup(): Promise<FullBackupData> {
-    const [students, attendance, evaluations, evaluationCriteria, settings, chatMessages, teachers, violations] =
+    const [students, attendance, evaluations, evaluationCriteria, settings, chatMessages, teachers, halaqahs, violations] =
       await Promise.all([
         this.loadStudents(),
         this.loadAttendance(),
@@ -899,11 +854,12 @@ export class OmranDataService {
         this.loadSettings(),
         this.loadChats(),
         this.loadTeachers(),
+        this.loadHalaqahs(),
         this.loadViolations()
       ]);
 
     return {
-      version: '1.4.0',
+      version: '1.5.0',
       exportDate: new Date().toISOString(),
       students,
       attendance,
@@ -912,6 +868,7 @@ export class OmranDataService {
       settings,
       chatMessages,
       teachers,
+      halaqahs,
       violations,
       userAccounts: [
         {
@@ -925,13 +882,14 @@ export class OmranDataService {
     };
   }
 
-  // Import / Restore Full Database (Comprehensive & Safe)
+  // Import / Restore Full Database directly into Firestore
   static async importFullBackup(backup: FullBackupData): Promise<{
     studentsCount: number;
     attendanceCount: number;
     evaluationsCount: number;
     criteriaCount: number;
     teachersCount: number;
+    halaqahsCount?: number;
     violationsCount?: number;
   }> {
     if (!backup || typeof backup !== 'object') {
@@ -949,21 +907,12 @@ export class OmranDataService {
     const teachersList = Array.isArray(backup.teachers) && backup.teachers.length > 0
       ? backup.teachers
       : INITIAL_TEACHERS;
+    const halaqahsList = Array.isArray(backup.halaqahs) && backup.halaqahs.length > 0
+      ? backup.halaqahs
+      : DEFAULT_HALAQAHS;
     const violationsList = Array.isArray(backup.violations) ? backup.violations : [];
 
-    // 1. Immediately Save to LocalStorage for zero-delay offline reliability
-    setLocalData(LS_KEYS.STUDENTS, studentsList);
-    setLocalData(LS_KEYS.ATTENDANCE, attendanceList);
-    setLocalData(LS_KEYS.EVALUATIONS, evaluationsList);
-    setLocalData(LS_KEYS.CRITERIA, criteriaList);
-    setLocalData(LS_KEYS.SETTINGS, settingsData);
-    setLocalData(LS_KEYS.CHATS, chatList);
-    setLocalData(LS_KEYS.TEACHERS, teachersList);
-    if (violationsList.length > 0) {
-      setLocalData(LS_KEYS.VIOLATIONS, violationsList);
-    }
-
-    // 2. Persist to Firestore concurrently
+    // Persist directly to Firestore concurrently
     try {
       const promises: Promise<any>[] = [];
 
@@ -982,6 +931,9 @@ export class OmranDataService {
       for (const t of teachersList) {
         if (t?.id) promises.push(setDoc(doc(db, 'teachers', t.id), t));
       }
+      for (const h of halaqahsList) {
+        if (h?.id) promises.push(setDoc(doc(db, 'halaqahs', h.id), h));
+      }
       for (const v of violationsList) {
         if (v?.id) promises.push(setDoc(doc(db, 'violations', v.id), v));
       }
@@ -989,9 +941,10 @@ export class OmranDataService {
         promises.push(setDoc(doc(db, 'settings', 'main'), settingsData));
       }
 
-      await Promise.allSettled(promises);
+      await Promise.all(promises);
     } catch (e) {
-      console.warn('Firestore restore background batch sync notice:', e);
+      handleFirestoreError(e, OperationType.WRITE, 'importFullBackup');
+      throw e;
     }
 
     return {
@@ -1000,6 +953,7 @@ export class OmranDataService {
       evaluationsCount: evaluationsList.length,
       criteriaCount: criteriaList.length,
       teachersCount: teachersList.length,
+      halaqahsCount: halaqahsList.length,
       violationsCount: violationsList.length
     };
   }

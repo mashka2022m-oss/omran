@@ -24,12 +24,14 @@ import {
   ChatMessage,
   UserRole,
   TeacherAccount,
-  BehaviorViolation
+  BehaviorViolation,
+  Halaqah
 } from './types';
 import {
   OmranDataService,
   DEFAULT_CRITERIA,
   DEFAULT_SETTINGS,
+  DEFAULT_HALAQAHS,
   INITIAL_STUDENTS,
   INITIAL_TEACHERS
 } from './lib/firebase';
@@ -38,6 +40,7 @@ import { Navbar } from './components/Navbar';
 import { LoginModal } from './components/LoginModal';
 import { ParentPortalView } from './components/ParentPortalView';
 import { TeacherManagementModal } from './components/TeacherManagementModal';
+import { SettingsModal } from './components/SettingsModal';
 import { getSurahInfo } from './data/quranData';
 import { HomeTab } from './components/tabs/HomeTab';
 import { StudentsTab } from './components/tabs/StudentsTab';
@@ -81,6 +84,11 @@ export function App() {
   // Teachers State & Modal
   const [teachers, setTeachers] = useState<TeacherAccount[]>(INITIAL_TEACHERS);
   const [isTeacherModalOpen, setIsTeacherModalOpen] = useState(false);
+
+  // Halaqahs State & Settings Modal
+  const [halaqahs, setHalaqahs] = useState<Halaqah[]>(DEFAULT_HALAQAHS);
+  const [activeHalaqahId, setActiveHalaqahId] = useState<string>('all');
+  const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
 
   // Main Data States
   const [students, setStudents] = useState<Student[]>([]);
@@ -172,7 +180,8 @@ export function App() {
         loadedSettings,
         loadedChats,
         loadedTeachers,
-        loadedViolations
+        loadedViolations,
+        loadedHalaqahs
       ] = await Promise.all([
         OmranDataService.loadStudents(),
         OmranDataService.loadAttendance(),
@@ -181,7 +190,8 @@ export function App() {
         OmranDataService.loadSettings(),
         OmranDataService.loadChats(),
         OmranDataService.loadTeachers(),
-        OmranDataService.loadViolations()
+        OmranDataService.loadViolations(),
+        OmranDataService.loadHalaqahs()
       ]);
 
       setStudents(loadedStudents);
@@ -192,6 +202,7 @@ export function App() {
       setChatHistory(loadedChats);
       setTeachers(loadedTeachers);
       setViolations(loadedViolations);
+      setHalaqahs(loadedHalaqahs);
     } catch (e) {
       console.error('Error loading initial data:', e);
     } finally {
@@ -225,6 +236,9 @@ export function App() {
     const unsubViolations = OmranDataService.subscribeViolations(newViolations => {
       setViolations(newViolations);
     });
+    const unsubHalaqahs = OmranDataService.subscribeHalaqahs(newHalaqahs => {
+      setHalaqahs(newHalaqahs);
+    });
 
     return () => {
       unsubStudents();
@@ -234,6 +248,7 @@ export function App() {
       unsubSettings();
       unsubTeachers();
       unsubViolations();
+      unsubHalaqahs();
     };
   }, []);
 
@@ -263,8 +278,34 @@ export function App() {
     setTeachers(updated);
   };
 
+  // Halaqah Management Handlers
+  const handleSaveHalaqah = async (halaqah: Halaqah) => {
+    await OmranDataService.saveHalaqah(halaqah);
+    const updated = await OmranDataService.loadHalaqahs();
+    setHalaqahs(updated);
+  };
+
+  const handleDeleteHalaqah = async (halaqahId: string) => {
+    await OmranDataService.deleteHalaqah(halaqahId);
+    const updated = await OmranDataService.loadHalaqahs();
+    setHalaqahs(updated);
+    if (activeHalaqahId === halaqahId) {
+      setActiveHalaqahId('all');
+    }
+  };
+
+  // Student Transfer Handler (Preserves full student history & evaluation records)
+  const handleTransferStudent = async (studentId: string, targetHalaqahId: string, targetHalaqahName: string) => {
+    await OmranDataService.transferStudentToHalaqah(studentId, targetHalaqahId, targetHalaqahName);
+    const updated = await OmranDataService.loadStudents();
+    setStudents(updated);
+  };
+
   // 1. Student Registration / Addition
   const handleAddStudent = async (studentData: Partial<Student>): Promise<boolean> => {
+    const chosenHalaqah = halaqahs.find(h => h.id === studentData.halaqahId) ||
+      (activeHalaqahId !== 'all' ? halaqahs.find(h => h.id === activeHalaqahId) : halaqahs[0]);
+
     const newStudent: Student = {
       id: `std_${Date.now()}`,
       name: studentData.name || 'طالب جديد',
@@ -279,6 +320,8 @@ export function App() {
       dailyNewTarget: studentData.dailyNewTarget || 'نصف وجه',
       dailyReviewTarget: studentData.dailyReviewTarget || 'وجه واحد',
       level: studentData.level || 'متوسط',
+      halaqahId: chosenHalaqah?.id || 'halaqah-zubeir',
+      halaqahName: chosenHalaqah?.name || settings.halaqahName,
       notes: studentData.notes || '',
       createdAt: new Date().toISOString()
     };
@@ -601,10 +644,15 @@ export function App() {
     );
   }
 
+  // Filter students based on active halaqah selection (or show all)
+  const displayedStudents = (activeHalaqahId && activeHalaqahId !== 'all')
+    ? students.filter(s => s.halaqahId === activeHalaqahId || (!s.halaqahId && activeHalaqahId === 'halaqah-zubeir'))
+    : students;
+
   // Navigation Items for Admin/Teacher
   const navItems = [
     { id: 'home', label: 'الرئيسية', icon: Home },
-    { id: 'students', label: 'الطلاب والتسجيل', icon: Users, badge: students.length },
+    { id: 'students', label: 'الطلاب والتسجيل', icon: Users, badge: displayedStudents.length },
     { id: 'attendance', label: 'الحضور والغياب', icon: UserCheck },
     { id: 'evaluation', label: 'تقييم التسميع', icon: BookOpen },
     { id: 'behavior', label: 'المخالفات السلوكية', icon: ShieldAlert, badge: violations.length > 0 ? violations.length : undefined },
@@ -618,14 +666,18 @@ export function App() {
     <div className="min-h-screen bg-[#022c22] text-[#f0f9f6] font-sans selection:bg-[#fbbf24] selection:text-[#064e3b] pb-12" dir="rtl">
       <AnimatedBackground />
 
-      {/* Main Navbar */}
+      {/* Main Navbar with Settings Button & Halaqah Selector */}
       <Navbar
         currentUser={currentUser}
         onLogout={handleLogout}
         settings={settings}
-        studentsCount={students.length}
+        studentsCount={displayedStudents.length}
         teachersCount={teachers.length}
-        onOpenTeacherManagement={() => setIsTeacherModalOpen(true)}
+        halaqahs={halaqahs}
+        activeHalaqahId={activeHalaqahId}
+        onSwitchHalaqah={setActiveHalaqahId}
+        onOpenTeacherManagement={() => setIsSettingsModalOpen(true)}
+        onOpenSettings={() => setIsSettingsModalOpen(true)}
       />
 
       <main className="max-w-7xl mx-auto px-4 lg:px-8 pt-6 relative z-10 space-y-6">
@@ -668,7 +720,7 @@ export function App() {
         {/* Tab Views */}
         {activeTab === 'home' && (
           <HomeTab
-            students={students}
+            students={displayedStudents}
             attendance={attendance}
             evaluations={evaluations}
             settings={settings}
@@ -676,14 +728,16 @@ export function App() {
             currentUserName={currentUser?.username}
             onNavigateTab={handleNavigateTab}
             onSelectStudentForEval={handleSelectStudentForEval}
-            onOpenTeacherManagement={() => setIsTeacherModalOpen(true)}
+            onOpenTeacherManagement={() => setIsSettingsModalOpen(true)}
           />
         )}
 
         {activeTab === 'students' && (
           <StudentsTab
-            students={students}
+            students={displayedStudents}
             settings={settings}
+            halaqahs={halaqahs}
+            activeHalaqahId={activeHalaqahId}
             onAddStudent={handleAddStudent}
             onUpdateStudent={handleUpdateStudent}
             onDeleteStudent={handleDeleteStudent}
@@ -694,7 +748,7 @@ export function App() {
 
         {activeTab === 'attendance' && (
           <AttendanceTab
-            students={students}
+            students={displayedStudents}
             attendanceRecords={attendance}
             onSaveAttendance={handleSaveAttendance}
           />
@@ -702,7 +756,7 @@ export function App() {
 
         {activeTab === 'evaluation' && (
           <EvaluationTab
-            students={students}
+            students={displayedStudents}
             attendance={attendance}
             evaluations={evaluations}
             criteria={criteria}
@@ -718,7 +772,7 @@ export function App() {
 
         {activeTab === 'behavior' && (
           <BehaviorTab
-            students={students}
+            students={displayedStudents}
             violations={violations}
             settings={settings}
             teacherName={currentUser?.username || settings.teacherName}
@@ -730,7 +784,7 @@ export function App() {
 
         {activeTab === 'parents' && (
           <ParentsWhatsAppTab
-            students={students}
+            students={displayedStudents}
             attendance={attendance}
             evaluations={evaluations}
             settings={settings}
@@ -740,7 +794,7 @@ export function App() {
 
         {activeTab === 'reports' && (
           <ReportsTab
-            students={students}
+            students={displayedStudents}
             attendance={attendance}
             evaluations={evaluations}
             settings={settings}
@@ -750,7 +804,7 @@ export function App() {
 
         {activeTab === 'aicoach' && (
           <AICoachTab
-            students={students}
+            students={displayedStudents}
             settings={settings}
             chatHistory={chatHistory}
             onSendMessage={handleSendChatMessage}
@@ -765,14 +819,21 @@ export function App() {
         )}
       </main>
 
-      {/* Teacher Accounts Management Modal */}
-      <TeacherManagementModal
-        isOpen={isTeacherModalOpen}
-        onClose={() => setIsTeacherModalOpen(false)}
+      {/* Comprehensive Settings Modal (Teachers, Halaqahs, Student Transfer) */}
+      <SettingsModal
+        isOpen={isSettingsModalOpen}
+        onClose={() => setIsSettingsModalOpen(false)}
         teachers={teachers}
+        halaqahs={halaqahs}
+        students={students}
         settings={settings}
+        activeHalaqahId={activeHalaqahId}
         onSaveTeacher={handleSaveTeacher}
         onDeleteTeacher={handleDeleteTeacher}
+        onSaveHalaqah={handleSaveHalaqah}
+        onDeleteHalaqah={handleDeleteHalaqah}
+        onTransferStudent={handleTransferStudent}
+        onSwitchActiveHalaqah={setActiveHalaqahId}
       />
     </div>
   );
