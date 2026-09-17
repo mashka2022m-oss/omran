@@ -464,6 +464,32 @@ export class OmranDataService {
     }
   }
 
+  // Transfer Multiple Students to another Halaqah directly in Firestore (batch transfer)
+  static async transferMultipleStudentsToHalaqah(
+    studentIds: string[],
+    targetHalaqahId: string,
+    targetHalaqahName: string
+  ): Promise<void> {
+    try {
+      for (const sId of studentIds) {
+        const studentRef = doc(db, 'students', sId);
+        const studentSnap = await getDoc(studentRef);
+        if (studentSnap.exists()) {
+          const data = studentSnap.data() as Student;
+          const updatedStudent: Student = {
+            ...data,
+            halaqahId: targetHalaqahId,
+            halaqahName: targetHalaqahName
+          };
+          await setDoc(studentRef, updatedStudent);
+        }
+      }
+    } catch (e) {
+      handleFirestoreError(e, OperationType.WRITE, `students/batch_transfer`);
+      throw e;
+    }
+  }
+
   // Load Students directly from Firestore
   static async loadStudents(): Promise<Student[]> {
     try {

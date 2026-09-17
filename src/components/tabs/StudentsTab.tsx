@@ -17,7 +17,11 @@ import {
   AlertCircle,
   HelpCircle,
   Eye,
-  Layers
+  Layers,
+  ArrowRightLeft,
+  CheckSquare,
+  Square,
+  RefreshCw
 } from 'lucide-react';
 import { Student, StudentLevel, AppSettings, Halaqah } from '../../types';
 import { QURAN_SURAHS } from '../../data/quranData';
@@ -27,11 +31,14 @@ interface StudentsTabProps {
   settings: AppSettings;
   halaqahs?: Halaqah[];
   activeHalaqahId?: string;
+  isSupervisor?: boolean;
   onAddStudent: (studentData: Partial<Student>) => Promise<boolean>;
   onUpdateStudent: (student: Student) => Promise<boolean>;
   onDeleteStudent: (studentId: string) => Promise<boolean>;
   onToggleRegistration: () => void;
   onTriggerAIPlan: (student: Student) => Promise<void>;
+  onTransferStudent?: (studentId: string, targetHalaqahId: string, targetHalaqahName: string) => Promise<void>;
+  onBatchTransferStudents?: (studentIds: string[], targetHalaqahId: string, targetHalaqahName: string) => Promise<void>;
 }
 
 export const StudentsTab: React.FC<StudentsTabProps> = ({
@@ -39,20 +46,83 @@ export const StudentsTab: React.FC<StudentsTabProps> = ({
   settings,
   halaqahs = [],
   activeHalaqahId,
+  isSupervisor = false,
   onAddStudent,
   onUpdateStudent,
   onDeleteStudent,
   onToggleRegistration,
-  onTriggerAIPlan
+  onTriggerAIPlan,
+  onTransferStudent,
+  onBatchTransferStudents
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [levelFilter, setLevelFilter] = useState<string>('all');
+  const [assignmentFilter, setAssignmentFilter] = useState<'all' | 'assigned' | 'unassigned'>('all');
+
+  // Bulk Selection & Transfer State
+  const [selectedStudentIds, setSelectedStudentIds] = useState<string[]>([]);
+  const [isBulkTransferModalOpen, setIsBulkTransferModalOpen] = useState(false);
+  const [bulkTargetHalaqahId, setBulkTargetHalaqahId] = useState<string>('');
+  const [isBulkTransferring, setIsBulkTransferring] = useState(false);
+  const [bulkFeedback, setBulkFeedback] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  const handleSelectAllFiltered = () => {
+    const allFilteredIds = filteredStudents.map(s => s.id);
+    setSelectedStudentIds(allFilteredIds);
+  };
+
+  const handleDeselectAll = () => {
+    setSelectedStudentIds([]);
+  };
+
+  const handleBulkTransferSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (selectedStudentIds.length === 0 || !bulkTargetHalaqahId) {
+      setBulkFeedback({ type: 'error', text: 'يرجى اختيار الحلقة المستهدفة لنقل الطلاب إليها.' });
+      return;
+    }
+
+    const targetHalaqah = halaqahs.find(h => h.id === bulkTargetHalaqahId);
+    const targetName = targetHalaqah ? targetHalaqah.name : 'الحلقة المختارة';
+
+    setIsBulkTransferring(true);
+    setBulkFeedback(null);
+    try {
+      if (onBatchTransferStudents) {
+        await onBatchTransferStudents(selectedStudentIds, bulkTargetHalaqahId, targetName);
+      } else if (onTransferStudent) {
+        for (const sId of selectedStudentIds) {
+          await onTransferStudent(sId, bulkTargetHalaqahId, targetName);
+        }
+      }
+      setBulkFeedback({
+        type: 'success',
+        text: `تم نقل (${selectedStudentIds.length}) طلاب بنجاح إلى "${targetName}" وحفظ كافة سجلاتهم سحابياً!`
+      });
+      setTimeout(() => {
+        setSelectedStudentIds([]);
+        setIsBulkTransferModalOpen(false);
+        setBulkFeedback(null);
+        setBulkTargetHalaqahId('');
+      }, 1500);
+    } catch (err: any) {
+      setBulkFeedback({
+        type: 'error',
+        text: err.message || 'حدث خطأ أثناء نقل الطلاب سحابياً.'
+      });
+    } finally {
+      setIsBulkTransferring(false);
+    }
+  };
   
   // Modal state
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [editingStudent, setEditingStudent] = useState<Student | null>(null);
   const [viewingPlanStudent, setViewingPlanStudent] = useState<Student | null>(null);
   const [studentToDelete, setStudentToDelete] = useState<Student | null>(null);
+  const [quickAssignStudent, setQuickAssignStudent] = useState<Student | null>(null);
+  const [quickSelectedHalaqahId, setQuickSelectedHalaqahId] = useState<string>('');
+  const [isQuickAssigning, setIsQuickAssigning] = useState(false);
   
   // Form fields
   const [formName, setFormName] = useState('');
@@ -86,7 +156,7 @@ export const StudentsTab: React.FC<StudentsTabProps> = ({
     setFormDailyNew('نصف وجه');
     setFormDailyReview('وجه واحد');
     setFormLevel('متوسط');
-    setFormHalaqahId(activeHalaqahId || halaqahs[0]?.id || '');
+    setFormHalaqahId(activeHalaqahId && activeHalaqahId !== 'all' ? activeHalaqahId : '');
     setFormNotes('');
     setFormError('');
     setIsAddModalOpen(true);
@@ -106,7 +176,7 @@ export const StudentsTab: React.FC<StudentsTabProps> = ({
     setFormDailyNew(student.dailyNewTarget || 'نصف وجه');
     setFormDailyReview(student.dailyReviewTarget || 'وجه واحد');
     setFormLevel(student.level || 'متوسط');
-    setFormHalaqahId(student.halaqahId || halaqahs[0]?.id || '');
+    setFormHalaqahId(student.halaqahId || '');
     setFormNotes(student.notes || '');
     setFormError('');
     setIsAddModalOpen(true);
@@ -139,7 +209,7 @@ export const StudentsTab: React.FC<StudentsTabProps> = ({
     const selectedSurah = QURAN_SURAHS.find(s => s.number === Number(formSurahNum));
     const validParentPhones = formParentPhones.map(p => p.trim()).filter(p => p.length > 0);
     const chosenHalaqah = halaqahs.find(h => h.id === formHalaqahId);
-    const assignedHalaqahName = chosenHalaqah ? chosenHalaqah.name : settings.halaqahName;
+    const assignedHalaqahName = chosenHalaqah ? chosenHalaqah.name : '';
 
     setIsSubmitting(true);
     try {
@@ -158,8 +228,8 @@ export const StudentsTab: React.FC<StudentsTabProps> = ({
           dailyNewTarget: formDailyNew,
           dailyReviewTarget: formDailyReview,
           level: formLevel,
-          halaqahId: formHalaqahId || editingStudent.halaqahId,
-          halaqahName: assignedHalaqahName || editingStudent.halaqahName,
+          halaqahId: formHalaqahId,
+          halaqahName: assignedHalaqahName,
           notes: formNotes
         };
         await onUpdateStudent(updated);
@@ -177,7 +247,7 @@ export const StudentsTab: React.FC<StudentsTabProps> = ({
           dailyNewTarget: formDailyNew,
           dailyReviewTarget: formDailyReview,
           level: formLevel,
-          halaqahId: formHalaqahId || halaqahs[0]?.id,
+          halaqahId: formHalaqahId,
           halaqahName: assignedHalaqahName,
           notes: formNotes
         });
@@ -190,8 +260,48 @@ export const StudentsTab: React.FC<StudentsTabProps> = ({
     }
   };
 
+  // Quick Assign Handler
+  const handleQuickAssign = async () => {
+    if (!quickAssignStudent || !quickSelectedHalaqahId) return;
+    setIsQuickAssigning(true);
+    try {
+      const chosen = halaqahs.find(h => h.id === quickSelectedHalaqahId);
+      const chosenName = chosen ? chosen.name : '';
+      if (onTransferStudent) {
+        await onTransferStudent(quickAssignStudent.id, quickSelectedHalaqahId, chosenName);
+      } else {
+        await onUpdateStudent({
+          ...quickAssignStudent,
+          halaqahId: quickSelectedHalaqahId,
+          halaqahName: chosenName
+        });
+      }
+      setQuickAssignStudent(null);
+      setQuickSelectedHalaqahId('');
+    } catch (e: any) {
+      console.error('Quick assign error:', e);
+    } finally {
+      setIsQuickAssigning(false);
+    }
+  };
+
+  const unassignedStudentsCount = students.filter(
+    s => !s.halaqahId || s.halaqahId.trim() === '' || s.halaqahId === 'unassigned' || s.halaqahId === 'none'
+  ).length;
+  const assignedStudentsCount = students.length - unassignedStudentsCount;
+
   // Filter students
   const filteredStudents = students.filter(student => {
+    const isAssigned = Boolean(
+      student.halaqahId &&
+      student.halaqahId.trim() !== '' &&
+      student.halaqahId !== 'unassigned' &&
+      student.halaqahId !== 'none'
+    );
+
+    if (assignmentFilter === 'assigned' && !isAssigned) return false;
+    if (assignmentFilter === 'unassigned' && isAssigned) return false;
+
     const matchesSearch =
       student.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       student.currentSurahName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -269,13 +379,13 @@ export const StudentsTab: React.FC<StudentsTabProps> = ({
           <Search className="w-4 h-4 text-[#86efac]/60 absolute right-4 top-3.5" />
         </div>
 
-        <div className="flex items-center gap-2 bg-[#064e3b]/50 border border-[#065f46] p-1.5 rounded-2xl">
+        <div className="flex items-center gap-2 bg-[#064e3b]/50 border border-[#065f46] p-1.5 rounded-2xl flex-wrap">
           <span className="text-xs text-[#86efac] px-2 font-bold">المستوى:</span>
           {(['all', 'قوي', 'متوسط', 'ضعيف'] as const).map(lvl => (
             <button
               key={lvl}
               onClick={() => setLevelFilter(lvl)}
-              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                 levelFilter === lvl
                   ? 'bg-[#fbbf24] text-[#064e3b] font-black shadow-sm'
                   : 'text-[#86efac]/80 hover:text-white'
@@ -285,6 +395,130 @@ export const StudentsTab: React.FC<StudentsTabProps> = ({
             </button>
           ))}
         </div>
+
+        {/* Assignment Status Filter */}
+        <div className="flex items-center gap-2 bg-[#064e3b]/50 border border-[#065f46] p-1.5 rounded-2xl flex-wrap">
+          <span className="text-xs text-[#86efac] px-2 font-bold">الحلقة:</span>
+          <button
+            onClick={() => setAssignmentFilter('all')}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              assignmentFilter === 'all'
+                ? 'bg-[#fbbf24] text-[#064e3b] font-black shadow-sm'
+                : 'text-[#86efac]/80 hover:text-white'
+            }`}
+          >
+            الكل ({students.length})
+          </button>
+          <button
+            onClick={() => setAssignmentFilter('assigned')}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              assignmentFilter === 'assigned'
+                ? 'bg-emerald-500 text-white font-black shadow-sm'
+                : 'text-[#86efac]/80 hover:text-white'
+            }`}
+          >
+            المرفقين ({assignedStudentsCount})
+          </button>
+          <button
+            onClick={() => setAssignmentFilter('unassigned')}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+              assignmentFilter === 'unassigned'
+                ? 'bg-amber-500 text-[#022c22] font-black shadow-sm'
+                : unassignedStudentsCount > 0
+                ? 'text-amber-300 bg-amber-500/20 hover:bg-amber-500/30'
+                : 'text-[#86efac]/80 hover:text-white'
+            }`}
+          >
+            <span>غير المرفقين ({unassignedStudentsCount})</span>
+            {unassignedStudentsCount > 0 && <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />}
+          </button>
+        </div>
+      </div>
+
+      {/* Unassigned Students Alert Banner for Supervisor */}
+      {unassignedStudentsCount > 0 && isSupervisor && assignmentFilter !== 'unassigned' && (
+        <div className="bg-gradient-to-r from-amber-500/20 via-amber-600/15 to-[#064e3b] border border-amber-500/40 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-lg">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-amber-500/20 border border-amber-500/40 text-amber-300 flex items-center justify-center shrink-0">
+              <AlertCircle className="w-5 h-5" />
+            </div>
+            <div>
+              <h4 className="text-sm font-bold text-amber-200">
+                تنبيه: يوجد {unassignedStudentsCount} طالب غير مرفق في أي حلقة قرآنية
+              </h4>
+              <p className="text-xs text-[#86efac]/90 mt-0.5">
+                الطلاب غير المرفقين يظهر لهم في بوابتهم (لم يتم إرفاقك بعد)، ولن يظهروا للمعلمين في الحلقات إلا عند إرفاقهم بحلقة محددة.
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => setAssignmentFilter('unassigned')}
+            className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-[#022c22] font-black text-xs flex items-center justify-center gap-1.5 shrink-0 shadow-md cursor-pointer transition-all"
+          >
+            <span>عرض وتعيين غير المرفقين ({unassignedStudentsCount})</span>
+          </button>
+        </div>
+      )}
+
+      {/* Bulk Selection and Batch Transfer Bar */}
+      <div className="bg-[#022c22]/90 border border-[#065f46] rounded-2xl p-3.5 sm:p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-lg">
+        <div className="flex items-center gap-2.5 flex-wrap">
+          <button
+            type="button"
+            onClick={selectedStudentIds.length === filteredStudents.length && filteredStudents.length > 0 ? handleDeselectAll : handleSelectAllFiltered}
+            className="px-3.5 py-2 rounded-xl text-xs font-bold bg-[#064e3b] text-[#86efac] hover:text-white border border-[#065f46] flex items-center gap-2 cursor-pointer transition-colors"
+          >
+            {selectedStudentIds.length === filteredStudents.length && filteredStudents.length > 0 ? (
+              <>
+                <CheckSquare className="w-4 h-4 text-[#fbbf24]" />
+                <span>إلغاء تحديد الكل ({selectedStudentIds.length})</span>
+              </>
+            ) : (
+              <>
+                <Square className="w-4 h-4" />
+                <span>تحديد جميع المعروضين ({filteredStudents.length})</span>
+              </>
+            )}
+          </button>
+
+          {selectedStudentIds.length > 0 && (
+            <button
+              type="button"
+              onClick={handleDeselectAll}
+              className="text-xs text-slate-400 hover:text-red-300 underline cursor-pointer px-1"
+            >
+              مسح التحديد
+            </button>
+          )}
+
+          <div className="text-xs">
+            {selectedStudentIds.length > 0 ? (
+              <span className="px-3 py-1 rounded-xl bg-[#fbbf24]/20 border border-[#fbbf24]/40 text-[#fbbf24] font-bold">
+                تم تحديد <strong>{selectedStudentIds.length}</strong> طالب لنقلهم سحابياً
+              </span>
+            ) : (
+              <span className="text-[#86efac]/70 text-[11px] hidden sm:inline">
+                حدد الطلاب بالضغط على زر التحديد في بطاقة أي طالب لنقلهم دفعة واحدة
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Transfer Action Button */}
+        <button
+          type="button"
+          disabled={selectedStudentIds.length === 0}
+          onClick={() => {
+            const otherHalaqah = halaqahs.find(h => h.id !== activeHalaqahId) || halaqahs[0];
+            setBulkTargetHalaqahId(otherHalaqah ? otherHalaqah.id : '');
+            setBulkFeedback(null);
+            setIsBulkTransferModalOpen(true);
+          }}
+          className="px-5 py-2.5 rounded-xl text-xs font-black bg-gradient-to-r from-[#fbbf24] to-[#f59e0b] text-[#064e3b] hover:from-[#f59e0b] hover:to-[#fbbf24] disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2 cursor-pointer transition-all shadow-md shadow-amber-950/30 shrink-0"
+        >
+          <ArrowRightLeft className="w-4 h-4" />
+          <span>نقل الطلاب المحددين ({selectedStudentIds.length}) إلى حلقة أخرى</span>
+        </button>
       </div>
 
       {/* Student Cards Grid */}
@@ -298,45 +532,85 @@ export const StudentsTab: React.FC<StudentsTabProps> = ({
             </p>
           </div>
         ) : (
-          filteredStudents.map(student => (
-            <div
-              key={student.id}
-              className="bg-[#064e3b]/55 border border-[#065f46] hover:border-[#fbbf24]/50 rounded-[32px] p-5 flex flex-col justify-between gap-4 transition-all hover:shadow-2xl hover:shadow-emerald-950/50"
-            >
-              {/* Card Top */}
-              <div>
-                <div className="flex items-start justify-between gap-2">
-                  <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 rounded-2xl bg-[#022c22] border border-[#065f46] text-[#fbbf24] flex items-center justify-center text-lg font-black shadow-inner shrink-0">
-                      {student.name.charAt(0)}
-                    </div>
-                    <div>
-                      <h3 className="text-sm font-bold text-white line-clamp-1">{student.name}</h3>
-                      <div className="flex items-center gap-2 mt-0.5 text-xs text-[#86efac]/80 flex-wrap">
-                        <span>{student.age} سنة</span>
-                        <span>•</span>
-                        <span
-                          className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                            student.level === 'قوي'
-                              ? 'bg-[#fbbf24]/20 text-[#fbbf24] border border-[#fbbf24]/30'
-                              : student.level === 'متوسط'
-                              ? 'bg-emerald-500/20 text-[#86efac] border border-emerald-500/30'
-                              : 'bg-amber-600/20 text-amber-300 border border-amber-600/30'
-                          }`}
-                        >
-                          {student.level}
-                        </span>
-                        {student.halaqahName && halaqahs.length > 1 && (
-                          <>
-                            <span>•</span>
-                            <span className="px-2 py-0.2 rounded-full text-[10px] font-medium bg-[#022c22] text-[#86efac] border border-[#065f46]">
-                              {student.halaqahName}
-                            </span>
-                          </>
+          filteredStudents.map(student => {
+            const isSelected = selectedStudentIds.includes(student.id);
+
+            return (
+              <div
+                key={student.id}
+                className={`border rounded-[32px] p-5 flex flex-col justify-between gap-4 transition-all hover:shadow-2xl hover:shadow-emerald-950/50 ${
+                  isSelected
+                    ? 'bg-[#064e3b]/90 border-[#fbbf24] ring-2 ring-[#fbbf24]/50 shadow-lg shadow-amber-950/40'
+                    : 'bg-[#064e3b]/55 border-[#065f46] hover:border-[#fbbf24]/50'
+                }`}
+              >
+                {/* Card Top */}
+                <div>
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-center gap-3">
+                      {/* Selection Checkbox */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedStudentIds(prev =>
+                            prev.includes(student.id)
+                              ? prev.filter(id => id !== student.id)
+                              : [...prev, student.id]
+                          );
+                        }}
+                        className={`w-9 h-9 rounded-xl border flex items-center justify-center shrink-0 cursor-pointer transition-all ${
+                          isSelected
+                            ? 'bg-[#fbbf24] text-[#064e3b] border-[#fbbf24] shadow-sm'
+                            : 'bg-[#022c22] text-slate-400 hover:text-white border-[#065f46] hover:border-[#fbbf24]/50'
+                        }`}
+                        title={isSelected ? 'إلغاء تحديد الطالب' : 'تحديد الطالب للنقل'}
+                      >
+                        {isSelected ? (
+                          <CheckSquare className="w-5 h-5" />
+                        ) : (
+                          <Square className="w-5 h-5" />
                         )}
+                      </button>
+
+                      <div className="w-12 h-12 rounded-2xl bg-[#022c22] border border-[#065f46] text-[#fbbf24] flex items-center justify-center text-lg font-black shadow-inner shrink-0">
+                        {student.name.charAt(0)}
+                      </div>
+                      <div>
+                        <h3 className="text-sm font-bold text-white line-clamp-1">{student.name}</h3>
+                        <div className="flex items-center gap-2 mt-0.5 text-xs text-[#86efac]/80 flex-wrap">
+                          <span>{student.age} سنة</span>
+                          <span>•</span>
+                          <span
+                            className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                              student.level === 'قوي'
+                                ? 'bg-[#fbbf24]/20 text-[#fbbf24] border border-[#fbbf24]/30'
+                                : student.level === 'متوسط'
+                                ? 'bg-emerald-500/20 text-[#86efac] border border-emerald-500/30'
+                                : 'bg-amber-600/20 text-amber-300 border border-amber-600/30'
+                            }`}
+                          >
+                            {student.level}
+                          </span>
+                          {(!student.halaqahId || student.halaqahId.trim() === '' || student.halaqahId === 'unassigned' || student.halaqahId === 'none') ? (
+                            <>
+                              <span>•</span>
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-500/25 text-amber-300 border border-amber-500/50">
+                                ⚠️ غير مرفق بحلقة
+                              </span>
+                            </>
+                          ) : (
+                            student.halaqahName && (
+                              <>
+                                <span>•</span>
+                                <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-[#022c22] text-[#86efac] border border-[#065f46]">
+                                  {student.halaqahName}
+                                </span>
+                              </>
+                            )
+                          )}
+                        </div>
                       </div>
                     </div>
-                  </div>
 
                   {/* Actions */}
                   <div className="flex items-center gap-1">
@@ -386,6 +660,20 @@ export const StudentsTab: React.FC<StudentsTabProps> = ({
                     </div>
                   )}
                 </div>
+
+                {/* Quick Assign Action for Unassigned Students */}
+                {(!student.halaqahId || student.halaqahId.trim() === '' || student.halaqahId === 'unassigned' || student.halaqahId === 'none') && isSupervisor && (
+                  <button
+                    onClick={() => {
+                      setQuickAssignStudent(student);
+                      setQuickSelectedHalaqahId(halaqahs[0]?.id || '');
+                    }}
+                    className="w-full mt-3 py-2 px-3 rounded-2xl bg-amber-500/20 hover:bg-amber-500/35 border border-amber-500/50 text-amber-300 text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-sm"
+                  >
+                    <UserPlus className="w-3.5 h-3.5 text-amber-300" />
+                    <span>إرفاق هذا الطالب بحلقة قرآنية الآن</span>
+                  </button>
+                )}
               </div>
 
               {/* AI Plan Banner / Action */}
@@ -409,9 +697,10 @@ export const StudentsTab: React.FC<StudentsTabProps> = ({
                 )}
               </div>
             </div>
-          ))
-        )}
-      </div>
+          );
+        })
+      )}
+    </div>
 
       {/* Add / Edit Student Modal */}
       {isAddModalOpen && (
@@ -678,6 +967,9 @@ export const StudentsTab: React.FC<StudentsTabProps> = ({
                       onChange={e => setFormHalaqahId(e.target.value)}
                       className="w-full bg-[#022c22] border border-[#065f46] focus:border-[#fbbf24] rounded-2xl py-2.5 px-3 text-sm text-[#f0f9f6] outline-none cursor-pointer"
                     >
+                      <option value="" className="bg-[#064e3b] text-amber-300 font-bold">
+                        ⚠️ غير مرفق بحلقة بعد (في قائمة الانتظار)
+                      </option>
                       {halaqahs.map(h => (
                         <option key={h.id} value={h.id} className="bg-[#064e3b] text-white">
                           {h.name} (المعلم: {h.primaryTeacherName || 'محمد منتصر'})
@@ -847,6 +1139,219 @@ export const StudentsTab: React.FC<StudentsTabProps> = ({
                 نعم، تأكيد الحذف
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Quick Assign Halaqah Modal */}
+      {quickAssignStudent && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+          <div className="relative w-full max-w-md bg-[#064e3b] border border-amber-500/40 rounded-3xl p-6 shadow-2xl shadow-emerald-950/90 flex flex-col gap-4 animate-fadeIn">
+            <div className="flex items-center gap-3 border-b border-[#065f46] pb-4">
+              <div className="w-10 h-10 rounded-xl bg-amber-500/20 border border-amber-500/40 text-amber-300 flex items-center justify-center shrink-0">
+                <UserPlus className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-white">إرفاق الطالب بحلقة قرآنية</h3>
+                <p className="text-xs text-[#86efac]/80 mt-0.5">
+                  الطالب: <span className="text-amber-300 font-bold">{quickAssignStudent.name}</span>
+                </p>
+              </div>
+            </div>
+
+            <p className="text-xs text-[#86efac]/90 leading-relaxed">
+              اختر الحلقة القرآنية التي ترغب في إلحاق الطالب بها. بعد التأكيد، سيتم الحفظ سحابياً في قاعدة البيانات وسيتمكن الطالب من الدخول لمعلمه ومتابعة الحفظ فوراً.
+            </p>
+
+            <div className="space-y-2">
+              <label className="block text-xs font-semibold text-[#86efac] text-right">
+                اختر الحلقة القرآنية:
+              </label>
+              <select
+                value={quickSelectedHalaqahId || (halaqahs[0]?.id || '')}
+                onChange={e => setQuickSelectedHalaqahId(e.target.value)}
+                className="w-full bg-[#022c22] border border-[#065f46] focus:border-amber-400 rounded-2xl py-3 px-3.5 text-sm text-[#f0f9f6] outline-none cursor-pointer font-bold"
+              >
+                {halaqahs.map(h => (
+                  <option key={h.id} value={h.id} className="bg-[#064e3b] text-white">
+                    {h.name} — المعلم: {h.primaryTeacherName || 'محمد منتصر'}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                type="button"
+                disabled={isQuickAssigning}
+                onClick={() => {
+                  setQuickAssignStudent(null);
+                  setQuickSelectedHalaqahId('');
+                }}
+                className="px-4 py-2.5 rounded-xl text-xs font-bold bg-[#022c22] text-[#86efac] hover:text-white border border-[#065f46] cursor-pointer"
+              >
+                إلغاء
+              </button>
+              <button
+                type="button"
+                disabled={isQuickAssigning}
+                onClick={() => {
+                  const targetId = quickSelectedHalaqahId || (halaqahs[0]?.id || '');
+                  if (targetId) {
+                    setQuickSelectedHalaqahId(targetId);
+                    handleQuickAssign();
+                  }
+                }}
+                className="px-5 py-2.5 rounded-xl text-xs font-black bg-amber-500 hover:bg-amber-400 text-[#022c22] shadow-lg cursor-pointer transition-all flex items-center gap-1.5"
+              >
+                {isQuickAssigning ? (
+                  <span>جاري الإرفاق السحابي...</span>
+                ) : (
+                  <>
+                    <UserPlus className="w-4 h-4" />
+                    <span>تأكيد الإرفاق والحفظ السحابي</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bulk Transfer Modal */}
+      {isBulkTransferModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+          <div className="relative w-full max-w-lg bg-[#064e3b] border border-[#fbbf24]/40 rounded-3xl p-6 shadow-2xl shadow-emerald-950/90 flex flex-col gap-4 animate-fadeIn">
+            {/* Header */}
+            <div className="flex items-center justify-between border-b border-[#065f46] pb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-[#fbbf24]/20 border border-[#fbbf24]/40 text-[#fbbf24] flex items-center justify-center shrink-0">
+                  <ArrowRightLeft className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-white">نقل جماعي للطلاب المحددين</h3>
+                  <p className="text-xs text-[#86efac]/90 mt-0.5">
+                    سيتم نقل جميع الطلاب المحددين وتحديث بياناتهم في السحابة فوراً
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsBulkTransferModalOpen(false);
+                  setBulkFeedback(null);
+                }}
+                className="p-1.5 rounded-lg text-[#86efac] hover:text-white hover:bg-[#022c22] cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {bulkFeedback && (
+              <div
+                className={`p-3 rounded-2xl text-xs flex items-center gap-2 ${
+                  bulkFeedback.type === 'success'
+                    ? 'bg-emerald-500/20 border border-emerald-500/40 text-emerald-200'
+                    : 'bg-red-500/20 border border-red-500/40 text-red-200'
+                }`}
+              >
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                <span>{bulkFeedback.text}</span>
+              </div>
+            )}
+
+            {/* Selected Students Preview */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between text-xs font-bold text-[#86efac]">
+                <span>الطلاب المختارون للنقل ({selectedStudentIds.length}):</span>
+                <span className="text-[11px] text-amber-300">
+                  {selectedStudentIds.length} طالب
+                </span>
+              </div>
+
+              <div className="max-h-36 overflow-y-auto bg-[#022c22]/90 border border-[#065f46] rounded-2xl p-2.5 flex flex-wrap gap-1.5">
+                {selectedStudentIds.map(sId => {
+                  const st = students.find(s => s.id === sId);
+                  if (!st) return null;
+                  return (
+                    <span
+                      key={st.id}
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-[#064e3b] text-white border border-[#065f46] text-xs"
+                    >
+                      <span className="font-bold">{st.name}</span>
+                      <span className="text-[10px] text-[#86efac]">
+                        ({st.halaqahName || 'غير مرفق'})
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedStudentIds(prev => prev.filter(id => id !== st.id))}
+                        className="text-slate-400 hover:text-red-300 cursor-pointer"
+                        title="إزالة من التحديد"
+                      >
+                        ×
+                      </button>
+                    </span>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Target Halaqah Select */}
+            <form onSubmit={handleBulkTransferSubmit} className="space-y-4">
+              <div className="space-y-1.5">
+                <label className="block text-xs font-semibold text-[#86efac] text-right">
+                  اختر الحلقة المستهدفة لنقل الطلاب إليها:
+                </label>
+                <select
+                  value={bulkTargetHalaqahId}
+                  onChange={e => setBulkTargetHalaqahId(e.target.value)}
+                  className="w-full bg-[#022c22] border border-[#065f46] focus:border-[#fbbf24] rounded-2xl py-3 px-3.5 text-sm text-[#f0f9f6] outline-none cursor-pointer font-bold"
+                >
+                  <option value="" disabled>-- اختر الحلقة المستهدفة --</option>
+                  {halaqahs.map(h => (
+                    <option key={h.id} value={h.id} className="bg-[#064e3b] text-white">
+                      {h.name} {h.primaryTeacherName ? `(المعلم: ${h.primaryTeacherName})` : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="p-3 bg-[#022c22]/60 border border-[#065f46] rounded-xl text-[11px] text-[#86efac]/80 leading-relaxed">
+                ℹ️ سيتم نقل جميع الطلاب المحددين إلى الحلقة المختارة سحابياً عبر قاعدة بيانات Firebase، مع الاحتفاظ بكامل سجلات التسميع والتقييمات والخطط اليومية دون أي فقدان.
+              </div>
+
+              {/* Actions */}
+              <div className="flex items-center justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  disabled={isBulkTransferring}
+                  onClick={() => {
+                    setIsBulkTransferModalOpen(false);
+                    setBulkFeedback(null);
+                  }}
+                  className="px-4 py-2.5 rounded-xl text-xs font-bold bg-[#022c22] text-[#86efac] hover:text-white border border-[#065f46] cursor-pointer"
+                >
+                  إلغاء
+                </button>
+                <button
+                  type="submit"
+                  disabled={isBulkTransferring || selectedStudentIds.length === 0 || !bulkTargetHalaqahId}
+                  className="px-6 py-2.5 rounded-xl text-xs font-black bg-gradient-to-r from-[#fbbf24] to-[#f59e0b] text-[#064e3b] shadow-lg shadow-amber-950/30 cursor-pointer transition-all flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  {isBulkTransferring ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                      <span>جاري النقل السحابي...</span>
+                    </>
+                  ) : (
+                    <>
+                      <ArrowRightLeft className="w-4 h-4" />
+                      <span>تأكيد نقل {selectedStudentIds.length} طالب سحابياً</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

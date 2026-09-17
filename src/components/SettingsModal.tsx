@@ -17,7 +17,9 @@ import {
   Phone,
   Key,
   BookOpen,
-  Info
+  Info,
+  CheckSquare,
+  Square
 } from 'lucide-react';
 import { TeacherAccount, Halaqah, Student, AppSettings } from '../types';
 
@@ -34,6 +36,7 @@ interface SettingsModalProps {
   onSaveHalaqah: (halaqah: Halaqah) => Promise<void>;
   onDeleteHalaqah: (halaqahId: string) => Promise<void>;
   onTransferStudent: (studentId: string, targetHalaqahId: string, targetHalaqahName: string) => Promise<void>;
+  onBatchTransferStudents?: (studentIds: string[], targetHalaqahId: string, targetHalaqahName: string) => Promise<void>;
   onSwitchActiveHalaqah?: (halaqahId: string) => void;
 }
 
@@ -50,6 +53,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onSaveHalaqah,
   onDeleteHalaqah,
   onTransferStudent,
+  onBatchTransferStudents,
   onSwitchActiveHalaqah
 }) => {
   const [activeSubTab, setActiveSubTab] = useState<'halaqahs' | 'teachers' | 'transfer'>('halaqahs');
@@ -68,7 +72,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [isNewTeacher, setIsNewTeacher] = useState(false);
 
   // Transfer Student State
+  const [transferMode, setTransferMode] = useState<'batch' | 'single'>('batch');
   const [transferStudentId, setTransferStudentId] = useState<string>('');
+  const [selectedTransferStudentIds, setSelectedTransferStudentIds] = useState<string[]>([]);
+  const [transferFilterSourceHalaqahId, setTransferFilterSourceHalaqahId] = useState<string>('all');
   const [transferTargetHalaqahId, setTransferTargetHalaqahId] = useState<string>('');
 
   // Status & Feedback
@@ -324,37 +331,74 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   // ----------------------------------------------------
   const handleTransferStudentSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!transferStudentId || !transferTargetHalaqahId) {
-      setStatusMsg({ type: 'error', text: 'يرجى اختيار الطالب والحلقة المراد النقل إليها.' });
+    if (!transferTargetHalaqahId) {
+      setStatusMsg({ type: 'error', text: 'يرجى اختيار الحلقة المراد النقل إليها.' });
       return;
     }
 
-    const st = students.find(s => s.id === transferStudentId);
     const targetHalaqah = halaqahs.find(h => h.id === transferTargetHalaqahId);
-
-    if (!st || !targetHalaqah) {
-      setStatusMsg({ type: 'error', text: 'تعذر العثور على بيانات الطالب أو الحلقة المستهدفة.' });
+    if (!targetHalaqah) {
+      setStatusMsg({ type: 'error', text: 'تعذر العثور على بيانات الحلقة المستهدفة.' });
       return;
     }
 
-    if (st.halaqahId === targetHalaqah.id) {
-      setStatusMsg({ type: 'error', text: 'الطالب موجود بالفعل في هذه الحلقة.' });
-      return;
-    }
+    if (transferMode === 'batch') {
+      if (selectedTransferStudentIds.length === 0) {
+        setStatusMsg({ type: 'error', text: 'يرجى تحديد طالب واحد على الأقل لنقله سحابياً.' });
+        return;
+      }
 
-    try {
-      setIsSubmitting(true);
-      await onTransferStudent(st.id, targetHalaqah.id, targetHalaqah.name);
-      setStatusMsg({
-        type: 'success',
-        text: `تم نقل الطالب (${st.name}) مع سجله وحفظه كاملاً إلى (${targetHalaqah.name}) بنجاح!`
-      });
-      setTransferStudentId('');
-      setTransferTargetHalaqahId('');
-    } catch (err: any) {
-      setStatusMsg({ type: 'error', text: 'حدث خطأ أثناء نقل الطالب: ' + err.message });
-    } finally {
-      setIsSubmitting(false);
+      try {
+        setIsSubmitting(true);
+        if (onBatchTransferStudents) {
+          await onBatchTransferStudents(selectedTransferStudentIds, targetHalaqah.id, targetHalaqah.name);
+        } else {
+          for (const sId of selectedTransferStudentIds) {
+            await onTransferStudent(sId, targetHalaqah.id, targetHalaqah.name);
+          }
+        }
+        setStatusMsg({
+          type: 'success',
+          text: `تم نقل (${selectedTransferStudentIds.length}) طلاب بنجاح إلى (${targetHalaqah.name}) ومزامنتهم سحابياً في Firestore!`
+        });
+        setSelectedTransferStudentIds([]);
+        setTransferTargetHalaqahId('');
+      } catch (err: any) {
+        setStatusMsg({ type: 'error', text: 'حدث خطأ أثناء نقل الطلاب سحابياً: ' + err.message });
+      } finally {
+        setIsSubmitting(false);
+      }
+    } else {
+      if (!transferStudentId) {
+        setStatusMsg({ type: 'error', text: 'يرجى اختيار الطالب المراد نقله.' });
+        return;
+      }
+
+      const st = students.find(s => s.id === transferStudentId);
+      if (!st) {
+        setStatusMsg({ type: 'error', text: 'تعذر العثور على بيانات الطالب.' });
+        return;
+      }
+
+      if (st.halaqahId === targetHalaqah.id) {
+        setStatusMsg({ type: 'error', text: 'الطالب موجود بالفعل في هذه الحلقة.' });
+        return;
+      }
+
+      try {
+        setIsSubmitting(true);
+        await onTransferStudent(st.id, targetHalaqah.id, targetHalaqah.name);
+        setStatusMsg({
+          type: 'success',
+          text: `تم نقل الطالب (${st.name}) مع سجله وحفظه كاملاً إلى (${targetHalaqah.name}) بنجاح!`
+        });
+        setTransferStudentId('');
+        setTransferTargetHalaqahId('');
+      } catch (err: any) {
+        setStatusMsg({ type: 'error', text: 'حدث خطأ أثناء نقل الطالب: ' + err.message });
+      } finally {
+        setIsSubmitting(false);
+      }
     }
   };
 
@@ -1117,32 +1161,198 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         )}
 
         {/* ========================================================================= */}
-        {/* SUB-TAB 3: TRANSFER STUDENTS */}
+        {/* SUB-TAB 3: TRANSFER STUDENTS (SINGLE OR MULTIPLE / BULK) */}
         {/* ========================================================================= */}
         {activeSubTab === 'transfer' && (
           <div className="space-y-6 flex-1">
             <div className="bg-[#022c22]/70 p-4 rounded-2xl border border-[#065f46]">
-              <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                <ArrowRightLeft className="w-4 h-4 text-[#fbbf24]" />
-                <span>نقل طالب إلى حلقة أخرى بكامل سجله القرآني</span>
-              </h3>
-              <p className="text-[11px] text-[#86efac] mt-1 leading-relaxed">
-                عند نقل الطالب، يتم نقل سجله بالكامل (بيانات الحفظ الحالية، خطة الذكاء الاصطناعي، جميع سجلات الحضور والغياب، وتقييمات التسميع) لتظهر فورياً تحت إشراف معلّمي الحلقة الجديدة.
-              </p>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                  <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                    <ArrowRightLeft className="w-4 h-4 text-[#fbbf24]" />
+                    <span>نقل الطلاب بين الحلقات مع كامل السجلات سحابياً</span>
+                  </h3>
+                  <p className="text-[11px] text-[#86efac] mt-1 leading-relaxed">
+                    يتم نقل الطلاب مع سجلاتهم بالكامل (الحفظ، التقييمات، الحضور، السلوك) وتحديثها فورياً في السحابة تحت إشراف معلّمي الحلقة الجديدة.
+                  </p>
+                </div>
+
+                {/* Mode Selector */}
+                <div className="flex items-center gap-1.5 bg-[#064e3b] p-1 rounded-xl border border-[#065f46] shrink-0 self-start sm:self-auto">
+                  <button
+                    type="button"
+                    onClick={() => setTransferMode('batch')}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                      transferMode === 'batch'
+                        ? 'bg-[#fbbf24] text-[#064e3b] shadow-md'
+                        : 'text-slate-300 hover:text-white'
+                    }`}
+                  >
+                    <CheckSquare className="w-3.5 h-3.5" />
+                    <span>نقل متعدد (مجموعة)</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setTransferMode('single')}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                      transferMode === 'single'
+                        ? 'bg-[#fbbf24] text-[#064e3b] shadow-md'
+                        : 'text-slate-300 hover:text-white'
+                    }`}
+                  >
+                    <Users className="w-3.5 h-3.5" />
+                    <span>طالب فردي</span>
+                  </button>
+                </div>
+              </div>
             </div>
 
             <form
               onSubmit={handleTransferStudentSubmit}
               className="bg-[#022c22] border border-[#065f46] rounded-2xl p-5 space-y-4 shadow-xl"
             >
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {/* Select Student */}
+              {/* TARGET HALAQAH SELECTION (ALWAYS REQUIRED) */}
+              <div>
+                <label className="block text-xs font-bold text-[#86efac] mb-1">
+                  اختر الحلقة المراد النقل إليها <span className="text-red-400">*</span>
+                </label>
+                <select
+                  required
+                  value={transferTargetHalaqahId}
+                  onChange={e => setTransferTargetHalaqahId(e.target.value)}
+                  className="w-full bg-[#064e3b] border border-[#065f46] rounded-xl px-3 py-2.5 text-white text-xs focus:border-[#fbbf24] focus:outline-none cursor-pointer"
+                >
+                  <option value="">-- اختر الحلقة المستهدفة --</option>
+                  {halaqahs.map(h => (
+                    <option key={h.id} value={h.id}>
+                      {h.name} (المعلمون: {h.teacherNames?.join('، ') || h.primaryTeacherName || 'غير محدد'})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* BATCH MODE: MULTI-SELECT CHECKLIST */}
+              {transferMode === 'batch' && (
+                <div className="space-y-3 pt-2">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-[#065f46] pb-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold text-white">تحديد الطلاب المراد نقلهم:</span>
+                      <span className="px-2 py-0.5 rounded-full bg-[#064e3b] text-[#fbbf24] text-[11px] font-bold">
+                        {selectedTransferStudentIds.length} محدد
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      {/* Filter by source halaqah */}
+                      <select
+                        value={transferFilterSourceHalaqahId}
+                        onChange={e => setTransferFilterSourceHalaqahId(e.target.value)}
+                        className="bg-[#064e3b] border border-[#065f46] text-xs text-white rounded-lg px-2 py-1 focus:outline-none"
+                      >
+                        <option value="all">كل الحلقات</option>
+                        {halaqahs.map(h => (
+                          <option key={h.id} value={h.id}>من: {h.name}</option>
+                        ))}
+                      </select>
+
+                      {/* Select/Deselect All */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const eligible = students.filter(s =>
+                            (transferFilterSourceHalaqahId === 'all' || s.halaqahId === transferFilterSourceHalaqahId) &&
+                            s.halaqahId !== transferTargetHalaqahId
+                          );
+                          const allIds = eligible.map(s => s.id);
+                          const areAllSelected = allIds.every(id => selectedTransferStudentIds.includes(id));
+                          if (areAllSelected) {
+                            setSelectedTransferStudentIds(prev => prev.filter(id => !allIds.includes(id)));
+                          } else {
+                            setSelectedTransferStudentIds(prev => Array.from(new Set([...prev, ...allIds])));
+                          }
+                        }}
+                        className="text-[11px] font-bold text-[#fbbf24] hover:underline cursor-pointer"
+                      >
+                        تحديد/إلغاء الكل
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Students Grid Checklist */}
+                  <div className="max-h-60 overflow-y-auto space-y-1.5 p-1 bg-[#064e3b]/30 rounded-xl border border-[#065f46]">
+                    {(() => {
+                      const filtered = students.filter(s =>
+                        transferFilterSourceHalaqahId === 'all' || s.halaqahId === transferFilterSourceHalaqahId
+                      );
+
+                      if (filtered.length === 0) {
+                        return (
+                          <div className="text-center py-6 text-xs text-slate-400">
+                            لا يوجد طلاب مطابقين للفلتر المختار.
+                          </div>
+                        );
+                      }
+
+                      return filtered.map(st => {
+                        const isSelected = selectedTransferStudentIds.includes(st.id);
+                        const isAlreadyInTarget = transferTargetHalaqahId && st.halaqahId === transferTargetHalaqahId;
+                        const currentHName = st.halaqahName || halaqahs.find(h => h.id === st.halaqahId)?.name || 'غير محدد';
+
+                        return (
+                          <div
+                            key={st.id}
+                            onClick={() => {
+                              if (isAlreadyInTarget) return;
+                              setSelectedTransferStudentIds(prev =>
+                                prev.includes(st.id) ? prev.filter(id => id !== st.id) : [...prev, st.id]
+                              );
+                            }}
+                            className={`flex items-center justify-between p-2.5 rounded-xl border cursor-pointer transition-all ${
+                              isAlreadyInTarget
+                                ? 'opacity-40 bg-slate-900/30 border-slate-700 cursor-not-allowed'
+                                : isSelected
+                                ? 'bg-[#064e3b] border-[#fbbf24] shadow-sm'
+                                : 'bg-[#022c22]/60 border-[#065f46] hover:bg-[#064e3b]/50'
+                            }`}
+                          >
+                            <div className="flex items-center gap-2.5">
+                              {isSelected ? (
+                                <CheckSquare className="w-4 h-4 text-[#fbbf24] shrink-0" />
+                              ) : (
+                                <Square className="w-4 h-4 text-slate-400 shrink-0" />
+                              )}
+                              <div>
+                                <div className="text-xs font-bold text-white flex items-center gap-1.5">
+                                  <span>{st.name}</span>
+                                  {isAlreadyInTarget && (
+                                    <span className="text-[10px] text-amber-300 font-normal">(في الحلقة المستهدفة)</span>
+                                  )}
+                                </div>
+                                <div className="text-[10px] text-[#86efac]">
+                                  حفظ: سورة {st.currentSurahName} (آية {st.currentAyah})
+                                </div>
+                              </div>
+                            </div>
+
+                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#022c22] text-slate-300 border border-[#065f46]">
+                              {currentHName}
+                            </span>
+                          </div>
+                        );
+                      });
+                    })()}
+                  </div>
+                </div>
+              )}
+
+              {/* SINGLE MODE */}
+              {transferMode === 'single' && (
                 <div>
                   <label className="block text-xs font-bold text-[#86efac] mb-1">
                     اختر الطالب المراد نقله <span className="text-red-400">*</span>
                   </label>
                   <select
-                    required
+                    required={transferMode === 'single'}
                     value={transferStudentId}
                     onChange={e => setTransferStudentId(e.target.value)}
                     className="w-full bg-[#064e3b] border border-[#065f46] rounded-xl px-3 py-2.5 text-white text-xs focus:border-[#fbbf24] focus:outline-none cursor-pointer"
@@ -1157,61 +1367,51 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       );
                     })}
                   </select>
-                </div>
 
-                {/* Select Target Halaqah */}
-                <div>
-                  <label className="block text-xs font-bold text-[#86efac] mb-1">
-                    اختر الحلقة المراد النقل إليها <span className="text-red-400">*</span>
-                  </label>
-                  <select
-                    required
-                    value={transferTargetHalaqahId}
-                    onChange={e => setTransferTargetHalaqahId(e.target.value)}
-                    className="w-full bg-[#064e3b] border border-[#065f46] rounded-xl px-3 py-2.5 text-white text-xs focus:border-[#fbbf24] focus:outline-none cursor-pointer"
-                  >
-                    <option value="">-- اختر الحلقة المستهدفة --</option>
-                    {halaqahs.map(h => (
-                      <option key={h.id} value={h.id}>
-                        {h.name} (المعلم: {h.primaryTeacherName || 'محمد منتصر'})
-                      </option>
-                    ))}
-                  </select>
+                  {/* Summary of Selected Student Details if chosen */}
+                  {transferStudentId && (
+                    (() => {
+                      const sel = students.find(s => s.id === transferStudentId);
+                      if (!sel) return null;
+                      return (
+                        <div className="mt-3 bg-[#064e3b]/50 border border-[#065f46] rounded-xl p-3.5 text-xs text-[#86efac] space-y-1">
+                          <div className="flex justify-between">
+                            <span className="font-bold text-white">بيانات الطالب المحدد:</span>
+                            <span className="text-[#fbbf24] font-bold">{sel.name} ({sel.age} سنة)</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span>موضع الحفظ الحالي:</span>
+                            <span className="text-white">سورة {sel.currentSurahName} - آية {sel.currentAyah}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span>ولي الأمر ورقم الجوال:</span>
+                            <span className="text-white">{sel.parentName} ({sel.phone})</span>
+                          </div>
+                        </div>
+                      );
+                    })()
+                  )}
                 </div>
-              </div>
-
-              {/* Summary of Selected Student Details if chosen */}
-              {transferStudentId && (
-                (() => {
-                  const sel = students.find(s => s.id === transferStudentId);
-                  if (!sel) return null;
-                  return (
-                    <div className="bg-[#064e3b]/50 border border-[#065f46] rounded-xl p-3.5 text-xs text-[#86efac] space-y-1">
-                      <div className="flex justify-between">
-                        <span className="font-bold text-white">بيانات الطالب المحدد:</span>
-                        <span className="text-[#fbbf24] font-bold">{sel.name} ({sel.age} سنة)</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span>موضع الحفظ الحالي:</span>
-                        <span className="text-white">سورة {sel.currentSurahName} - آية {sel.currentAyah}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span>ولي الأمر ورقم الجوال:</span>
-                        <span className="text-white">{sel.parentName} ({sel.phone})</span>
-                      </div>
-                    </div>
-                  );
-                })()
               )}
 
               <div className="flex items-center justify-end pt-3 border-t border-[#065f46]">
                 <button
                   type="submit"
-                  disabled={isSubmitting || !transferStudentId || !transferTargetHalaqahId}
+                  disabled={
+                    isSubmitting ||
+                    !transferTargetHalaqahId ||
+                    (transferMode === 'batch' ? selectedTransferStudentIds.length === 0 : !transferStudentId)
+                  }
                   className="px-6 py-2.5 rounded-xl text-xs font-black bg-[#fbbf24] text-[#064e3b] hover:bg-[#f59e0b] shadow-lg cursor-pointer transition-all disabled:opacity-50 flex items-center gap-2"
                 >
                   <ArrowRightLeft className="w-4 h-4" />
-                  <span>{isSubmitting ? 'جارٍ النقل...' : 'نقل الطالب وحفظ سجله بالكامل'}</span>
+                  <span>
+                    {isSubmitting
+                      ? 'جارٍ النقل سحابياً...'
+                      : transferMode === 'batch'
+                      ? `نقل الطلاب المحددين (${selectedTransferStudentIds.length}) سحابياً`
+                      : 'نقل الطالب وحفظ سجله بالكامل'}
+                  </span>
                 </button>
               </div>
             </form>

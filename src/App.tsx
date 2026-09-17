@@ -39,10 +39,12 @@ import {
 import { AnimatedBackground } from './components/AnimatedBackground';
 import { Navbar } from './components/Navbar';
 import { LoginModal } from './components/LoginModal';
+import { CloudLoadingScreen } from './components/CloudLoadingScreen';
 import { ParentPortalView } from './components/ParentPortalView';
 import { TeacherManagementModal } from './components/TeacherManagementModal';
 import { SettingsModal } from './components/SettingsModal';
 import { UnassignedTeacherView } from './components/UnassignedTeacherView';
+import { UnassignedStudentView } from './components/UnassignedStudentView';
 import { getSurahInfo } from './data/quranData';
 import { HomeTab } from './components/tabs/HomeTab';
 import { StudentsTab } from './components/tabs/StudentsTab';
@@ -327,6 +329,66 @@ export function App() {
     }
   }, [currentUser, isSupervisor, assignedHalaqahs, activeHalaqahId]);
 
+  // Helper to check whether a student has an assigned halaqah
+  const isStudentAssigned = (s: Student) => {
+    return Boolean(
+      s.halaqahId &&
+      s.halaqahId.trim() !== '' &&
+      s.halaqahId !== 'unassigned' &&
+      s.halaqahId !== 'none'
+    );
+  };
+
+  // Filter students based on active halaqah selection (or show all for supervisor)
+  // Teachers MUST only see students assigned to their specific halaqah!
+  const displayedStudents = useMemo(() => {
+    if (isSupervisor) {
+      if (activeHalaqahId && activeHalaqahId !== 'all') {
+        return students.filter(s => s.halaqahId === activeHalaqahId);
+      }
+      return students;
+    }
+
+    // Teacher view: only students assigned to teacher's halaqah
+    if (activeHalaqahId && activeHalaqahId !== 'all') {
+      return students.filter(s => s.halaqahId === activeHalaqahId);
+    }
+    if (assignedHalaqahs.length > 0) {
+      const allowedIds = new Set(assignedHalaqahs.map(h => h.id));
+      return students.filter(s => s.halaqahId && allowedIds.has(s.halaqahId));
+    }
+    return [];
+  }, [students, isSupervisor, activeHalaqahId, assignedHalaqahs]);
+
+  // Students for attendance, evaluations, behavior, reports, and WhatsApp:
+  // Must only include assigned students
+  const assignedDisplayedStudents = useMemo(() => {
+    return displayedStudents.filter(isStudentAssigned);
+  }, [displayedStudents]);
+
+  // Scope attendance, evaluations, and violations based on displayed students
+  const displayedStudentIds = useMemo(() => {
+    return new Set(displayedStudents.map(s => s.id));
+  }, [displayedStudents]);
+
+  const displayedAttendance = useMemo(() => {
+    return activeHalaqahId === 'all' && isSupervisor
+      ? attendance
+      : attendance.filter(a => displayedStudentIds.has(a.studentId));
+  }, [activeHalaqahId, isSupervisor, attendance, displayedStudentIds]);
+
+  const displayedEvaluations = useMemo(() => {
+    return activeHalaqahId === 'all' && isSupervisor
+      ? evaluations
+      : evaluations.filter(e => displayedStudentIds.has(e.studentId));
+  }, [activeHalaqahId, isSupervisor, evaluations, displayedStudentIds]);
+
+  const displayedViolations = useMemo(() => {
+    return activeHalaqahId === 'all' && isSupervisor
+      ? violations
+      : violations.filter(v => displayedStudentIds.has(v.studentId));
+  }, [activeHalaqahId, isSupervisor, violations, displayedStudentIds]);
+
   // Save session on login
   const handleLoginSuccess = (user: { username: string; role: UserRole; studentId?: string; teacherId?: string }) => {
     setCurrentUser(user);
@@ -376,10 +438,30 @@ export function App() {
     setStudents(updated);
   };
 
+  // Batch Student Transfer Handler (Transfers multiple students in one operation to Firestore)
+  const handleBatchTransferStudents = async (studentIds: string[], targetHalaqahId: string, targetHalaqahName: string) => {
+    await OmranDataService.transferMultipleStudentsToHalaqah(studentIds, targetHalaqahId, targetHalaqahName);
+    const updated = await OmranDataService.loadStudents();
+    setStudents(updated);
+  };
+
   // 1. Student Registration / Addition
   const handleAddStudent = async (studentData: Partial<Student>): Promise<boolean> => {
-    const chosenHalaqah = halaqahs.find(h => h.id === studentData.halaqahId) ||
-      (activeHalaqahId !== 'all' ? halaqahs.find(h => h.id === activeHalaqahId) : halaqahs[0]);
+    let chosenHalaqahId = studentData.halaqahId || '';
+    let chosenHalaqahName = studentData.halaqahName || '';
+
+    if (chosenHalaqahId) {
+      const match = halaqahs.find(h => h.id === chosenHalaqahId);
+      if (match) {
+        chosenHalaqahName = match.name;
+      }
+    } else if (activeHalaqahId && activeHalaqahId !== 'all') {
+      const match = halaqahs.find(h => h.id === activeHalaqahId);
+      if (match) {
+        chosenHalaqahId = match.id;
+        chosenHalaqahName = match.name;
+      }
+    }
 
     const newStudent: Student = {
       id: `std_${Date.now()}`,
@@ -395,8 +477,8 @@ export function App() {
       dailyNewTarget: studentData.dailyNewTarget || 'نصف وجه',
       dailyReviewTarget: studentData.dailyReviewTarget || 'وجه واحد',
       level: studentData.level || 'متوسط',
-      halaqahId: chosenHalaqah?.id || 'halaqah-zubeir',
-      halaqahName: chosenHalaqah?.name || settings.halaqahName,
+      halaqahId: chosenHalaqahId,
+      halaqahName: chosenHalaqahName,
       notes: studentData.notes || '',
       createdAt: new Date().toISOString()
     };
@@ -629,27 +711,33 @@ export function App() {
     ? students.find(s => s.id === currentUser.studentId || s.name === currentUser.username)
     : null;
 
-  // 1. Loading State when accessing via direct Portal Link
-  if (portalStudentId && isLoadingData) {
+  // 1. Universal Blocking Cloud Loading & Verification Screen (Load-Before-Render)
+  if (isLoadingData) {
     return (
-      <div className="min-h-screen bg-[#022c22] text-[#f0f9f6] font-sans flex flex-col items-center justify-center p-6" dir="rtl">
-        <AnimatedBackground />
-        <div className="relative z-10 text-center space-y-4 max-w-sm bg-[#064e3b]/80 border border-[#065f46] p-8 rounded-[32px] backdrop-blur-md shadow-2xl">
-          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-[#fbbf24] to-[#f59e0b] text-[#064e3b] flex items-center justify-center mx-auto shadow-xl animate-pulse">
-            <BookOpen className="w-8 h-8" />
-          </div>
-          <h2 className="text-xl font-bold font-heading text-white">بوابة المتابعة الحية</h2>
-          <p className="text-xs text-[#86efac]">جاري تحميل ملف الطالب والبيانات القرآنية المحدثة...</p>
-          <div className="w-full bg-[#022c22] h-1.5 rounded-full overflow-hidden">
-            <div className="bg-[#fbbf24] h-full rounded-full animate-indeterminate" />
-          </div>
-        </div>
-      </div>
+      <CloudLoadingScreen
+        onRetry={loadAllData}
+        onForceEnter={() => setIsLoadingData(false)}
+      />
     );
   }
 
   // 2. Direct Student / Parent Portal View
   if (activePortalStudent) {
+    if (!isStudentAssigned(activePortalStudent)) {
+      return (
+        <div className="min-h-screen bg-[#022c22] text-[#f0f9f6] font-sans selection:bg-[#fbbf24] selection:text-[#064e3b]" dir="rtl">
+          <AnimatedBackground />
+          <UnassignedStudentView
+            studentName={activePortalStudent.name}
+            studentPhone={activePortalStudent.phone}
+            onRefresh={loadAllData}
+            onLogout={handleLogout}
+            settings={settings}
+          />
+        </div>
+      );
+    }
+
     return (
       <div className="min-h-screen bg-[#022c22] text-[#f0f9f6] font-sans selection:bg-[#fbbf24] selection:text-[#064e3b]" dir="rtl">
         <AnimatedBackground />
@@ -749,23 +837,6 @@ export function App() {
       </div>
     );
   }
-
-  // Filter students based on active halaqah selection (or show all for supervisor)
-  const displayedStudents = (activeHalaqahId && activeHalaqahId !== 'all')
-    ? students.filter(s => s.halaqahId === activeHalaqahId || (!s.halaqahId && activeHalaqahId === 'halaqah-zubeir'))
-    : (isSupervisor ? students : (assignedHalaqahs.length > 0 ? students.filter(s => s.halaqahId === assignedHalaqahs[0].id) : students));
-
-  // Scope attendance, evaluations, and violations based on displayed students
-  const displayedStudentIds = new Set(displayedStudents.map(s => s.id));
-  const displayedAttendance = activeHalaqahId === 'all' && isSupervisor
-    ? attendance
-    : attendance.filter(a => displayedStudentIds.has(a.studentId));
-  const displayedEvaluations = activeHalaqahId === 'all' && isSupervisor
-    ? evaluations
-    : evaluations.filter(e => displayedStudentIds.has(e.studentId));
-  const displayedViolations = activeHalaqahId === 'all' && isSupervisor
-    ? violations
-    : violations.filter(v => displayedStudentIds.has(v.studentId));
 
   // Navigation Items for Admin/Teacher
   const navItems = [
@@ -937,17 +1008,20 @@ export function App() {
             settings={settings}
             halaqahs={halaqahs}
             activeHalaqahId={activeHalaqahId}
+            isSupervisor={isSupervisor}
             onAddStudent={handleAddStudent}
             onUpdateStudent={handleUpdateStudent}
             onDeleteStudent={handleDeleteStudent}
             onToggleRegistration={handleToggleRegistration}
             onTriggerAIPlan={handleTriggerAIPlan}
+            onTransferStudent={handleTransferStudent}
+            onBatchTransferStudents={handleBatchTransferStudents}
           />
         )}
 
         {activeTab === 'attendance' && (
           <AttendanceTab
-            students={displayedStudents}
+            students={assignedDisplayedStudents}
             attendanceRecords={displayedAttendance}
             onSaveAttendance={handleSaveAttendance}
           />
@@ -955,7 +1029,7 @@ export function App() {
 
         {activeTab === 'evaluation' && (
           <EvaluationTab
-            students={displayedStudents}
+            students={assignedDisplayedStudents}
             attendance={displayedAttendance}
             evaluations={displayedEvaluations}
             criteria={criteria}
@@ -971,7 +1045,7 @@ export function App() {
 
         {activeTab === 'behavior' && (
           <BehaviorTab
-            students={displayedStudents}
+            students={assignedDisplayedStudents}
             violations={displayedViolations}
             settings={settings}
             teacherName={currentUser?.username || settings.teacherName}
@@ -983,7 +1057,7 @@ export function App() {
 
         {activeTab === 'parents' && (
           <ParentsWhatsAppTab
-            students={displayedStudents}
+            students={assignedDisplayedStudents}
             attendance={displayedAttendance}
             evaluations={displayedEvaluations}
             settings={settings}
@@ -993,7 +1067,7 @@ export function App() {
 
         {activeTab === 'reports' && (
           <ReportsTab
-            students={displayedStudents}
+            students={assignedDisplayedStudents}
             attendance={displayedAttendance}
             evaluations={displayedEvaluations}
             settings={settings}
@@ -1003,7 +1077,7 @@ export function App() {
 
         {activeTab === 'aicoach' && (
           <AICoachTab
-            students={displayedStudents}
+            students={assignedDisplayedStudents}
             settings={settings}
             chatHistory={chatHistory}
             onSendMessage={handleSendChatMessage}
@@ -1032,6 +1106,7 @@ export function App() {
         onSaveHalaqah={handleSaveHalaqah}
         onDeleteHalaqah={handleDeleteHalaqah}
         onTransferStudent={handleTransferStudent}
+        onBatchTransferStudents={handleBatchTransferStudents}
         onSwitchActiveHalaqah={setActiveHalaqahId}
       />
     </div>
