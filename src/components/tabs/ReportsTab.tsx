@@ -577,7 +577,7 @@ export const ReportsTab: React.FC<ReportsTabProps> = ({
                   ) : (
                     <>
                       <Sparkles className="w-4 h-4 text-[#064e3b]" />
-                      <span>توليد التقرير بالذكاء الاصطناعي</span>
+                      <span>توليد التقرير المنهجي الشامل</span>
                     </>
                   )}
                 </button>

@@ -53,7 +53,6 @@ import { EvaluationTab } from './components/tabs/EvaluationTab';
 import { BehaviorTab } from './components/tabs/BehaviorTab';
 import { ParentsWhatsAppTab } from './components/tabs/ParentsWhatsAppTab';
 import { ReportsTab } from './components/tabs/ReportsTab';
-import { AICoachTab } from './components/tabs/AICoachTab';
 import { DataBackupTab } from './components/tabs/DataBackupTab';
 
 export function App() {
@@ -624,6 +623,7 @@ export function App() {
       currentSurah: updatedPosition?.surahNumber ?? student.currentSurah,
       currentSurahName: updatedPosition?.surahName ?? student.currentSurahName,
       currentAyah: updatedPosition?.ayah ?? student.currentAyah,
+      persistentReviewItems: newAssignment?.reviewItems || student.persistentReviewItems,
       aiPlan: {
         roadmapSummary: student.aiPlan?.roadmapSummary || 'خطة الحفظ والمراجعة التراكمية',
         difficultyAdjustment: student.aiPlan?.difficultyAdjustment || 'وتيرة متوازنة',
@@ -847,7 +847,6 @@ export function App() {
     { id: 'behavior', label: 'المخالفات السلوكية', icon: ShieldAlert, badge: displayedViolations.length > 0 ? displayedViolations.length : undefined },
     { id: 'parents', label: 'رسائل الواتساب', icon: MessageCircle },
     { id: 'reports', label: 'التقارير الدورية', icon: Award },
-    { id: 'aicoach', label: 'المستشار الذكي', icon: Sparkles, isHighlight: true },
     { id: 'backup', label: 'النسخ الاحتياطي', icon: Database }
   ];
 
@@ -1072,16 +1071,6 @@ export function App() {
             evaluations={displayedEvaluations}
             settings={settings}
             onUpdateSettings={handleUpdateSettings}
-          />
-        )}
-
-        {activeTab === 'aicoach' && (
-          <AICoachTab
-            students={assignedDisplayedStudents}
-            settings={settings}
-            chatHistory={chatHistory}
-            onSendMessage={handleSendChatMessage}
-            onClearChat={handleClearChat}
           />
         )}
 

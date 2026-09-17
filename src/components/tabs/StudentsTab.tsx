@@ -322,7 +322,7 @@ export const StudentsTab: React.FC<StudentsTabProps> = ({
             </span>
           </h2>
           <p className="text-xs text-[#86efac]/90 mt-1">
-            تسجيل الطلاب وتحديد مستوياتهم ومواضع حفظهم وتوليد الخطط اليومية بالذكاء الاصطناعي
+            تسجيل الطلاب وتحديد مستوياتهم ومواضع حفظهم ومتابعة مقرراتهم المنهجية
           </p>
         </div>
 
@@ -676,24 +676,20 @@ export const StudentsTab: React.FC<StudentsTabProps> = ({
                 )}
               </div>
 
-              {/* AI Plan Banner / Action */}
+              {/* Plan Banner / Action */}
               <div className="pt-2 border-t border-[#065f46]/60 flex items-center justify-between gap-2">
                 {student.aiPlan ? (
                   <button
                     onClick={() => setViewingPlanStudent(student)}
                     className="flex-1 py-2.5 px-3 rounded-2xl bg-gradient-to-r from-[#fbbf24]/20 to-[#064e3b] hover:from-[#fbbf24]/30 hover:to-[#064e3b] border border-[#fbbf24]/40 text-[#fbbf24] text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-sm"
                   >
-                    <Sparkles className="w-3.5 h-3.5 text-[#fbbf24]" />
-                    <span>عرض الخطة اليومية</span>
+                    <BookOpen className="w-3.5 h-3.5 text-[#fbbf24]" />
+                    <span>عرض الخطة المنهجية</span>
                   </button>
                 ) : (
-                  <button
-                    onClick={() => onTriggerAIPlan(student)}
-                    className="flex-1 py-2.5 px-3 rounded-2xl bg-[#022c22] hover:bg-[#022c22]/90 border border-[#065f46] text-[#86efac] text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer"
-                  >
-                    <Sparkles className="w-3.5 h-3.5 text-[#fbbf24]" />
-                    <span>توليد خطة بالذكاء الاصطناعي</span>
-                  </button>
+                  <div className="flex-1 py-2 px-3 rounded-2xl bg-[#022c22]/50 border border-[#065f46] text-[#86efac]/70 text-[11px] text-center">
+                    الخطة المنهجية معتمدة
+                  </div>
                 )}
               </div>
             </div>
@@ -717,7 +713,7 @@ export const StudentsTab: React.FC<StudentsTabProps> = ({
                     {editingStudent ? 'تعديل بيانات الطالب' : 'تسجيل طالب جديد في الحلقة'}
                   </h3>
                   <p className="text-[11px] sm:text-xs text-[#86efac]">
-                    إدخال بيانات الطالب لضبط خطة الحفظ والمتابعة بالذكاء الاصطناعي
+                    إدخال بيانات الطالب لضبط خطة الحفظ والمتابعة القرآنية المنهجية
                   </p>
                 </div>
               </div>
@@ -988,7 +984,7 @@ export const StudentsTab: React.FC<StudentsTabProps> = ({
                     rows={2}
                     value={formNotes}
                     onChange={e => setFormNotes(e.target.value)}
-                    placeholder="اكتب أي ملاحظة خاصة ليأخذها الذكاء الاصطناعي في الحسبان..."
+                    placeholder="اكتب أي ملاحظات خاصة حول الطالب، الحفظ، ومخارج الحروف..."
                     className="w-full bg-[#022c22] border border-[#065f46] focus:border-[#fbbf24] rounded-2xl py-2 px-3 text-sm text-[#f0f9f6] outline-none resize-none"
                     dir="rtl"
                   />
@@ -1010,11 +1006,11 @@ export const StudentsTab: React.FC<StudentsTabProps> = ({
                   className="px-6 py-2.5 rounded-2xl bg-[#fbbf24] hover:bg-[#f59e0b] disabled:opacity-50 text-[#064e3b] text-xs sm:text-sm font-black shadow-[0_0_20px_rgba(251,191,36,0.3)] flex items-center gap-2 cursor-pointer transition-all"
                 >
                   {isSubmitting ? (
-                    <span>جاري معالجة وتوليد الخطة...</span>
+                    <span>جاري حفظ البيانات...</span>
                   ) : (
                     <>
-                      <Sparkles className="w-4 h-4 text-[#064e3b]" />
-                      <span>{editingStudent ? 'حفظ التعديلات' : 'تسجيل الطالب وتوليد الخطة الذكية'}</span>
+                      <UserPlus className="w-4 h-4 text-[#064e3b]" />
+                      <span>{editingStudent ? 'حفظ التعديلات' : 'تسجيل واعتماد الطالب في الحلقة'}</span>
                     </>
                   )}
                 </button>
@@ -1024,15 +1020,15 @@ export const StudentsTab: React.FC<StudentsTabProps> = ({
         </div>
       )}
 
-      {/* View AI Plan Modal */}
+      {/* View Plan Modal */}
       {viewingPlanStudent && viewingPlanStudent.aiPlan && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 md:p-6 overflow-y-auto">
           <div className="relative w-full max-w-xl bg-[#064e3b] border border-[#fbbf24]/40 rounded-2xl sm:rounded-[32px] shadow-2xl shadow-emerald-950/80 flex flex-col max-h-[90vh] my-auto overflow-hidden animate-fadeIn">
             {/* Header */}
             <div className="flex items-center justify-between p-4 sm:p-6 border-b border-[#065f46] shrink-0 bg-[#064e3b]">
               <div className="flex items-center gap-2 text-[#fbbf24] font-bold font-heading text-sm sm:text-base">
-                <Sparkles className="w-5 h-5 text-[#fbbf24] shrink-0" />
-                <span className="line-clamp-1">خطة الذكاء الاصطناعي للطالب: {viewingPlanStudent.name}</span>
+                <BookOpen className="w-5 h-5 text-[#fbbf24] shrink-0" />
+                <span className="line-clamp-1">الخطة المنهجية للطالب: {viewingPlanStudent.name}</span>
               </div>
               <button
                 type="button"

@@ -70,7 +70,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               <h1 className="text-lg sm:text-xl font-bold font-heading tracking-tight text-[#fbbf24] flex items-center gap-1.5">
                 مَنَصَّةُ عُمْرَان
                 <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#022c22] text-[#86efac] border border-[#065f46] font-sans font-medium">
-                  الذكية
+                  القرآنية
                 </span>
               </h1>
             </div>

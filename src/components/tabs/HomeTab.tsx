@@ -17,7 +17,8 @@ import {
   UserPlus,
   ShieldCheck,
   RefreshCw,
-  ShieldAlert
+  ShieldAlert,
+  MessageCircle
 } from 'lucide-react';
 import { Student, AttendanceRecord, StudentEvaluation, AppSettings, TeacherAccount } from '../../types';
 
@@ -80,7 +81,7 @@ export const HomeTab: React.FC<HomeTabProps> = ({
           <div>
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#fbbf24]/20 text-[#fbbf24] border border-[#fbbf24]/40 text-xs font-bold mb-3 shadow-[0_0_12px_rgba(251,191,36,0.2)]">
               <Sparkles className="w-3.5 h-3.5 text-[#fbbf24]" />
-              <span>لوحة القيادة الذكية والمتابعة المشتركة للحلقة</span>
+              <span>لوحة المتابعة المشتركة للحلقة القرآنية</span>
             </div>
             <h2 className="text-2xl sm:text-3xl font-bold font-heading text-white">
               مرحباً بك، <span className="text-[#fbbf24]">{displayTeacherName}</span> 🌿
@@ -171,10 +172,10 @@ export const HomeTab: React.FC<HomeTabProps> = ({
           </div>
         </div>
 
-        {/* AI Plans Active */}
+        {/* Approved Quran Plans Active */}
         <div className="bg-[#064e3b]/50 border border-[#065f46] rounded-[24px] p-5 hover:border-[#fbbf24]/40 transition-all shadow-md">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-semibold text-[#86efac]/90">خطط الذكاء الاصطناعي</span>
+            <span className="text-xs font-semibold text-[#86efac]/90">الخطط المنهجية المعتمدة</span>
             <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-[#fbbf24] to-[#d97706] text-[#064e3b] flex items-center justify-center shadow-md">
               <Sparkles className="w-5 h-5" />
             </div>
@@ -379,16 +380,16 @@ export const HomeTab: React.FC<HomeTabProps> = ({
               </button>
 
               <button
-                onClick={() => onNavigateTab('aicoach')}
-                className="w-full p-3 rounded-2xl bg-gradient-to-r from-[#fbbf24]/15 to-[#064e3b] hover:from-[#fbbf24]/25 hover:to-[#064e3b] border border-[#fbbf24]/40 flex items-center justify-between text-right transition-all text-xs font-bold text-[#fbbf24] cursor-pointer shadow-[0_0_15px_rgba(251,191,36,0.15)]"
+                onClick={() => onNavigateTab('parents')}
+                className="w-full p-3 rounded-2xl bg-gradient-to-r from-emerald-500/15 to-[#064e3b] hover:from-emerald-500/25 hover:to-[#064e3b] border border-emerald-500/40 flex items-center justify-between text-right transition-all text-xs font-bold text-emerald-300 cursor-pointer shadow-[0_0_15px_rgba(16,185,129,0.15)]"
               >
                 <div className="flex items-center gap-2.5">
-                  <div className="w-8 h-8 rounded-xl bg-[#fbbf24] text-[#064e3b] flex items-center justify-center shadow-md">
-                    <Sparkles className="w-4 h-4" />
+                  <div className="w-8 h-8 rounded-xl bg-emerald-500 text-[#064e3b] flex items-center justify-center shadow-md">
+                    <MessageCircle className="w-4 h-4" />
                   </div>
-                  <span>استشارة الذكاء الاصطناعي القرآني</span>
+                  <span>إرسال تقارير ورسائل الواتساب</span>
                 </div>
-                <ArrowLeft className="w-3.5 h-3.5 text-[#fbbf24]" />
+                <ArrowLeft className="w-3.5 h-3.5 text-emerald-300" />
               </button>
             </div>
           </div>
@@ -401,7 +402,7 @@ export const HomeTab: React.FC<HomeTabProps> = ({
             </div>
             <h4 className="text-sm font-bold text-white">الشيخ محمود خليل الحصري (المصحف المعلم)</h4>
             <p className="text-xs text-[#86efac]/90 mt-1 leading-relaxed">
-              يوصي الذكاء الاصطناعي بتشغيل سورة البقرة وقصار السور بصوت الشيخ الحصري لترسيخ مخارج الحروف وأحكام الإدغام والغنة قبل الحفظ.
+              يوصى بتشغيل سورة البقرة وقصار السور بصوت الشيخ الحصري لترسيخ مخارج الحروف وأحكام الإدغام والغنة والترتيل المتقن قبل التسميع.
             </p>
           </div>
         </div>

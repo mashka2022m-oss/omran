@@ -49,6 +49,8 @@ export interface QuranRecitationItem {
   toAyah: number;      // End ayah
   isFullSurah?: boolean;
   notes?: string;
+  didNotRecite?: boolean; // خيار لم يُسمّع
+  didNotReciteReason?: string; // سبب عدم التسميع (لم يحفظ، غياب، أو سبب مخصص من المعلم)
 }
 
 export interface DailyAssignment {
@@ -86,6 +88,7 @@ export interface Student {
   dailyReviewTarget: string;
   level: StudentLevel;
   aiPlan?: StudentAIPlan;
+  persistentReviewItems?: QuranRecitationItem[]; // بنود المراجعة والتراكمي والاختبار المحفوظة دائماً للطالب
   notes?: string;
   halaqahId?: string; // ID of the halaqah this student belongs to
   halaqahName?: string; // Cached display name of halaqah

@@ -24,8 +24,7 @@ import {
   Compass,
   FileText,
   ArrowLeftRight,
-  Brain,
-  Zap,
+  XCircle,
   Info,
   ShieldAlert
 } from 'lucide-react';
@@ -95,14 +94,9 @@ export const EvaluationTab: React.FC<EvaluationTabProps> = ({
   // Auto-fill notice from yesterday
   const [autoFilledNotice, setAutoFilledNotice] = useState<string>('');
 
-  // AI 3-Day Diagnostic state
-  const [isGeneratingSmartPlan, setIsGeneratingSmartPlan] = useState<boolean>(false);
-  const [smartAIAnalysis, setSmartAIAnalysis] = useState<{
-    threeDayAnalysis: string;
-    pedagogicalReasoning: string;
-    suggestedSheikh: string;
-    tajweedFocus: string;
-  } | null>(null);
+  // "لم يُسمّع" (Did not recite) for Today's New Memorization
+  const [todayNewDidNotRecite, setTodayNewDidNotRecite] = useState<boolean>(false);
+  const [todayNewDidNotReciteReason, setTodayNewDidNotReciteReason] = useState<string>('');
 
   // ----------------------------------------------------
   // 1. RECITATION STATE (ما سمعه الطالب)
@@ -131,18 +125,27 @@ export const EvaluationTab: React.FC<EvaluationTabProps> = ({
 
   // ----------------------------------------------------
   // 2. TOMORROW'S REQUIRED ASSIGNMENT (مقرر الغد يحدده المعلم)
-  // Supports multi-surah ranges
+  // Supports multi-surah ranges & persistent multiple review items
   // ----------------------------------------------------
   const [tomNewSurah, setTomNewSurah] = useState<number>(78);
   const [tomNewFromAyah, setTomNewFromAyah] = useState<number>(11);
   const [tomNewToSurah, setTomNewToSurah] = useState<number>(78);
   const [tomNewToAyah, setTomNewToAyah] = useState<number>(20);
 
-  const [tomReviewType, setTomReviewType] = useState<string>(REVIEW_TYPES[0]);
-  const [tomReviewSurah, setTomReviewSurah] = useState<number>(79);
-  const [tomReviewFromAyah, setTomReviewFromAyah] = useState<number>(1);
-  const [tomReviewToSurah, setTomReviewToSurah] = useState<number>(79);
-  const [tomReviewToAyah, setTomReviewToAyah] = useState<number>(46);
+  // Tomorrow's Review Items (can have multiple items: review, cumulative, test, etc.)
+  const [tomReviews, setTomReviews] = useState<QuranRecitationItem[]>([
+    {
+      id: 'tom_rev_1',
+      type: REVIEW_TYPES[0],
+      surahNumber: 79,
+      surahName: 'النازعات',
+      fromAyah: 1,
+      toSurahNumber: 79,
+      toSurahName: 'النازعات',
+      toAyah: 46,
+      isFullSurah: true
+    }
+  ]);
 
   const [selectedSheikh, setSelectedSheikh] = useState<string>(FAMOUS_RECITERS[0].name);
   const [dailyHomeNote, setDailyHomeNote] = useState<string>(
@@ -180,8 +183,9 @@ export const EvaluationTab: React.FC<EvaluationTabProps> = ({
   const startTomNewSurahInfo = getSurahInfo(tomNewSurah);
   const endTomNewSurahInfo = getSurahInfo(tomNewToSurah);
 
-  const startTomRevSurahInfo = getSurahInfo(tomReviewSurah);
-  const endTomRevSurahInfo = getSurahInfo(tomReviewToSurah);
+  const firstTomRev = tomReviews[0];
+  const startTomRevSurahInfo = getSurahInfo(firstTomRev?.surahNumber || 79);
+  const endTomRevSurahInfo = getSurahInfo(firstTomRev?.toSurahNumber || firstTomRev?.surahNumber || 79);
 
   // All evaluations for the currently active student (sorted latest first)
   const studentEvaluationsHistory = evaluations
@@ -192,7 +196,6 @@ export const EvaluationTab: React.FC<EvaluationTabProps> = ({
   useEffect(() => {
     if (!activeStudent) return;
     setAutoFilledNotice('');
-    setSmartAIAnalysis(null);
 
     // 1. Check if an evaluation already exists for the selectedDate
     const existing = evaluations.find(
@@ -212,6 +215,11 @@ export const EvaluationTab: React.FC<EvaluationTabProps> = ({
         setTodayNewFromAyah(item.fromAyah || 1);
         setTodayNewToSurah(toSNum);
         setTodayNewToAyah(item.toAyah || 10);
+        setTodayNewDidNotRecite(!!item.didNotRecite);
+        setTodayNewDidNotReciteReason(item.didNotReciteReason || '');
+      } else {
+        setTodayNewDidNotRecite(false);
+        setTodayNewDidNotReciteReason('');
       }
 
       // Load today's review items
@@ -229,15 +237,10 @@ export const EvaluationTab: React.FC<EvaluationTabProps> = ({
         setTomNewToSurah(toSNum);
         setTomNewToAyah(tNew.toAyah || 10);
       }
-      if (existing.recitationDetails?.tomorrowReviewItem) {
-        const tRev = existing.recitationDetails.tomorrowReviewItem;
-        const sNum = tRev.surahNumber || 78;
-        const toSNum = tRev.toSurahNumber || sNum;
-        setTomReviewType(tRev.type || REVIEW_TYPES[0]);
-        setTomReviewSurah(sNum);
-        setTomReviewFromAyah(tRev.fromAyah || 1);
-        setTomReviewToSurah(toSNum);
-        setTomReviewToAyah(tRev.toAyah || 10);
+      if (existing.recitationDetails?.tomorrowReviewItems && existing.recitationDetails.tomorrowReviewItems.length > 0) {
+        setTomReviews(existing.recitationDetails.tomorrowReviewItems);
+      } else if (existing.recitationDetails?.tomorrowReviewItem) {
+        setTomReviews([existing.recitationDetails.tomorrowReviewItem]);
       }
       if (existing.recitationDetails?.tomorrowSuggestedSheikh) {
         setSelectedSheikh(existing.recitationDetails.tomorrowSuggestedSheikh);
@@ -247,6 +250,9 @@ export const EvaluationTab: React.FC<EvaluationTabProps> = ({
       }
     } else {
       // 2. No evaluation exists for this date yet!
+      setTodayNewDidNotRecite(false);
+      setTodayNewDidNotReciteReason('');
+
       // Check for the LAST ACTUAL recitation record before selectedDate,
       // intentionally bypassing empty days, unexpected trips, or sudden holidays!
       const actualPastEvals = evaluations
@@ -259,7 +265,36 @@ export const EvaluationTab: React.FC<EvaluationTabProps> = ({
 
       const latestActualRecord = actualPastEvals[0];
 
-      if (latestActualRecord && latestActualRecord.recitationDetails?.tomorrowNewItem) {
+      // If in previous record student DID NOT recite, re-assign the exact same portion today
+      if (latestActualRecord && latestActualRecord.recitationDetails?.todayNewItem?.didNotRecite) {
+        const unrecited = latestActualRecord.recitationDetails.todayNewItem;
+        const sNum = unrecited.surahNumber || 78;
+        const toSNum = unrecited.toSurahNumber || sNum;
+        const fAyah = unrecited.fromAyah || 1;
+        const tAyah = unrecited.toAyah || 10;
+
+        setTodayNewSurah(sNum);
+        setTodayNewFromAyah(fAyah);
+        setTodayNewToSurah(toSNum);
+        setTodayNewToAyah(tAyah);
+
+        setAutoFilledNotice(`تم تثبيت نفس الورد المقرر ليوم (${latestActualRecord.date}) نظراً لعدم تسميع الطالب له سابقاً: ${getSurahInfo(sNum).name} (${fAyah}-${tAyah})`);
+
+        // Tomorrow new also set to repeat until recited
+        setTomNewSurah(sNum);
+        setTomNewFromAyah(fAyah);
+        setTomNewToSurah(toSNum);
+        setTomNewToAyah(tAyah);
+
+        // Load reviews
+        const prevReviews = latestActualRecord.recitationDetails?.tomorrowReviewItems ||
+          latestActualRecord.recitationDetails?.todayReviewItems ||
+          activeStudent.persistentReviewItems;
+        if (prevReviews && prevReviews.length > 0) {
+          setTodayReviews(prevReviews.map((r, idx) => ({ ...r, id: `rev_${Date.now()}_${idx}`, didNotRecite: false, didNotReciteReason: undefined })));
+          setTomReviews(prevReviews.map((r, idx) => ({ ...r, id: `tom_rev_${Date.now()}_${idx}` })));
+        }
+      } else if (latestActualRecord && latestActualRecord.recitationDetails?.tomorrowNewItem) {
         // AUTOMATIC PLAN LOADING FROM LAST ACTUAL RECORD'S PLANNED TOMORROW!
         const yNew = latestActualRecord.recitationDetails.tomorrowNewItem;
         const sNum = yNew.surahNumber || 78;
@@ -284,22 +319,55 @@ export const EvaluationTab: React.FC<EvaluationTabProps> = ({
 
         setAutoFilledNotice(`تم ضبط المقرر تلقائياً بناءً على آخر تسجيل تسميع للطالب بتاريخ (${latestActualRecord.date}): ${loadedPortionText}`);
 
-        // Also load review item if available
-        if (latestActualRecord.recitationDetails?.tomorrowReviewItem) {
-          const yRev = latestActualRecord.recitationDetails.tomorrowReviewItem;
-          setTodayReviews([
-            {
-              id: `rev_auto_${Date.now()}`,
-              type: yRev.type || REVIEW_TYPES[0],
-              surahNumber: yRev.surahNumber || 78,
-              surahName: yRev.surahName || getSurahInfo(yRev.surahNumber || 78).name,
-              fromAyah: yRev.fromAyah || 1,
-              toSurahNumber: yRev.toSurahNumber || yRev.surahNumber || 78,
-              toSurahName: yRev.toSurahName || getSurahInfo(yRev.toSurahNumber || yRev.surahNumber || 78).name,
-              toAyah: yRev.toAyah || 10,
-              isFullSurah: yRev.isFullSurah || false
+        // Load review items: if tomorrowReviewItems existed in last record, or student's persistentReviewItems
+        const loadedReviews = latestActualRecord.recitationDetails?.tomorrowReviewItems ||
+          (latestActualRecord.recitationDetails?.tomorrowReviewItem ? [latestActualRecord.recitationDetails.tomorrowReviewItem] : null) ||
+          activeStudent.persistentReviewItems;
+
+        if (loadedReviews && loadedReviews.length > 0) {
+          setTodayReviews(loadedReviews.map((r, idx) => ({
+            ...r,
+            id: `rev_auto_${Date.now()}_${idx}`,
+            didNotRecite: false,
+            didNotReciteReason: undefined
+          })));
+
+          // Prepare tomorrow's reviews by advancing any cumulative review automatically!
+          setTomReviews(loadedReviews.map((r, idx) => {
+            if (r.type === 'مراجعة تراكمية') {
+              const itemSurah = r.toSurahNumber || r.surahNumber;
+              const itemAyah = r.toAyah;
+              const sInfo = getSurahInfo(itemSurah);
+              const revStep = 15;
+              if (itemAyah < sInfo.numberOfAyahs) {
+                return {
+                  ...r,
+                  id: `tom_rev_${Date.now()}_${idx}`,
+                  fromAyah: itemAyah + 1,
+                  toAyah: Math.min(itemAyah + revStep, sInfo.numberOfAyahs),
+                  isFullSurah: false
+                };
+              } else {
+                const nextS = itemSurah < 114 ? itemSurah + 1 : 1;
+                const nextInfo = getSurahInfo(nextS);
+                return {
+                  ...r,
+                  id: `tom_rev_${Date.now()}_${idx}`,
+                  surahNumber: nextS,
+                  surahName: nextInfo.name,
+                  fromAyah: 1,
+                  toSurahNumber: nextS,
+                  toSurahName: nextInfo.name,
+                  toAyah: Math.min(revStep, nextInfo.numberOfAyahs),
+                  isFullSurah: revStep >= nextInfo.numberOfAyahs
+                };
+              }
             }
-          ]);
+            return {
+              ...r,
+              id: `tom_rev_${Date.now()}_${idx}`
+            };
+          }));
         }
 
         // Auto-calculate tomorrow's continuation step
@@ -318,12 +386,6 @@ export const EvaluationTab: React.FC<EvaluationTabProps> = ({
           setTomNewToSurah(nextSurahNum);
           setTomNewToAyah(Math.min(step, nextInfo.numberOfAyahs));
         }
-
-        setTomReviewType(REVIEW_TYPES[0]);
-        setTomReviewSurah(sNum);
-        setTomReviewFromAyah(fAyah);
-        setTomReviewToSurah(toSNum);
-        setTomReviewToAyah(tAyah);
       } else if (latestActualRecord && latestActualRecord.recitationDetails?.todayNewItem) {
         // Fallback to continuing directly from what student recited on their last active recitation session
         const lastRecited = latestActualRecord.recitationDetails.todayNewItem;
@@ -379,11 +441,19 @@ export const EvaluationTab: React.FC<EvaluationTabProps> = ({
           setTomNewToAyah(Math.min(tomStep, getSurahInfo(nextS).numberOfAyahs));
         }
 
-        setTomReviewType(REVIEW_TYPES[0]);
-        setTomReviewSurah(startS);
-        setTomReviewFromAyah(startA);
-        setTomReviewToSurah(endS);
-        setTomReviewToAyah(endA);
+        setTomReviews([
+          {
+            id: `tom_rev_${Date.now()}`,
+            type: REVIEW_TYPES[0],
+            surahNumber: startS,
+            surahName: getSurahInfo(startS).name,
+            fromAyah: startA,
+            toSurahNumber: endS,
+            toSurahName: endInfo.name,
+            toAyah: endA,
+            isFullSurah: false
+          }
+        ]);
       } else {
         // Fallback default initialization from student profile
         const studentSurah = activeStudent.currentSurah || 78;
@@ -399,22 +469,41 @@ export const EvaluationTab: React.FC<EvaluationTabProps> = ({
         setTodayNewToSurah(studentSurah);
         setTodayNewToAyah(endAyah);
 
-        // Default review
-        const revSurah = studentSurah < 114 ? studentSurah + 1 : 113;
-        const revInfo = getSurahInfo(revSurah);
-        setTodayReviews([
-          {
-            id: `rev_${Date.now()}`,
-            type: REVIEW_TYPES[0],
-            surahNumber: revSurah,
-            surahName: revInfo.name,
-            fromAyah: 1,
-            toSurahNumber: revSurah,
-            toSurahName: revInfo.name,
-            toAyah: revInfo.numberOfAyahs,
-            isFullSurah: true
-          }
-        ]);
+        // Default review (check persistent items first)
+        if (activeStudent.persistentReviewItems && activeStudent.persistentReviewItems.length > 0) {
+          setTodayReviews(activeStudent.persistentReviewItems.map((r, idx) => ({ ...r, id: `rev_${Date.now()}_${idx}` })));
+          setTomReviews(activeStudent.persistentReviewItems.map((r, idx) => ({ ...r, id: `tom_rev_${Date.now()}_${idx}` })));
+        } else {
+          const revSurah = studentSurah < 114 ? studentSurah + 1 : 113;
+          const revInfo = getSurahInfo(revSurah);
+          setTodayReviews([
+            {
+              id: `rev_${Date.now()}`,
+              type: REVIEW_TYPES[0],
+              surahNumber: revSurah,
+              surahName: revInfo.name,
+              fromAyah: 1,
+              toSurahNumber: revSurah,
+              toSurahName: revInfo.name,
+              toAyah: revInfo.numberOfAyahs,
+              isFullSurah: true
+            }
+          ]);
+
+          setTomReviews([
+            {
+              id: `tom_rev_${Date.now()}`,
+              type: REVIEW_TYPES[0],
+              surahNumber: studentSurah,
+              surahName: surahInfo.name,
+              fromAyah: 1,
+              toSurahNumber: studentSurah,
+              toSurahName: surahInfo.name,
+              toAyah: endAyah,
+              isFullSurah: endAyah >= totalAyahs
+            }
+          ]);
+        }
 
         if (endAyah < totalAyahs) {
           setTomNewSurah(studentSurah);
@@ -429,12 +518,6 @@ export const EvaluationTab: React.FC<EvaluationTabProps> = ({
           setTomNewToSurah(nextSurahNum);
           setTomNewToAyah(Math.min(step, nextSurahInfo.numberOfAyahs));
         }
-
-        setTomReviewType(REVIEW_TYPES[0]);
-        setTomReviewSurah(studentSurah);
-        setTomReviewFromAyah(1);
-        setTomReviewToSurah(studentSurah);
-        setTomReviewToAyah(endAyah);
       }
 
       // Initialize criteria defaults
@@ -503,24 +586,7 @@ export const EvaluationTab: React.FC<EvaluationTabProps> = ({
     setTomNewToAyah(Math.min(10, info.numberOfAyahs));
   };
 
-  // Handlers for Tomorrow's Review
-  const handleTomRevStartSurahChange = (surahNum: number) => {
-    setTomReviewSurah(surahNum);
-    const info = getSurahInfo(surahNum);
-    setTomReviewFromAyah(1);
-    if (tomReviewToSurah === tomReviewSurah) {
-      setTomReviewToSurah(surahNum);
-      setTomReviewToAyah(info.numberOfAyahs);
-    }
-  };
-
-  const handleTomRevEndSurahChange = (surahNum: number) => {
-    setTomReviewToSurah(surahNum);
-    const info = getSurahInfo(surahNum);
-    setTomReviewToAyah(info.numberOfAyahs);
-  };
-
-  // Add Review Item
+  // Add Review Item for Today
   const handleAddReviewItem = () => {
     const defaultSurahNum = 114;
     const info = getSurahInfo(defaultSurahNum);
@@ -538,7 +604,7 @@ export const EvaluationTab: React.FC<EvaluationTabProps> = ({
     setTodayReviews(prev => [...prev, newItem]);
   };
 
-  // Update Review Item
+  // Update Review Item for Today
   const handleUpdateReviewItem = (id: string, updates: Partial<QuranRecitationItem>) => {
     setTodayReviews(prev =>
       prev.map(item => {
@@ -566,115 +632,157 @@ export const EvaluationTab: React.FC<EvaluationTabProps> = ({
     );
   };
 
-  // Remove Review Item
+  // Remove Review Item for Today
   const handleRemoveReviewItem = (id: string) => {
     setTodayReviews(prev => prev.filter(item => item.id !== id));
   };
 
-  // Quick Auto-Calculate Tomorrow Assignment from Today's finished point (Rule-based)
-  const handleAutoCalcTomorrow = () => {
+  // Add Review Item for Tomorrow
+  const handleAddTomReviewItem = () => {
+    const defaultSurahNum = 114;
+    const info = getSurahInfo(defaultSurahNum);
+    const newItem: QuranRecitationItem = {
+      id: `tom_rev_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
+      type: REVIEW_TYPES[2] || 'مراجعة تراكمية',
+      surahNumber: defaultSurahNum,
+      surahName: info.name,
+      fromAyah: 1,
+      toSurahNumber: defaultSurahNum,
+      toSurahName: info.name,
+      toAyah: info.numberOfAyahs,
+      isFullSurah: true
+    };
+    setTomReviews(prev => [...prev, newItem]);
+  };
+
+  // Update Review Item for Tomorrow
+  const handleUpdateTomReviewItem = (id: string, updates: Partial<QuranRecitationItem>) => {
+    setTomReviews(prev =>
+      prev.map(item => {
+        if (item.id === id) {
+          const updated = { ...item, ...updates };
+          if (updates.surahNumber !== undefined) {
+            const sInfo = getSurahInfo(updates.surahNumber);
+            updated.surahName = sInfo.name;
+            updated.fromAyah = 1;
+            if (updated.toSurahNumber === undefined || updated.toSurahNumber === item.surahNumber) {
+              updated.toSurahNumber = updates.surahNumber;
+              updated.toSurahName = sInfo.name;
+              updated.toAyah = sInfo.numberOfAyahs;
+            }
+          }
+          if (updates.toSurahNumber !== undefined) {
+            const toSInfo = getSurahInfo(updates.toSurahNumber);
+            updated.toSurahName = toSInfo.name;
+            updated.toAyah = toSInfo.numberOfAyahs;
+          }
+          return updated;
+        }
+        return item;
+      })
+    );
+  };
+
+  // Remove Review Item for Tomorrow
+  const handleRemoveTomReviewItem = (id: string) => {
+    setTomReviews(prev => prev.filter(item => item.id !== id));
+  };
+
+  // Auto-progress Tomorrow Assignment (Progression & Cumulative Updates)
+  const handleAutoProgressTomorrow = () => {
     const curEndSurahInfo = getSurahInfo(todayNewToSurah);
     const totalAyahs = curEndSurahInfo.numberOfAyahs;
     const step = activeStudent?.level === 'ضعيف' ? 4 : activeStudent?.level === 'قوي' ? 12 : 7;
 
-    if (todayNewToAyah < totalAyahs) {
-      setTomNewSurah(todayNewToSurah);
-      setTomNewFromAyah(todayNewToAyah + 1);
+    if (todayNewDidNotRecite) {
+      // Keep tomorrow's new memorization at the exact same portion because student did not recite it
+      setTomNewSurah(todayNewSurah);
+      setTomNewFromAyah(todayNewFromAyah);
       setTomNewToSurah(todayNewToSurah);
-      setTomNewToAyah(Math.min(todayNewToAyah + step, totalAyahs));
+      setTomNewToAyah(todayNewToAyah);
     } else {
-      const nextSurahNum = todayNewToSurah < 114 ? todayNewToSurah + 1 : 1;
-      const nextInfo = getSurahInfo(nextSurahNum);
-      setTomNewSurah(nextSurahNum);
-      setTomNewFromAyah(1);
-      setTomNewToSurah(nextSurahNum);
-      setTomNewToAyah(Math.min(step, nextInfo.numberOfAyahs));
-    }
-
-    setTomReviewType(REVIEW_TYPES[0]);
-    setTomReviewSurah(todayNewSurah);
-    setTomReviewFromAyah(todayNewFromAyah);
-    setTomReviewToSurah(todayNewToSurah);
-    setTomReviewToAyah(todayNewToAyah);
-  };
-
-  // 4. AI-DRIVEN 3-DAY ANALYSIS & TOMORROW PLAN CALCULATION
-  const handleGenerateSmart3DayPlan = async () => {
-    if (!activeStudent) return;
-    setIsGeneratingSmartPlan(true);
-
-    try {
-      const recentEvals = studentEvaluationsHistory.slice(0, 5);
-      const studentAtt = attendance.filter(a => a.studentId === activeStudent.id);
-
-      const todayRecitation = {
-        todayNewSurah,
-        todayNewFromAyah,
-        todayNewToSurah,
-        todayNewToAyah,
-        criteriaValues,
-        teacherNotes
-      };
-
-      const res = await fetch('/api/gemini/calculate-smart-assignment', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          student: activeStudent,
-          recentEvaluations: recentEvals,
-          attendanceRecords: studentAtt,
-          todayRecitation
-        })
-      });
-
-      const data = await res.json();
-      if (data.result) {
-        const r = data.result;
-
-        // Auto-set tomorrow new
-        if (r.tomorrowNew) {
-          setTomNewSurah(r.tomorrowNew.surahNumber || 78);
-          setTomNewFromAyah(r.tomorrowNew.fromAyah || 1);
-          setTomNewToSurah(r.tomorrowNew.toSurahNumber || r.tomorrowNew.surahNumber || 78);
-          setTomNewToAyah(r.tomorrowNew.toAyah || 10);
-        }
-
-        // Auto-set tomorrow review
-        if (r.tomorrowReview) {
-          setTomReviewType(r.tomorrowReview.type || REVIEW_TYPES[0]);
-          setTomReviewSurah(r.tomorrowReview.surahNumber || 78);
-          setTomReviewFromAyah(r.tomorrowReview.fromAyah || 1);
-          setTomReviewToSurah(r.tomorrowReview.toSurahNumber || r.tomorrowReview.surahNumber || 78);
-          setTomReviewToAyah(r.tomorrowReview.toAyah || 10);
-        }
-
-        if (r.suggestedSheikh) {
-          setSelectedSheikh(r.suggestedSheikh);
-        }
-        if (r.dailyHomeNote) {
-          setDailyHomeNote(r.dailyHomeNote);
-        }
-
-        setSmartAIAnalysis({
-          threeDayAnalysis: r.threeDayAnalysis,
-          pedagogicalReasoning: r.pedagogicalReasoning,
-          suggestedSheikh: r.suggestedSheikh,
-          tajweedFocus: r.tajweedFocus
-        });
-
-        confetti({
-          particleCount: 40,
-          spread: 50,
-          origin: { y: 0.6 }
-        });
+      if (todayNewToAyah < totalAyahs) {
+        setTomNewSurah(todayNewToSurah);
+        setTomNewFromAyah(todayNewToAyah + 1);
+        setTomNewToSurah(todayNewToSurah);
+        setTomNewToAyah(Math.min(todayNewToAyah + step, totalAyahs));
+      } else {
+        const nextSurahNum = todayNewToSurah < 114 ? todayNewToSurah + 1 : 1;
+        const nextInfo = getSurahInfo(nextSurahNum);
+        setTomNewSurah(nextSurahNum);
+        setTomNewFromAyah(1);
+        setTomNewToSurah(nextSurahNum);
+        setTomNewToAyah(Math.min(step, nextInfo.numberOfAyahs));
       }
-    } catch (err) {
-      console.error('AI 3-Day calculation error:', err);
-      // Fallback rule-based
-      handleAutoCalcTomorrow();
-    } finally {
-      setIsGeneratingSmartPlan(false);
     }
+
+    // Auto-update tomorrow's review items:
+    setTomReviews(prev => {
+      if (prev.length === 0) {
+        const sInfo = getSurahInfo(todayNewSurah);
+        const toInfo = getSurahInfo(todayNewToSurah);
+        return [{
+          id: `tom_rev_${Date.now()}`,
+          type: REVIEW_TYPES[0],
+          surahNumber: todayNewSurah,
+          surahName: sInfo.name,
+          fromAyah: todayNewFromAyah,
+          toSurahNumber: todayNewToSurah,
+          toSurahName: toInfo.name,
+          toAyah: todayNewToAyah,
+          isFullSurah: todayNewSurah === todayNewToSurah && todayNewFromAyah === 1 && todayNewToAyah >= sInfo.numberOfAyahs
+        }];
+      }
+
+      return prev.map(item => {
+        // If minor review, update to review what was recited today (if recited)
+        if (item.type === 'مراجعة صغرى' && !todayNewDidNotRecite) {
+          const sInfo = getSurahInfo(todayNewSurah);
+          const toInfo = getSurahInfo(todayNewToSurah);
+          return {
+            ...item,
+            surahNumber: todayNewSurah,
+            surahName: sInfo.name,
+            fromAyah: todayNewFromAyah,
+            toSurahNumber: todayNewToSurah,
+            toSurahName: toInfo.name,
+            toAyah: todayNewToAyah,
+            isFullSurah: todayNewSurah === todayNewToSurah && todayNewFromAyah === 1 && todayNewToAyah >= sInfo.numberOfAyahs
+          };
+        }
+
+        // If cumulative review, advance to the next range!
+        if (item.type === 'مراجعة تراكمية') {
+          const itemSurah = item.toSurahNumber || item.surahNumber;
+          const itemAyah = item.toAyah;
+          const sInfo = getSurahInfo(itemSurah);
+          const revStep = 15;
+          if (itemAyah < sInfo.numberOfAyahs) {
+            return {
+              ...item,
+              fromAyah: itemAyah + 1,
+              toAyah: Math.min(itemAyah + revStep, sInfo.numberOfAyahs),
+              isFullSurah: false
+            };
+          } else {
+            const nextS = itemSurah < 114 ? itemSurah + 1 : 1;
+            const nextInfo = getSurahInfo(nextS);
+            return {
+              ...item,
+              surahNumber: nextS,
+              surahName: nextInfo.name,
+              fromAyah: 1,
+              toSurahNumber: nextS,
+              toSurahName: nextInfo.name,
+              toAyah: Math.min(revStep, nextInfo.numberOfAyahs),
+              isFullSurah: revStep >= nextInfo.numberOfAyahs
+            };
+          }
+        }
+
+        return item;
+      });
+    });
   };
 
   // Save complete evaluation and update student's current position permanently
@@ -700,7 +808,7 @@ export const EvaluationTab: React.FC<EvaluationTabProps> = ({
       const reviewStrings = todayReviews.map(r => {
         const sInfo = getSurahInfo(r.surahNumber);
         const toInfo = r.toSurahNumber ? getSurahInfo(r.toSurahNumber) : sInfo;
-        return formatQuranPortion(
+        const portionText = formatQuranPortion(
           sInfo.name,
           r.fromAyah,
           r.toAyah,
@@ -709,6 +817,7 @@ export const EvaluationTab: React.FC<EvaluationTabProps> = ({
           toInfo.name,
           toInfo.numberOfAyahs
         );
+        return r.didNotRecite ? `${portionText} (لم يُسمّع: ${r.didNotReciteReason || 'لم يتقن'})` : portionText;
       });
       const reviewAchievedSummary = reviewStrings.length > 0 ? reviewStrings.join(' • ') : 'أتم المراجعة والتثبيت المقرر';
 
@@ -725,18 +834,20 @@ export const EvaluationTab: React.FC<EvaluationTabProps> = ({
         tomEndSurahInfo.numberOfAyahs
       );
 
-      const tomRevStartInfo = getSurahInfo(tomReviewSurah);
-      const tomRevEndInfo = getSurahInfo(tomReviewToSurah);
-
-      const tomRevFormatted = formatQuranPortion(
-        tomRevStartInfo.name,
-        tomReviewFromAyah,
-        tomReviewToAyah,
-        tomRevStartInfo.numberOfAyahs,
-        tomReviewType,
-        tomRevEndInfo.name,
-        tomRevEndInfo.numberOfAyahs
-      );
+      const tomRevStrings = tomReviews.map(r => {
+        const sInfo = getSurahInfo(r.surahNumber);
+        const toInfo = r.toSurahNumber ? getSurahInfo(r.toSurahNumber) : sInfo;
+        return formatQuranPortion(
+          sInfo.name,
+          r.fromAyah,
+          r.toAyah,
+          sInfo.numberOfAyahs,
+          r.type,
+          toInfo.name,
+          toInfo.numberOfAyahs
+        );
+      });
+      const tomRevFormatted = tomRevStrings.length > 0 ? tomRevStrings.join(' • ') : 'المراجعة المقررة';
 
       const todayNewItem: QuranRecitationItem = {
         id: `new_${Date.now()}`,
@@ -747,7 +858,9 @@ export const EvaluationTab: React.FC<EvaluationTabProps> = ({
         toSurahNumber: todayNewToSurah,
         toSurahName: todayEndSurahInfo.name,
         toAyah: todayNewToAyah,
-        isFullSurah: todayNewSurah === todayNewToSurah && todayNewFromAyah === 1 && todayNewToAyah >= todayStartSurahInfo.numberOfAyahs
+        isFullSurah: todayNewSurah === todayNewToSurah && todayNewFromAyah === 1 && todayNewToAyah >= todayStartSurahInfo.numberOfAyahs,
+        didNotRecite: todayNewDidNotRecite,
+        didNotReciteReason: todayNewDidNotRecite ? (todayNewDidNotReciteReason || 'لم يحفظ الورد المقرر') : undefined
       };
 
       const tomorrowNewItem: QuranRecitationItem = {
@@ -762,31 +875,22 @@ export const EvaluationTab: React.FC<EvaluationTabProps> = ({
         isFullSurah: tomNewSurah === tomNewToSurah && tomNewFromAyah === 1 && tomNewToAyah >= tomStartSurahInfo.numberOfAyahs
       };
 
-      const tomorrowReviewItem: QuranRecitationItem = {
-        id: `tom_rev_${Date.now()}`,
-        type: tomReviewType,
-        surahNumber: tomReviewSurah,
-        surahName: tomRevStartInfo.name,
-        fromAyah: tomReviewFromAyah,
-        toSurahNumber: tomReviewToSurah,
-        toSurahName: tomRevEndInfo.name,
-        toAyah: tomReviewToAyah,
-        isFullSurah: tomReviewSurah === tomReviewToSurah && tomReviewFromAyah === 1 && tomReviewToAyah >= tomRevStartInfo.numberOfAyahs
-      };
-
       const fullEvaluation: StudentEvaluation = {
         id: `eval_${selectedDate}_${activeStudent.id}`,
         date: selectedDate,
         studentId: activeStudent.id,
         criteriaValues,
         recitationDetails: {
-          newMemorizationAchieved: todayNewFormatted,
+          newMemorizationAchieved: todayNewDidNotRecite
+            ? `⚠️ لم يُسمّع: ${todayNewFormatted} (${todayNewDidNotReciteReason || 'لم يحفظ الورد'})`
+            : todayNewFormatted,
           reviewAchieved: reviewAchievedSummary,
           teacherNotes,
           todayNewItem,
           todayReviewItems: todayReviews,
           tomorrowNewItem,
-          tomorrowReviewItem,
+          tomorrowReviewItem: tomReviews[0] || null,
+          tomorrowReviewItems: tomReviews,
           tomorrowSuggestedSheikh: selectedSheikh,
           tomorrowDailyNote: dailyHomeNote
         },
@@ -803,17 +907,27 @@ export const EvaluationTab: React.FC<EvaluationTabProps> = ({
         suggestedSheikh: selectedSheikh,
         dailyNote: dailyHomeNote,
         newItem: tomorrowNewItem,
-        reviewItem: tomorrowReviewItem
+        reviewItem: tomReviews[0] || null,
+        reviewItems: tomReviews
       };
 
-      // Update student's current position to the latest surah and ayah reached today!
+      // Update student's current position:
+      // If student did not recite, keep current position unchanged!
+      const targetSurahNumber = todayNewDidNotRecite ? (activeStudent.currentSurah || 78) : todayNewToSurah;
+      const targetSurahName = todayNewDidNotRecite ? (activeStudent.currentSurahName || getSurahInfo(targetSurahNumber).name) : todayEndSurahInfo.name;
+      const targetAyah = todayNewDidNotRecite ? (activeStudent.currentAyah || 1) : todayNewToAyah;
+
       await onUpdateStudentAIPlan(activeStudent.id, newDailyAssignment, {
-        surahNumber: todayNewToSurah,
-        surahName: todayEndSurahInfo.name,
-        ayah: todayNewToAyah
+        surahNumber: targetSurahNumber,
+        surahName: targetSurahName,
+        ayah: targetAyah
       });
 
-      setSaveSuccessMsg(`تم حفظ التسميع والتقييم ليوم (${selectedDate}) وتحديث موضع الطالب إلى سورة ${todayEndSurahInfo.name} (الآية ${todayNewToAyah}) بنجاح!`);
+      setSaveSuccessMsg(
+        todayNewDidNotRecite
+          ? `تم حفظ التقييم وتثبيت موضع الطالب عند سورة ${targetSurahName} (الآية ${targetAyah}) لعدم التسميع بنجاح!`
+          : `تم حفظ التسميع والتقييم ليوم (${selectedDate}) وتحديث موضع الطالب إلى سورة ${todayEndSurahInfo.name} (الآية ${todayNewToAyah}) بنجاح!`
+      );
 
       confetti({
         particleCount: 60,
@@ -1404,6 +1518,32 @@ export const EvaluationTab: React.FC<EvaluationTabProps> = ({
                       )}
                     </span>
                   </div>
+
+                  {/* Did not recite toggle */}
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 rounded-2xl bg-[#022c22]/90 border border-[#065f46]">
+                    <label className="flex items-center gap-2 cursor-pointer text-xs font-bold select-none">
+                      <input
+                        type="checkbox"
+                        checked={todayNewDidNotRecite}
+                        onChange={e => setTodayNewDidNotRecite(e.target.checked)}
+                        className="w-4 h-4 rounded text-red-500 bg-[#064e3b] border-[#065f46] focus:ring-red-400 focus:ring-offset-0 cursor-pointer"
+                      />
+                      <span className={todayNewDidNotRecite ? "text-red-400 font-black" : "text-emerald-200"}>
+                        لم يُسمّع الطالب هذا الورد اليوم (تثبيت نفس الورد لليوم التالي وعدم تقدمه)
+                      </span>
+                    </label>
+                    {todayNewDidNotRecite && (
+                      <div className="flex-1 max-w-sm">
+                        <input
+                          type="text"
+                          value={todayNewDidNotReciteReason}
+                          onChange={e => setTodayNewDidNotReciteReason(e.target.value)}
+                          placeholder="سبب عدم التسميع (مثال: لم يحفظ، تعثر شديد، غياب...)"
+                          className="w-full bg-[#064e3b] border border-red-500/40 focus:border-red-400 rounded-xl py-1.5 px-3 text-xs text-red-200 outline-none placeholder:text-red-300/40"
+                        />
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 {/* 1.2 Today's Reviews */}
@@ -1438,10 +1578,35 @@ export const EvaluationTab: React.FC<EvaluationTabProps> = ({
                             key={rev.id}
                             className="bg-[#064e3b]/30 p-4 rounded-2xl border border-[#065f46] space-y-3 relative"
                           >
-                            <div className="flex items-center justify-between gap-2">
-                              <span className="text-xs font-bold text-[#86efac]">
-                                بند مراجعة #{index + 1}
-                              </span>
+                            <div className="flex items-center justify-between gap-2 flex-wrap">
+                              <div className="flex items-center gap-3">
+                                <span className="text-xs font-bold text-[#86efac]">
+                                  بند مراجعة #{index + 1}
+                                </span>
+                                <label className="flex items-center gap-1.5 cursor-pointer text-[11px] font-bold select-none">
+                                  <input
+                                    type="checkbox"
+                                    checked={!!rev.didNotRecite}
+                                    onChange={e => handleUpdateReviewItem(rev.id, {
+                                      didNotRecite: e.target.checked,
+                                      didNotReciteReason: e.target.checked ? (rev.didNotReciteReason || 'لم يتقن الورد') : undefined
+                                    })}
+                                    className="w-3.5 h-3.5 rounded text-red-500 bg-[#022c22] border-[#065f46]"
+                                  />
+                                  <span className={rev.didNotRecite ? "text-red-400 font-bold" : "text-[#86efac]/80"}>
+                                    لم يُسمّع
+                                  </span>
+                                </label>
+                                {rev.didNotRecite && (
+                                  <input
+                                    type="text"
+                                    value={rev.didNotReciteReason || ''}
+                                    onChange={e => handleUpdateReviewItem(rev.id, { didNotReciteReason: e.target.value })}
+                                    placeholder="السبب..."
+                                    className="bg-[#022c22] border border-red-500/40 rounded-lg py-0.5 px-2 text-[11px] text-red-200 outline-none w-28 placeholder:text-red-300/40"
+                                  />
+                                )}
+                              </div>
                               <div className="flex items-center gap-2">
                                 <button
                                   type="button"
@@ -1589,89 +1754,36 @@ export const EvaluationTab: React.FC<EvaluationTabProps> = ({
               </div>
 
               {/* ============================================================ */}
-              {/* SECTION 2: TOMORROW'S ASSIGNMENT & AI SMART CALCULATION      */}
+              {/* SECTION 2: TOMORROW'S ASSIGNMENT & MULTI-REVIEWS             */}
               {/* ============================================================ */}
-              <div className="bg-[#022c22] border border-[#fbbf24]/40 rounded-3xl p-5 space-y-5 shadow-xl relative overflow-hidden">
+              <div className="bg-[#022c22] border border-[#065f46] rounded-3xl p-5 space-y-5 shadow-xl relative overflow-hidden">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-[#065f46]">
                   <div>
                     <h4 className="text-sm font-bold text-[#fbbf24] font-heading flex items-center gap-2">
                       <Compass className="w-4 h-4 text-[#fbbf24]" />
-                      <span>2. المقرر المطلوب تسميعه غداً (حفظ جديد + مراجعة التسجيلات السابقة):</span>
+                      <span>2. المقرر المطلوب تسميعه غداً (حفظ جديد + مراجعات وتراكميات محفوظة):</span>
                     </h4>
                     <p className="text-[11px] text-[#86efac]/80 mt-0.5">
-                      خطة الطالب التراكمية المستقلة: تُحسب تلقائياً بدراسة آخر 3 تسجيلات تسميع فعلية ومراجعة تسجيلاته القديمة (سواء سُجلت من قبلك أو من قِبل معلم آخر)
+                      يبقى الورد والمراجعات والتراكميات محفوظة للغد وثابتة للأبد حتى يقوم المعلم بتعديلها أو حذفها
                     </p>
                   </div>
 
-                  <div className="flex items-center gap-2 flex-wrap">
-                    {/* ✨ Smart AI 3-Day Calculation Button */}
-                    <button
-                      type="button"
-                      disabled={isGeneratingSmartPlan}
-                      onClick={handleGenerateSmart3DayPlan}
-                      className="px-4 py-2 rounded-2xl bg-gradient-to-r from-[#fbbf24] to-[#f59e0b] hover:from-[#f59e0b] hover:to-[#d97706] disabled:opacity-50 text-[#064e3b] text-xs font-black flex items-center gap-1.5 shadow-[0_0_20px_rgba(251,191,36,0.4)] transition-all cursor-pointer"
-                    >
-                      {isGeneratingSmartPlan ? (
-                        <>
-                          <Clock className="w-4 h-4 animate-spin text-[#064e3b]" />
-                          <span>جاري دراسة آخر 3 تسجيلات ومراجعة القديم...</span>
-                        </>
-                      ) : (
-                        <>
-                          <Brain className="w-4 h-4 text-[#064e3b]" />
-                          <Sparkles className="w-3.5 h-3.5 text-[#064e3b]" />
-                          <span>توليد الخطة الذكية (اعتماد آخر 3 تسجيلات ومراجعة القديم)</span>
-                        </>
-                      )}
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={handleAutoCalcTomorrow}
-                      className="px-3 py-2 rounded-2xl bg-[#064e3b] hover:bg-[#064e3b]/80 border border-[#065f46] text-[#86efac] text-xs font-bold flex items-center gap-1 transition-all cursor-pointer"
-                      title="حساب تتابعي تقليدي"
-                    >
-                      <RotateCcw className="w-3.5 h-3.5" />
-                      <span>تتابع عادي</span>
-                    </button>
-                  </div>
+                  <button
+                    type="button"
+                    onClick={handleAutoProgressTomorrow}
+                    className="px-3.5 py-2 rounded-2xl bg-[#064e3b] hover:bg-[#047857] border border-[#065f46] text-[#fbbf24] text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-sm"
+                    title="تحديث تدرج الورد والتراكمي لغد تلقائياً"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5 text-[#fbbf24]" />
+                    <span>تدرج الورد والتراكمي لغد تلقائياً</span>
+                  </button>
                 </div>
-
-                {/* 🌟 3-Day AI Diagnostic Card (if generated) */}
-                {smartAIAnalysis && (
-                  <div className="bg-gradient-to-br from-[#064e3b] to-[#022c22] p-4.5 rounded-2xl border border-[#fbbf24]/50 shadow-lg space-y-3 animate-fadeIn">
-                    <div className="flex items-center justify-between border-b border-[#065f46] pb-2">
-                      <span className="text-xs font-black text-[#fbbf24] flex items-center gap-1.5">
-                        <Sparkles className="w-4 h-4 text-[#fbbf24]" />
-                        <span>تحليل الذكاء الاصطناعي لأداء الطالب لآخر 3 أيام:</span>
-                      </span>
-                      <span className="text-[10px] bg-[#fbbf24]/20 text-[#fbbf24] px-2 py-0.5 rounded-md font-bold">
-                        تم الضبط تلقائياً ✨
-                      </span>
-                    </div>
-
-                    <p className="text-xs text-emerald-100 leading-relaxed">
-                      {smartAIAnalysis.threeDayAnalysis}
-                    </p>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1 text-[11px]">
-                      <div className="p-2.5 rounded-xl bg-[#022c22]/80 border border-[#065f46]">
-                        <span className="font-bold text-[#fbbf24] block mb-0.5">🎯 التبرير التربوي للورد:</span>
-                        <span className="text-[#86efac]">{smartAIAnalysis.pedagogicalReasoning}</span>
-                      </div>
-                      <div className="p-2.5 rounded-xl bg-[#022c22]/80 border border-[#065f46]">
-                        <span className="font-bold text-[#fbbf24] block mb-0.5">💡 تركيز التجويد المقترح:</span>
-                        <span className="text-[#86efac]">{smartAIAnalysis.tajweedFocus}</span>
-                      </div>
-                    </div>
-                  </div>
-                )}
 
                 {/* 2.1 Tomorrow's New Memorization */}
                 <div className="space-y-3 bg-[#064e3b]/40 p-4 rounded-2xl border border-[#065f46]">
                   <div className="flex items-center justify-between flex-wrap gap-2">
                     <span className="text-xs font-bold text-white flex items-center gap-1.5">
-                      <Sparkles className="w-4 h-4 text-[#fbbf24]" />
+                      <span className="w-2 h-2 rounded-full bg-[#fbbf24]" />
                       <span>ورد الحفظ الجديد المطلوب لغد (بداية ونهاية المقرر):</span>
                     </span>
                     <button
@@ -1787,140 +1899,185 @@ export const EvaluationTab: React.FC<EvaluationTabProps> = ({
                   </div>
                 </div>
 
-                {/* 2.2 Tomorrow's Review */}
-                <div className="space-y-3 bg-[#064e3b]/40 p-4 rounded-2xl border border-[#065f46]">
+                {/* 2.2 Tomorrow's Reviews (Multi-item) */}
+                <div className="space-y-3">
                   <div className="flex items-center justify-between flex-wrap gap-2">
                     <span className="text-xs font-bold text-white flex items-center gap-1.5">
                       <Layers className="w-4 h-4 text-[#86efac]" />
-                      <span>ورد المراجعة والتثبيت المطلوب لغد:</span>
+                      <span>ورد المراجعة والتثبيت والاختبارات لغد ({tomReviews.length}):</span>
                     </span>
                     <button
                       type="button"
-                      onClick={() => {
-                        setTomReviewToSurah(tomReviewSurah);
-                        setTomReviewFromAyah(1);
-                        setTomReviewToAyah(startTomRevSurahInfo.numberOfAyahs);
-                      }}
-                      className="px-2.5 py-1 rounded-xl bg-[#022c22] text-[#fbbf24] border border-[#065f46] text-[11px] font-bold cursor-pointer"
+                      onClick={handleAddTomReviewItem}
+                      className="px-3 py-1.5 rounded-xl bg-[#064e3b] hover:bg-[#064e3b]/80 border border-[#065f46] text-[#86efac] hover:text-white text-xs font-bold flex items-center gap-1 transition-colors cursor-pointer"
                     >
-                      كامل سورة {startTomRevSurahInfo.name} ({startTomRevSurahInfo.numberOfAyahs})
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>إضافة مراجعة أو اختبار لغد</span>
                     </button>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-5 gap-2.5">
-                    {/* Type */}
-                    <div>
-                      <label className="text-[10px] font-semibold text-[#86efac] block mb-1">
-                        نوع المراجعة:
-                      </label>
-                      <select
-                        value={tomReviewType}
-                        onChange={e => setTomReviewType(e.target.value)}
-                        className="w-full bg-[#022c22] border border-[#065f46] focus:border-[#fbbf24] rounded-xl py-1.5 px-2 text-xs text-white outline-none"
-                      >
-                        {REVIEW_TYPES.map(t => (
-                          <option key={t} value={t}>
-                            {t}
-                          </option>
-                        ))}
-                      </select>
+                  {tomReviews.length === 0 ? (
+                    <div className="p-4 rounded-2xl bg-[#064e3b]/20 border border-dashed border-[#065f46] text-center text-xs text-[#86efac]/70">
+                      لا توجد مراجعات مقررة لغد. اضغط على "إضافة مراجعة أو اختبار لغد" لتحديد المقرر.
                     </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {tomReviews.map((rev, index) => {
+                        const revStartSurahInfo = getSurahInfo(rev.surahNumber);
+                        const revEndSurahInfo = rev.toSurahNumber ? getSurahInfo(rev.toSurahNumber) : revStartSurahInfo;
 
-                    {/* From Surah */}
-                    <div>
-                      <label className="text-[10px] font-semibold text-[#86efac] block mb-1">
-                        من سورة:
-                      </label>
-                      <select
-                        value={tomReviewSurah}
-                        onChange={e => handleTomRevStartSurahChange(Number(e.target.value))}
-                        className="w-full bg-[#022c22] border border-[#065f46] focus:border-[#fbbf24] rounded-xl py-1.5 px-2 text-xs text-white outline-none"
-                      >
-                        {QURAN_SURAHS.map(s => (
-                          <option key={s.number} value={s.number}>
-                            {s.number}. {s.name}
-                          </option>
-                        ))}
-                      </select>
+                        return (
+                          <div
+                            key={rev.id}
+                            className="bg-[#064e3b]/30 p-4 rounded-2xl border border-[#065f46] space-y-3 relative"
+                          >
+                            <div className="flex items-center justify-between gap-2 flex-wrap">
+                              <span className="text-xs font-bold text-[#86efac]">
+                                مقرر مراجعة لغد #{index + 1}
+                              </span>
+                              <div className="flex items-center gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    handleUpdateTomReviewItem(rev.id, {
+                                      toSurahNumber: rev.surahNumber,
+                                      toSurahName: revStartSurahInfo.name,
+                                      fromAyah: 1,
+                                      toAyah: revStartSurahInfo.numberOfAyahs,
+                                      isFullSurah: true
+                                    })
+                                  }
+                                  className="px-2 py-0.5 rounded-lg bg-[#022c22] text-[#fbbf24] text-[10px] font-bold border border-[#065f46] cursor-pointer"
+                                >
+                                  كامل السورة ({revStartSurahInfo.numberOfAyahs})
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveTomReviewItem(rev.id)}
+                                  className="p-1 text-red-400 hover:text-red-300 hover:bg-red-500/20 rounded-lg transition-colors cursor-pointer"
+                                  title="حذف هذا المقرر لغد"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            </div>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-5 gap-2.5">
+                              {/* Review Type */}
+                              <div className="sm:col-span-1">
+                                <label className="text-[10px] font-semibold text-[#86efac] block mb-1">
+                                  نوع المراجعة:
+                                </label>
+                                <select
+                                  value={rev.type}
+                                  onChange={e => handleUpdateTomReviewItem(rev.id, { type: e.target.value })}
+                                  className="w-full bg-[#022c22] border border-[#065f46] focus:border-[#fbbf24] rounded-xl py-1.5 px-2 text-xs text-white outline-none"
+                                >
+                                  {REVIEW_TYPES.map(t => (
+                                    <option key={t} value={t}>
+                                      {t}
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
+
+                              {/* Start Surah */}
+                              <div>
+                                <label className="text-[10px] font-semibold text-[#86efac] block mb-1">
+                                  من سورة:
+                                </label>
+                                <select
+                                  value={rev.surahNumber}
+                                  onChange={e => handleUpdateTomReviewItem(rev.id, { surahNumber: Number(e.target.value) })}
+                                  className="w-full bg-[#022c22] border border-[#065f46] focus:border-[#fbbf24] rounded-xl py-1.5 px-2 text-xs text-white outline-none"
+                                >
+                                  {QURAN_SURAHS.map(s => (
+                                    <option key={s.number} value={s.number}>
+                                      {s.number}. {s.name}
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
+
+                              {/* From Ayah */}
+                              <div>
+                                <label className="text-[10px] font-semibold text-[#86efac] block mb-1">
+                                  من الآية:
+                                </label>
+                                <select
+                                  value={rev.fromAyah}
+                                  onChange={e => {
+                                    const val = Number(e.target.value);
+                                    handleUpdateTomReviewItem(rev.id, {
+                                      fromAyah: val,
+                                      toAyah: (rev.toSurahNumber || rev.surahNumber) === rev.surahNumber && rev.toAyah < val ? val : rev.toAyah
+                                    });
+                                  }}
+                                  className="w-full bg-[#022c22] border border-[#065f46] focus:border-[#fbbf24] rounded-xl py-1.5 px-2 text-xs text-white outline-none"
+                                >
+                                  {Array.from({ length: revStartSurahInfo.numberOfAyahs }, (_, i) => i + 1).map(ayahNum => (
+                                    <option key={ayahNum} value={ayahNum}>
+                                      آية {ayahNum}
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
+
+                              {/* End Surah */}
+                              <div>
+                                <label className="text-[10px] font-semibold text-[#86efac] block mb-1">
+                                  إلى سورة:
+                                </label>
+                                <select
+                                  value={rev.toSurahNumber || rev.surahNumber}
+                                  onChange={e => handleUpdateTomReviewItem(rev.id, { toSurahNumber: Number(e.target.value) })}
+                                  className="w-full bg-[#022c22] border border-[#065f46] focus:border-[#fbbf24] rounded-xl py-1.5 px-2 text-xs text-white outline-none"
+                                >
+                                  {QURAN_SURAHS.map(s => (
+                                    <option key={s.number} value={s.number}>
+                                      {s.number}. {s.name}
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
+
+                              {/* To Ayah */}
+                              <div>
+                                <label className="text-[10px] font-semibold text-[#86efac] block mb-1">
+                                  إلى الآية:
+                                </label>
+                                <select
+                                  value={rev.toAyah}
+                                  onChange={e => handleUpdateTomReviewItem(rev.id, { toAyah: Number(e.target.value) })}
+                                  className="w-full bg-[#022c22] border border-[#065f46] focus:border-[#fbbf24] rounded-xl py-1.5 px-2 text-xs text-white outline-none"
+                                >
+                                  {Array.from({ length: revEndSurahInfo.numberOfAyahs }, (_, i) => i + 1)
+                                    .filter(ayahNum => (rev.toSurahNumber || rev.surahNumber) !== rev.surahNumber || ayahNum >= rev.fromAyah)
+                                    .map(ayahNum => (
+                                      <option key={ayahNum} value={ayahNum}>
+                                        آية {ayahNum}
+                                      </option>
+                                    ))}
+                                </select>
+                              </div>
+                            </div>
+
+                            <div className="text-[11px] text-[#fbbf24] bg-[#022c22] p-2.5 rounded-xl border border-[#065f46] font-bold">
+                              {formatQuranPortion(
+                                revStartSurahInfo.name,
+                                rev.fromAyah,
+                                rev.toAyah,
+                                revStartSurahInfo.numberOfAyahs,
+                                rev.type,
+                                revEndSurahInfo.name,
+                                revEndSurahInfo.numberOfAyahs
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
-
-                    {/* From Ayah */}
-                    <div>
-                      <label className="text-[10px] font-semibold text-[#86efac] block mb-1">
-                        من الآية:
-                      </label>
-                      <select
-                        value={tomReviewFromAyah}
-                        onChange={e => {
-                          const val = Number(e.target.value);
-                          setTomReviewFromAyah(val);
-                          if (tomReviewSurah === tomReviewToSurah && tomReviewToAyah < val) {
-                            setTomReviewToAyah(val);
-                          }
-                        }}
-                        className="w-full bg-[#022c22] border border-[#065f46] focus:border-[#fbbf24] rounded-xl py-1.5 px-2 text-xs text-white outline-none"
-                      >
-                        {Array.from({ length: startTomRevSurahInfo.numberOfAyahs }, (_, i) => i + 1).map(ayahNum => (
-                          <option key={ayahNum} value={ayahNum}>
-                            آية {ayahNum}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    {/* To Surah */}
-                    <div>
-                      <label className="text-[10px] font-semibold text-[#86efac] block mb-1">
-                        إلى سورة:
-                      </label>
-                      <select
-                        value={tomReviewToSurah}
-                        onChange={e => handleTomRevEndSurahChange(Number(e.target.value))}
-                        className="w-full bg-[#022c22] border border-[#065f46] focus:border-[#fbbf24] rounded-xl py-1.5 px-2 text-xs text-white outline-none"
-                      >
-                        {QURAN_SURAHS.map(s => (
-                          <option key={s.number} value={s.number}>
-                            {s.number}. {s.name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    {/* To Ayah */}
-                    <div>
-                      <label className="text-[10px] font-semibold text-[#86efac] block mb-1">
-                        إلى الآية:
-                      </label>
-                      <select
-                        value={tomReviewToAyah}
-                        onChange={e => setTomReviewToAyah(Number(e.target.value))}
-                        className="w-full bg-[#022c22] border border-[#065f46] focus:border-[#fbbf24] rounded-xl py-1.5 px-2 text-xs text-white outline-none"
-                      >
-                        {Array.from({ length: endTomRevSurahInfo.numberOfAyahs }, (_, i) => i + 1)
-                          .filter(ayahNum => tomReviewSurah !== tomReviewToSurah || ayahNum >= tomReviewFromAyah)
-                          .map(ayahNum => (
-                            <option key={ayahNum} value={ayahNum}>
-                              آية {ayahNum}
-                            </option>
-                          ))}
-                      </select>
-                    </div>
-                  </div>
-
-                  <div className="p-3 rounded-2xl bg-[#022c22] border border-[#065f46] text-xs text-[#86efac] flex items-center justify-between">
-                    <span className="font-bold">المراجعة المقررة لغد:</span>
-                    <span className="font-bold text-white text-sm">
-                      {formatQuranPortion(
-                        startTomRevSurahInfo.name,
-                        tomReviewFromAyah,
-                        tomReviewToAyah,
-                        startTomRevSurahInfo.numberOfAyahs,
-                        tomReviewType,
-                        endTomRevSurahInfo.name,
-                        endTomRevSurahInfo.numberOfAyahs
-                      )}
-                    </span>
-                  </div>
+                  )}
                 </div>
 
                 {/* 2.3 Reciter & Daily Home Directive */}

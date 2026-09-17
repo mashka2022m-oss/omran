@@ -17,7 +17,7 @@ export const CloudLoadingScreen: React.FC<CloudLoadingScreenProps> = ({
   const steps = [
     { label: 'الاتصال بقاعدة البيانات السحابية (Firestore)', icon: Cloud },
     { label: 'استرجاع سجلات الحلقات والمعلمين وتوزيع الصلاحيات', icon: Layers },
-    { label: 'مزامنة بيانات الطلاب ومواضع الحفظ وخطط الذكاء الاصطناعي', icon: Database },
+    { label: 'مزامنة بيانات الطلاب ومواضع الحفظ والسجلات القرآنية', icon: Database },
     { label: 'التحقق السحابي النهائي وجاهزية المنصة', icon: ShieldCheck }
   ];
 
@@ -62,7 +62,7 @@ export const CloudLoadingScreen: React.FC<CloudLoadingScreenProps> = ({
         {/* Title */}
         <div className="space-y-2">
           <h1 className="text-2xl sm:text-3xl font-bold font-heading text-[#fbbf24] tracking-tight">
-            مَنَصَّةُ عُمْرَان الذكية
+            مَنَصَّةُ عُمْرَان القرآنية
           </h1>
           <p className="text-xs sm:text-sm text-[#86efac]/90 font-medium">
             جارٍ الاتصال السحابي وتحميل ومزامنة كافة البيانات بالكامل...
