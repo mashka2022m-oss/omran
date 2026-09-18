@@ -37,7 +37,9 @@ import {
 export { firebaseConfig };
 
 const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
-export const db = getFirestore(app);
+export const db = firebaseConfig.firestoreDatabaseId
+  ? getFirestore(app, firebaseConfig.firestoreDatabaseId)
+  : getFirestore(app);
 export const auth = getAuth(app);
 
 export const DEFAULT_LEADERBOARD_SETTINGS: LeaderboardSettings = {
