@@ -86,6 +86,16 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [deleteHalaqahConfirmId, setDeleteHalaqahConfirmId] = useState<string | null>(null);
   const [deleteTeacherConfirmId, setDeleteTeacherConfirmId] = useState<string | null>(null);
 
+  React.useEffect(() => {
+    if (isOpen) {
+      const originalOverflow = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+      return () => {
+        document.body.style.overflow = originalOverflow;
+      };
+    }
+  }, [isOpen]);
+
   if (!isOpen) return null;
 
   // ----------------------------------------------------
@@ -403,8 +413,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 overflow-y-auto" dir="rtl">
-      <div className="w-full max-w-4xl bg-[#064e3b] border border-[#fbbf24]/40 rounded-[32px] p-5 sm:p-8 shadow-2xl space-y-6 max-h-[92vh] overflow-y-auto flex flex-col">
+    <div className="fixed inset-0 z-[9999] bg-black/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 overflow-y-auto overscroll-contain" dir="rtl">
+      <div className="w-full max-w-4xl bg-[#064e3b] border border-[#fbbf24]/40 rounded-[32px] p-5 sm:p-8 shadow-2xl space-y-6 max-h-[90vh] overflow-y-auto overscroll-contain flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-[#065f46] pb-4">
           <div className="flex items-center gap-3">

@@ -70,6 +70,7 @@ interface ExamsTabProps {
   onSaveExam: (exam: Exam) => Promise<void>;
   onDeleteExam: (examId: string) => Promise<void>;
   onSaveSubmission: (submission: ExamSubmission) => Promise<void>;
+  onDeleteSubmission?: (submissionId: string) => Promise<void>;
   onSaveLeaderboardSettings: (settings: LeaderboardSettings) => Promise<void>;
   onRefreshGoogleAuth?: () => Promise<void>;
 }
@@ -111,6 +112,7 @@ export const ExamsTab: React.FC<ExamsTabProps> = ({
   onSaveExam,
   onDeleteExam,
   onSaveSubmission,
+  onDeleteSubmission,
   onSaveLeaderboardSettings,
   onRefreshGoogleAuth
 }) => {
@@ -127,9 +129,11 @@ export const ExamsTab: React.FC<ExamsTabProps> = ({
   // Restrict linking accounts of the exam to supervisor Mohamed Montaser
   const isMontaserSupervisor = Boolean(isSupervisor || (currentUserName && (currentUserName.includes('محمد منتصر') || currentUserName.includes('منتصر'))));
 
-  // Deletion Confirmation Modal State
+  // Deletion Confirmation Modal State (Exams & Submissions)
   const [examToDelete, setExamToDelete] = useState<Exam | null>(null);
+  const [submissionToDelete, setSubmissionToDelete] = useState<ExamSubmission | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isDeletingSubmission, setIsDeletingSubmission] = useState(false);
 
   // Correction Modal State
   const [selectedSubmissionForGrading, setSelectedSubmissionForGrading] = useState<ExamSubmission | null>(null);
@@ -700,6 +704,33 @@ export const ExamsTab: React.FC<ExamsTabProps> = ({
       });
     } finally {
       setIsDeleting(false);
+    }
+  };
+
+  // Perform Real Cloud Deletion of Student Submission
+  const handleConfirmDeleteSubmission = async () => {
+    if (!submissionToDelete) return;
+    setIsDeletingSubmission(true);
+    try {
+      if (onDeleteSubmission) {
+        await onDeleteSubmission(submissionToDelete.id);
+      } else {
+        await OmranDataService.deleteSubmission(submissionToDelete.id);
+      }
+      setStatusMessage({
+        type: 'success',
+        text: `تم حذف تسليم الطالب "${submissionToDelete.studentName}" لاختبار "${submissionToDelete.examTitle}" بنجاح!`
+      });
+      setSubmissionToDelete(null);
+      setTimeout(() => setStatusMessage(null), 4000);
+    } catch (err: any) {
+      console.error('Error deleting submission:', err);
+      setStatusMessage({
+        type: 'error',
+        text: `حدث خطأ أثناء حذف التسليم: ${err.message || err}`
+      });
+    } finally {
+      setIsDeletingSubmission(false);
     }
   };
 
@@ -1475,12 +1506,21 @@ export const ExamsTab: React.FC<ExamsTabProps> = ({
                           )}
                         </td>
                         <td className="p-4 text-center">
-                          <button
-                            onClick={() => handleOpenGrading(sub)}
-                            className="px-3 py-1.5 rounded-xl bg-[#fbbf24] hover:bg-[#f59e0b] text-[#064e3b] font-black text-xs transition-all cursor-pointer shadow-md"
-                          >
-                            تصحيح ومراجعة
-                          </button>
+                          <div className="flex items-center justify-center gap-2">
+                            <button
+                              onClick={() => handleOpenGrading(sub)}
+                              className="px-3 py-1.5 rounded-xl bg-[#fbbf24] hover:bg-[#f59e0b] text-[#064e3b] font-black text-xs transition-all cursor-pointer shadow-md"
+                            >
+                              تصحيح ومراجعة
+                            </button>
+                            <button
+                              onClick={() => setSubmissionToDelete(sub)}
+                              className="p-1.5 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 hover:text-rose-100 border border-rose-500/30 text-xs transition-all cursor-pointer"
+                              title="حذف هذا التسليم لإتاحة الإعادة أو تصحيح الخطأ"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     );
@@ -2452,6 +2492,41 @@ export const ExamsTab: React.FC<ExamsTabProps> = ({
                 className="px-5 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold shadow-lg cursor-pointer"
               >
                 {isDeleting ? 'جارٍ الحذف...' : 'نعم، حذف الاختبار'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* DELETE SUBMISSION CONFIRMATION MODAL */}
+      {submissionToDelete && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="bg-[#022c22] border border-rose-600/50 rounded-3xl w-full max-w-md p-6 shadow-2xl space-y-4 text-center">
+            <div className="w-14 h-14 rounded-2xl bg-rose-950 text-rose-400 flex items-center justify-center mx-auto border border-rose-500/40">
+              <Trash2 className="w-7 h-7" />
+            </div>
+            <div>
+              <h3 className="text-base font-bold text-white">تأكيد حذف تسليم الطالب</h3>
+              <p className="text-xs text-rose-200/80 mt-1">
+                هل أنت متأكد من رغبتك في حذف تسليم الطالب <strong className="text-white font-bold">"{submissionToDelete.studentName}"</strong> لاختبار <strong className="text-[#fbbf24] font-bold">"{submissionToDelete.examTitle}"</strong> (المحاولة #{submissionToDelete.attemptNumber})؟
+              </p>
+              <div className="p-3 rounded-xl bg-amber-950/40 border border-amber-500/30 text-[11px] text-amber-200 mt-2 text-right leading-relaxed">
+                💡 مفيد في حال رغب المعلم بتصحيح خطأ أو إعطاء الطالب فرصة لإعادة الاختبار.
+              </div>
+            </div>
+            <div className="flex items-center justify-center gap-3 pt-2">
+              <button
+                onClick={() => setSubmissionToDelete(null)}
+                className="px-4 py-2 rounded-xl bg-emerald-900/60 text-emerald-200 text-xs font-bold cursor-pointer hover:bg-emerald-800"
+              >
+                تراجع
+              </button>
+              <button
+                onClick={handleConfirmDeleteSubmission}
+                disabled={isDeletingSubmission}
+                className="px-5 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold shadow-lg cursor-pointer"
+              >
+                {isDeletingSubmission ? 'جارٍ الحذف...' : 'نعم، حذف التسليم'}
               </button>
             </div>
           </div>

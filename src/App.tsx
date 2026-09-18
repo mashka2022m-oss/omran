@@ -15,7 +15,9 @@ import {
   Unlock,
   ShieldAlert,
   Layers,
-  FileText
+  FileText,
+  Headphones,
+  UserCog
 } from 'lucide-react';
 import {
   Student,
@@ -31,7 +33,9 @@ import {
   Exam,
   ExamSubmission,
   LeaderboardSettings,
-  GoogleOAuthConfig
+  GoogleOAuthConfig,
+  SurahRecording,
+  RecordingsConfig
 } from './types';
 import {
   OmranDataService,
@@ -39,7 +43,8 @@ import {
   DEFAULT_SETTINGS,
   DEFAULT_HALAQAHS,
   INITIAL_STUDENTS,
-  INITIAL_TEACHERS
+  INITIAL_TEACHERS,
+  DEFAULT_RECORDINGS_CONFIG
 } from './lib/firebase';
 import { AnimatedBackground } from './components/AnimatedBackground';
 import { Navbar } from './components/Navbar';
@@ -60,6 +65,8 @@ import { ParentsWhatsAppTab } from './components/tabs/ParentsWhatsAppTab';
 import { ReportsTab } from './components/tabs/ReportsTab';
 import { DataBackupTab } from './components/tabs/DataBackupTab';
 import { ExamsTab } from './components/tabs/ExamsTab';
+import { AccountsTab } from './components/tabs/AccountsTab';
+import { RecordingsTab } from './components/tabs/RecordingsTab';
 
 export function App() {
   // Authentication State
@@ -111,6 +118,8 @@ export function App() {
   const [submissions, setSubmissions] = useState<ExamSubmission[]>([]);
   const [leaderboardSettings, setLeaderboardSettings] = useState<LeaderboardSettings | null>(null);
   const [googleAuthConfig, setGoogleAuthConfig] = useState<GoogleOAuthConfig>({ isLinked: false });
+  const [recordings, setRecordings] = useState<SurahRecording[]>([]);
+  const [recordingsConfig, setRecordingsConfig] = useState<RecordingsConfig>(DEFAULT_RECORDINGS_CONFIG);
   const [isLoadingData, setIsLoadingData] = useState(true);
 
   // Parse URL on initial load and handle hash / search changes
@@ -198,7 +207,9 @@ export function App() {
         loadedExams,
         loadedSubmissions,
         loadedLeaderboard,
-        loadedGoogleOAuth
+        loadedGoogleOAuth,
+        loadedRecordings,
+        loadedRecordingsConfig
       ] = await Promise.all([
         OmranDataService.loadStudents(),
         OmranDataService.loadAttendance(),
@@ -212,7 +223,9 @@ export function App() {
         OmranDataService.loadExams(),
         OmranDataService.loadSubmissions(),
         OmranDataService.loadLeaderboardSettings(),
-        OmranDataService.loadGoogleOAuthConfig()
+        OmranDataService.loadGoogleOAuthConfig(),
+        OmranDataService.loadRecordings(),
+        OmranDataService.loadRecordingsConfig()
       ]);
 
       setStudents(loadedStudents);
@@ -228,6 +241,8 @@ export function App() {
       setSubmissions(loadedSubmissions);
       setLeaderboardSettings(loadedLeaderboard);
       setGoogleAuthConfig(loadedGoogleOAuth);
+      setRecordings(loadedRecordings);
+      setRecordingsConfig(loadedRecordingsConfig);
     } catch (e) {
       console.error('Error loading initial data:', e);
     } finally {
@@ -276,6 +291,12 @@ export function App() {
     const unsubGoogle = OmranDataService.subscribeGoogleOAuthConfig(newGoogle => {
       setGoogleAuthConfig(newGoogle);
     });
+    const unsubRecordings = OmranDataService.subscribeRecordings(newRecordings => {
+      setRecordings(newRecordings);
+    });
+    const unsubRecordingsConfig = OmranDataService.subscribeRecordingsConfig(newConfig => {
+      setRecordingsConfig(newConfig);
+    });
 
     return () => {
       unsubStudents();
@@ -290,6 +311,8 @@ export function App() {
       unsubSubmissions();
       unsubLeaderboard();
       unsubGoogle();
+      unsubRecordings();
+      unsubRecordingsConfig();
     };
   }, []);
 
@@ -307,19 +330,19 @@ export function App() {
 
   const isSupervisor = useMemo(() => {
     if (!currentUser || currentUser.role !== 'admin') return false;
+    // 1. Persistent role field on teacher account
+    if (currentTeacher?.role === 'supervisor') return true;
+    if (currentTeacher?.role === 'teacher') return false;
+    // 2. Primary teacher flag
+    if (currentTeacher?.isPrimary) return true;
+    // 3. Fallback for initial system administrators
     const cleanUser = currentUser.username.trim().toLowerCase();
-    if (
+    return (
       cleanUser === 'محمد منتصر' ||
       cleanUser === 'الشيخ محمد منتصر' ||
       cleanUser === 'admin' ||
       cleanUser === 'المشرف العام'
-    ) {
-      return true;
-    }
-    if (currentTeacher?.isPrimary) {
-      return true;
-    }
-    return false;
+    );
   }, [currentUser, currentTeacher]);
 
   const assignedHalaqahs = useMemo(() => {
@@ -745,6 +768,35 @@ export function App() {
     await OmranDataService.saveSubmission(sub);
   };
 
+  const handleDeleteSubmission = async (submissionId: string) => {
+    setSubmissions(prev => prev.filter(s => s.id !== submissionId));
+    await OmranDataService.deleteSubmission(submissionId);
+  };
+
+  // Recordings Handlers
+  const handleSaveRecording = async (rec: SurahRecording) => {
+    setRecordings(prev => {
+      const idx = prev.findIndex(r => r.id === rec.id);
+      if (idx >= 0) {
+        const copy = [...prev];
+        copy[idx] = rec;
+        return copy;
+      }
+      return [rec, ...prev];
+    });
+    await OmranDataService.saveRecording(rec);
+  };
+
+  const handleDeleteRecording = async (recId: string) => {
+    setRecordings(prev => prev.filter(r => r.id !== recId));
+    await OmranDataService.deleteRecording(recId);
+  };
+
+  const handleSaveRecordingsConfig = async (cfg: RecordingsConfig) => {
+    setRecordingsConfig(cfg);
+    await OmranDataService.saveRecordingsConfig(cfg);
+  };
+
   const handleSaveLeaderboardSettings = async (settings: LeaderboardSettings) => {
     setLeaderboardSettings(settings);
     await OmranDataService.saveLeaderboardSettings(settings);
@@ -832,6 +884,8 @@ export function App() {
           students={students}
           halaqahs={halaqahs}
           leaderboardSettings={leaderboardSettings || undefined}
+          recordings={recordings}
+          recordingsConfig={recordingsConfig}
           isLoggedInStudent={!!currentUser}
           onLogout={handleLogout}
           onSaveSubmission={handleSaveSubmission}
@@ -931,6 +985,8 @@ export function App() {
     { id: 'attendance', label: 'الحضور والغياب', icon: UserCheck },
     { id: 'evaluation', label: 'تقييم التسميع', icon: BookOpen },
     { id: 'exams', label: 'قسم الاختبارات', icon: FileText, badge: exams.length > 0 ? exams.length : undefined },
+    { id: 'recordings', label: 'مقاطع التلاوة والواجبات', icon: Headphones, badge: recordings.length > 0 ? recordings.length : undefined },
+    { id: 'accounts', label: 'إدارة الحسابات والرتب', icon: UserCog, badge: teachers.length },
     { id: 'behavior', label: 'المخالفات السلوكية', icon: ShieldAlert, badge: displayedViolations.length > 0 ? displayedViolations.length : undefined },
     { id: 'parents', label: 'رسائل الواتساب', icon: MessageCircle },
     { id: 'reports', label: 'التقارير الدورية', icon: Award },
@@ -1139,8 +1195,30 @@ export function App() {
             onSaveExam={handleSaveExam}
             onDeleteExam={handleDeleteExam}
             onSaveSubmission={handleSaveSubmission}
+            onDeleteSubmission={handleDeleteSubmission}
             onSaveLeaderboardSettings={handleSaveLeaderboardSettings}
             onRefreshGoogleAuth={handleRefreshGoogleAuth}
+          />
+        )}
+
+        {activeTab === 'recordings' && (
+          <RecordingsTab
+            recordings={recordings}
+            recordingsConfig={recordingsConfig}
+            onSaveRecording={handleSaveRecording}
+            onDeleteRecording={handleDeleteRecording}
+            onSaveConfig={handleSaveRecordingsConfig}
+          />
+        )}
+
+        {activeTab === 'accounts' && (
+          <AccountsTab
+            teachers={teachers}
+            students={students}
+            halaqahs={halaqahs}
+            onSaveTeacher={handleSaveTeacher}
+            onDeleteTeacher={handleDeleteTeacher}
+            onUpdateStudent={handleUpdateStudent}
           />
         )}
 
@@ -1179,6 +1257,9 @@ export function App() {
         {activeTab === 'backup' && (
           <DataBackupTab
             onRefreshAllData={loadAllData}
+            googleAuthConfig={googleAuthConfig}
+            onRefreshGoogleAuth={handleRefreshGoogleAuth}
+            isSupervisor={isSupervisor}
           />
         )}
       </main>

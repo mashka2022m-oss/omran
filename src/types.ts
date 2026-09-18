@@ -19,6 +19,7 @@ export interface TeacherAccount {
   phone: string; // teacher's phone number
   title?: string; // e.g. "المعلم الأساسي", "معلم شريك / ثانٍ", "محفظ ومساعد"
   isPrimary?: boolean;
+  role?: 'teacher' | 'supervisor'; // رتبة المعلم: معلم عادي أو مشرف
   halaqahId?: string; // Legacy single halaqah id
   halaqahName?: string; // Legacy single halaqah name
   halaqahIds?: string[]; // All halaqahs this teacher teaches (supports multiple halaqahs)
@@ -101,6 +102,7 @@ export interface Student {
   completedReviewPages?: number[]; // الأوجه المكتملة في المراجعة (نقطة واحدة لكل وجه)
   totalPagePoints?: number; // إجمالي نقاط الأوجه المكتملة
   listeningPoints?: number; // نقاط إتمام واجبات الاستماع
+  points?: number; // إجمالي النقاط الكلي للطالب
   createdAt: string;
 }
 
@@ -340,6 +342,8 @@ export interface SurahRecordingSegment {
   ayahText?: string;
   startTimeSeconds: number;
   endTimeSeconds: number;
+  formattedStart?: string;
+  formattedEnd?: string;
 }
 
 export interface SurahRecording {

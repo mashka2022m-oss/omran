@@ -23,7 +23,10 @@ import {
   Trophy,
   Medal,
   Copy,
-  Check
+  Check,
+  Headphones,
+  Radio,
+  ListOrdered
 } from 'lucide-react';
 import {
   Student,
@@ -34,7 +37,10 @@ import {
   Exam,
   ExamSubmission,
   LeaderboardSettings,
-  Halaqah
+  Halaqah,
+  SurahRecording,
+  RecordingsConfig,
+  SurahRecordingSegment
 } from '../types';
 import { StudentExamTaker } from './StudentExamTaker';
 import { OmranDataService } from '../lib/firebase';
@@ -51,6 +57,8 @@ interface ParentPortalViewProps {
   students?: Student[];
   halaqahs?: Halaqah[];
   leaderboardSettings?: LeaderboardSettings;
+  recordings?: SurahRecording[];
+  recordingsConfig?: RecordingsConfig;
   isLoggedInStudent?: boolean;
   onLogout?: () => void;
   onSaveSubmission?: (submission: ExamSubmission) => Promise<void>;
@@ -68,6 +76,8 @@ export const ParentPortalView: React.FC<ParentPortalViewProps> = ({
   students = [],
   halaqahs = [],
   leaderboardSettings,
+  recordings = [],
+  recordingsConfig,
   isLoggedInStudent,
   onLogout,
   onSaveSubmission,
@@ -243,6 +253,33 @@ export const ParentPortalView: React.FC<ParentPortalViewProps> = ({
   const myRankingData = myRankIndex >= 0 ? studentRankList[myRankIndex] : null;
   const studentHalaqahObj = halaqahs?.find(h => h.id === student.halaqahId);
   const currentHalaqahTitle = student.halaqahName || studentHalaqahObj?.name || 'حلقتك القرآنية';
+
+  // Audio Recording & Ayah Listening for Students
+  const [selectedRecordingId, setSelectedRecordingId] = useState<string>('');
+  const [activePortalAyah, setActivePortalAyah] = useState<SurahRecordingSegment | null>(null);
+  const [activePortalIframeUrl, setActivePortalIframeUrl] = useState<string>('');
+  const [listensCount, setListensCount] = useState<number>(0);
+
+  // Initialize selected recording based on student's current Surah
+  React.useEffect(() => {
+    if (recordings && recordings.length > 0) {
+      const matchSurah = recordings.find(r => r.surahNumber === currentStudent.currentSurah);
+      const chosen = matchSurah || recordings[0];
+      if (chosen && (!selectedRecordingId || !recordings.some(r => r.id === selectedRecordingId))) {
+        setSelectedRecordingId(chosen.id);
+        const firstSeg = chosen.segments && chosen.segments.length > 0 ? chosen.segments[0] : null;
+        setActivePortalAyah(firstSeg);
+        const clean = chosen.youtubeUrl ? chosen.youtubeUrl.trim() : '';
+        const match = clean.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))([\w-]{11})/);
+        const vId = chosen.youtubeVideoId || (match ? match[1] : '');
+        if (vId) {
+          setActivePortalIframeUrl(`https://www.youtube.com/embed/${vId}?rel=0&enablejsapi=1`);
+        }
+      }
+    }
+  }, [recordings, currentStudent.currentSurah]);
+
+  const activeRecording = recordings.find(r => r.id === selectedRecordingId) || recordings[0];
 
   // Handle Google Form exam launch with student name prefill and auto-clipboard
   const handleLaunchGoogleForm = (exam: Exam, targetStudent?: Student) => {
@@ -573,6 +610,195 @@ export const ParentPortalView: React.FC<ParentPortalViewProps> = ({
             </div>
           )}
         </div>
+
+        {/* QURAN AUDIO LISTENING & AYAH REPETITION SECTION */}
+        {recordings && recordings.length > 0 && (recordingsConfig?.isPublishedToStudents ?? true) && (
+          <div className="bg-[#064e3b]/60 border border-[#fbbf24]/40 rounded-[32px] p-6 sm:p-8 space-y-6 shadow-xl backdrop-blur-md">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-[#065f46]">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-[#fbbf24] to-[#f59e0b] text-[#064e3b] flex items-center justify-center font-bold shadow-lg border border-[#fbbf24]/40 shrink-0">
+                  <Headphones className="w-6 h-6" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="text-base sm:text-lg font-bold font-heading text-white">
+                      التسجيلات والاستماع القرآني المقرّر
+                    </h3>
+                    <span className="text-[10px] sm:text-xs px-2.5 py-0.5 rounded-full bg-[#fbbf24]/20 text-[#fbbf24] font-bold border border-[#fbbf24]/30">
+                      تقسيم الآيات بالذكاء الاصطناعي
+                    </span>
+                  </div>
+                  <p className="text-xs text-emerald-200/80 mt-0.5">
+                    استمع لتلاوة سورتك المقررة بدقة واضغط على أي آية للاستماع إليها مباشرة ومراجعة التكرار اليومي.
+                  </p>
+                </div>
+              </div>
+
+              {/* Surah Selector if multiple recordings exist */}
+              {recordings.length > 1 && (
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-[#86efac] whitespace-nowrap">اختر السورة:</span>
+                  <select
+                    value={activeRecording?.id || ''}
+                    onChange={(e) => {
+                      const rec = recordings.find(r => r.id === e.target.value);
+                      if (rec) {
+                        setSelectedRecordingId(rec.id);
+                        const firstSeg = rec.segments && rec.segments.length > 0 ? rec.segments[0] : null;
+                        setActivePortalAyah(firstSeg);
+                        const clean = rec.youtubeUrl ? rec.youtubeUrl.trim() : '';
+                        const match = clean.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))([\w-]{11})/);
+                        const vId = rec.youtubeVideoId || (match ? match[1] : '');
+                        if (vId) {
+                          const startSec = firstSeg ? Math.floor(firstSeg.startTime) : 0;
+                          setActivePortalIframeUrl(`https://www.youtube.com/embed/${vId}?start=${startSec}&autoplay=1&rel=0&enablejsapi=1`);
+                        }
+                      }
+                    }}
+                    className="bg-[#022c22] text-[#fbbf24] text-xs font-bold px-3 py-2 rounded-xl border border-[#065f46] focus:outline-none focus:border-[#fbbf24]"
+                  >
+                    {recordings.map(r => (
+                      <option key={r.id} value={r.id}>
+                        سورة {r.surahName} ({r.segments?.length || 0} آية)
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+            </div>
+
+            {activeRecording && (
+              <div className="space-y-6">
+                {/* Listening Target and Repetition Counter */}
+                <div className="bg-[#022c22]/70 border border-[#065f46] rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-400 border border-amber-500/30 flex items-center justify-center shrink-0">
+                      <Radio className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-bold text-white">
+                        سورة {activeRecording.surahName} {activeRecording.reciterName ? `- بصوت الشيخ ${activeRecording.reciterName}` : ''}
+                      </h4>
+                      <p className="text-xs text-[#86efac]/80 mt-0.5">
+                        الهدف اليومي: تكرار الاستماع {recordingsConfig?.dailyRepetitionTarget || 3} مرات متقنة
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-end">
+                    <span className="text-xs text-[#86efac]">
+                      المكتمل: <strong className="text-[#fbbf24] text-sm">{listensCount}</strong> من {recordingsConfig?.dailyRepetitionTarget || 3}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setListensCount(prev => (prev < (recordingsConfig?.dailyRepetitionTarget || 3) ? prev + 1 : 0))}
+                      className="px-3 py-1.5 rounded-xl bg-[#fbbf24] hover:bg-[#f59e0b] text-[#064e3b] text-xs font-black flex items-center gap-1.5 transition-all shadow-md cursor-pointer"
+                    >
+                      <Check className="w-4 h-4" />
+                      <span>{listensCount >= (recordingsConfig?.dailyRepetitionTarget || 3) ? 'إعادة التعيين' : 'تسجيل استماع'}</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Player & Ayah Segment Navigator Grid */}
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+                  {/* Video Embed Player */}
+                  <div className="lg:col-span-7 bg-[#022c22] rounded-2xl border border-[#065f46] overflow-hidden shadow-lg flex flex-col">
+                    <div className="aspect-video w-full bg-black relative">
+                      {activePortalIframeUrl ? (
+                        <iframe
+                          src={activePortalIframeUrl}
+                          title={`تلاوة سورة ${activeRecording.surahName}`}
+                          className="w-full h-full border-0"
+                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                          allowFullScreen
+                        />
+                      ) : (
+                        <div className="w-full h-full flex flex-col items-center justify-center text-center p-4 text-emerald-300/60">
+                          <Headphones className="w-10 h-10 mb-2 opacity-50" />
+                          <p className="text-xs">المقطع الصوتي قيد التحميل...</p>
+                        </div>
+                      )}
+                    </div>
+                    {activePortalAyah && (
+                      <div className="p-4 bg-[#022c22]/90 border-t border-[#065f46] flex items-center justify-between">
+                        <div className="flex items-center gap-2 text-xs">
+                          <span className="px-2 py-0.5 rounded-full bg-[#fbbf24]/20 text-[#fbbf24] font-bold">
+                            الآية {activePortalAyah.ayahNumber}
+                          </span>
+                          <span className="text-[#86efac]">
+                            {activePortalAyah.textSnippet || `الآية رقم ${activePortalAyah.ayahNumber}`}
+                          </span>
+                        </div>
+                        <span className="text-[11px] text-[#86efac]/70 font-mono">
+                          {Math.floor(activePortalAyah.startTime / 60)}:{(Math.floor(activePortalAyah.startTime % 60)).toString().padStart(2, '0')}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Ayahs Quick Navigation List */}
+                  <div className="lg:col-span-5 bg-[#022c22]/70 rounded-2xl border border-[#065f46] p-4 flex flex-col max-h-[380px]">
+                    <div className="flex items-center justify-between pb-3 border-b border-[#065f46] mb-3">
+                      <div className="flex items-center gap-2">
+                        <ListOrdered className="w-4 h-4 text-[#fbbf24]" />
+                        <h4 className="text-xs font-bold text-white">آيات السورة ({activeRecording.segments?.length || 0})</h4>
+                      </div>
+                      <span className="text-[11px] text-[#86efac]/70">اضغط للاستماع للآية</span>
+                    </div>
+
+                    <div className="overflow-y-auto space-y-2 pr-1 custom-scrollbar flex-1">
+                      {activeRecording.segments && activeRecording.segments.length > 0 ? (
+                        activeRecording.segments.map((seg) => {
+                          const isCurrent = activePortalAyah?.ayahNumber === seg.ayahNumber;
+                          return (
+                            <button
+                              key={seg.ayahNumber}
+                              type="button"
+                              onClick={() => {
+                                setActivePortalAyah(seg);
+                                const clean = activeRecording.youtubeUrl ? activeRecording.youtubeUrl.trim() : '';
+                                const match = clean.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))([\w-]{11})/);
+                                const vId = activeRecording.youtubeVideoId || (match ? match[1] : '');
+                                if (vId) {
+                                  const startSec = Math.floor(seg.startTime);
+                                  setActivePortalIframeUrl(`https://www.youtube.com/embed/${vId}?start=${startSec}&autoplay=1&rel=0&enablejsapi=1`);
+                                }
+                              }}
+                              className={`w-full text-right p-2.5 rounded-xl text-xs flex items-center justify-between gap-2 transition-all cursor-pointer ${
+                                isCurrent
+                                  ? 'bg-[#fbbf24] text-[#064e3b] font-bold shadow-md'
+                                  : 'bg-[#064e3b]/50 hover:bg-[#064e3b] text-white border border-[#065f46]/60'
+                              }`}
+                            >
+                              <div className="flex items-center gap-2 min-w-0">
+                                <span className={`w-6 h-6 rounded-lg text-[11px] font-black flex items-center justify-center shrink-0 ${
+                                  isCurrent ? 'bg-[#064e3b] text-[#fbbf24]' : 'bg-[#022c22] text-[#86efac]'
+                                }`}>
+                                  {seg.ayahNumber}
+                                </span>
+                                <span className="truncate text-[11px]">
+                                  {seg.textSnippet || `الآية ${seg.ayahNumber}`}
+                                </span>
+                              </div>
+                              <span className={`text-[10px] font-mono shrink-0 ${isCurrent ? 'text-[#064e3b]' : 'text-[#86efac]/70'}`}>
+                                {Math.floor(seg.startTime / 60)}:{(Math.floor(seg.startTime % 60)).toString().padStart(2, '0')}
+                              </span>
+                            </button>
+                          );
+                        })
+                      ) : (
+                        <div className="text-center py-8 text-xs text-[#86efac]/70">
+                          لم يتم تقسيم آيات هذه السورة بعد.
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* HONOR BOARD / LEADERBOARD SECTION FOR STUDENTS ACCORDING TO SUPERVISOR CONFIG */}
         <div className="bg-[#064e3b]/60 border border-[#fbbf24]/40 rounded-[32px] p-6 sm:p-8 space-y-6 shadow-xl backdrop-blur-md">
