@@ -38,6 +38,7 @@ import {
 } from '../types';
 import { StudentExamTaker } from './StudentExamTaker';
 import { OmranDataService } from '../lib/firebase';
+import { GoogleWorkspaceService } from '../lib/googleWorkspace';
 
 interface ParentPortalViewProps {
   student: Student;
@@ -53,6 +54,7 @@ interface ParentPortalViewProps {
   isLoggedInStudent?: boolean;
   onLogout?: () => void;
   onSaveSubmission?: (submission: ExamSubmission) => Promise<void>;
+  onUpdateStudent?: (updatedStudent: Student) => void;
 }
 
 export const ParentPortalView: React.FC<ParentPortalViewProps> = ({
@@ -68,7 +70,8 @@ export const ParentPortalView: React.FC<ParentPortalViewProps> = ({
   leaderboardSettings,
   isLoggedInStudent,
   onLogout,
-  onSaveSubmission
+  onSaveSubmission,
+  onUpdateStudent
 }) => {
   const [activeTakingExam, setActiveTakingExam] = useState<Exam | null>(null);
   const [activeTakingAttemptNum, setActiveTakingAttemptNum] = useState<number>(1);
@@ -81,6 +84,84 @@ export const ParentPortalView: React.FC<ParentPortalViewProps> = ({
     hasPrefill: boolean;
   } | null>(null);
   const [nameCopiedNotice, setNameCopiedNotice] = useState(false);
+
+  // Student Google Authentication & Linking State
+  const [currentStudent, setCurrentStudent] = useState<Student>(student);
+  const [googleAuthGateExam, setGoogleAuthGateExam] = useState<Exam | null>(null);
+  const [isLinkingGoogle, setIsLinkingGoogle] = useState(false);
+  const [googleLinkError, setGoogleLinkError] = useState('');
+  const [isCheckingGoogleScore, setIsCheckingGoogleScore] = useState(false);
+  const [googleScoreFeedback, setGoogleScoreFeedback] = useState<{
+    success: boolean;
+    message: string;
+  } | null>(null);
+
+  // Synchronize internal student state if props change
+  React.useEffect(() => {
+    setCurrentStudent(student);
+  }, [student]);
+
+  const handleLinkGoogleAccount = async (targetExamAfterLink?: Exam | null) => {
+    setIsLinkingGoogle(true);
+    setGoogleLinkError('');
+    try {
+      const updated = await GoogleWorkspaceService.linkStudentGoogleAccount(currentStudent);
+      setCurrentStudent(updated);
+      if (onUpdateStudent) {
+        onUpdateStudent(updated);
+      }
+      setGoogleAuthGateExam(null);
+
+      // If linking was triggered by clicking an exam, launch it now!
+      if (targetExamAfterLink) {
+        if (targetExamAfterLink.deliveryMode === 'google_form') {
+          handleLaunchGoogleForm(targetExamAfterLink, updated);
+        } else {
+          const mySubs = submissions.filter(s => s.examId === targetExamAfterLink.id && s.studentId === updated.id);
+          setActiveTakingAttemptNum(mySubs.length + 1);
+          setActiveTakingExam(targetExamAfterLink);
+        }
+      }
+    } catch (err: any) {
+      console.error('Failed to link Google account for student:', err);
+      setGoogleLinkError(err?.message || 'تعذر استكمال تسجيل الدخول بحساب Google. تأكد من السماح بالنوافذ المنبثقة.');
+    } finally {
+      setIsLinkingGoogle(false);
+    }
+  };
+
+  const handleCheckAndRecordGoogleScore = async (targetExam: Exam) => {
+    setIsCheckingGoogleScore(true);
+    setGoogleScoreFeedback(null);
+    try {
+      const result = await GoogleWorkspaceService.fetchAndRecordStudentGoogleFormScore(
+        targetExam,
+        currentStudent,
+        submissions
+      );
+      if (result.found && result.submission) {
+        if (onSaveSubmission) {
+          await onSaveSubmission(result.submission);
+        }
+        setGoogleScoreFeedback({
+          success: true,
+          message: result.message
+        });
+      } else {
+        setGoogleScoreFeedback({
+          success: false,
+          message: result.message
+        });
+      }
+    } catch (err: any) {
+      setGoogleScoreFeedback({
+        success: false,
+        message: err?.message || 'تعذر التحقق من درجات Google Forms حالياً.'
+      });
+    } finally {
+      setIsCheckingGoogleScore(false);
+    }
+  };
 
   const studentAttendance = attendance.filter(a => a.studentId === student.id);
   const studentEvaluations = evaluations.filter(e => e.studentId === student.id);
@@ -157,7 +238,8 @@ export const ParentPortalView: React.FC<ParentPortalViewProps> = ({
   const currentHalaqahTitle = student.halaqahName || studentHalaqahObj?.name || 'حلقتك القرآنية';
 
   // Handle Google Form exam launch with student name prefill and auto-clipboard
-  const handleLaunchGoogleForm = (exam: Exam) => {
+  const handleLaunchGoogleForm = (exam: Exam, targetStudent?: Student) => {
+    const activeSt = targetStudent || currentStudent;
     const rawUrl = exam.googleFormResponderUrl || exam.googleFormUrl;
     if (!rawUrl) {
       alert('لم يتم ربط أو توليد رابط Google Form لهذا الاختبار بعد. يرجى التواصل مع المعلم.');
@@ -172,13 +254,13 @@ export const ParentPortalView: React.FC<ParentPortalViewProps> = ({
         ? exam.googleFormNameEntryId
         : `entry.${exam.googleFormNameEntryId}`;
       const joinChar = rawUrl.includes('?') ? '&' : '?';
-      prefilledUrl = `${rawUrl}${joinChar}${entryKey}=${encodeURIComponent(student.name)}`;
+      prefilledUrl = `${rawUrl}${joinChar}${entryKey}=${encodeURIComponent(activeSt.name)}`;
       hasPrefill = true;
     }
 
     // Auto-copy the registered student name to clipboard so student never misspells it
     if (typeof navigator !== 'undefined' && navigator.clipboard) {
-      navigator.clipboard.writeText(student.name).then(() => {
+      navigator.clipboard.writeText(activeSt.name).then(() => {
         setNameCopiedNotice(true);
         setTimeout(() => setNameCopiedNotice(false), 4000);
       }).catch(() => {});
@@ -242,12 +324,42 @@ export const ParentPortalView: React.FC<ParentPortalViewProps> = ({
           </div>
 
           <div className="flex flex-wrap items-center gap-2.5">
+            {/* Google Account Status Badge */}
+            {currentStudent.isGoogleLinked && currentStudent.googleEmail ? (
+              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-2xl bg-emerald-950/90 border border-emerald-500/50 text-xs shadow-sm" title={currentStudent.googleEmail}>
+                <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24">
+                  <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                  <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                  <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
+                  <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
+                </svg>
+                <span className="text-emerald-300 font-bold truncate max-w-[150px]">{currentStudent.googleEmail}</span>
+                <span className="text-[10px] bg-emerald-500/20 text-emerald-300 px-1.5 py-0.5 rounded-full font-bold">موثق</span>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => handleLinkGoogleAccount(null)}
+                disabled={isLinkingGoogle}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-2xl bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-300 text-xs font-bold transition-colors cursor-pointer"
+                title="اضغط لربط حسابك بـ Google وتفعيل دخول الاختبارات"
+              >
+                <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24">
+                  <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                  <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                  <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
+                  <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
+                </svg>
+                <span>{isLinkingGoogle ? 'جاري الربط...' : 'ربط حساب Google'}</span>
+              </button>
+            )}
+
             {/* Prominent Account Badge */}
             <div className="flex items-center gap-2 px-3.5 py-2 rounded-2xl bg-[#022c22] border border-[#fbbf24]/40 text-xs shadow-md">
               <User className="w-3.5 h-3.5 text-[#fbbf24]" />
               <span className="text-[#86efac]">حسابك:</span>
-              <span className="font-bold text-white">{student.name}</span>
-              <span className="text-[#fbbf24] font-mono font-bold">- {student.password || '123'}</span>
+              <span className="font-bold text-white">{currentStudent.name}</span>
+              <span className="text-[#fbbf24] font-mono font-bold">- {currentStudent.password || '123'}</span>
             </div>
 
             {/* Logout Button Always Visible */}
@@ -267,25 +379,31 @@ export const ParentPortalView: React.FC<ParentPortalViewProps> = ({
           <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-6">
             <div className="flex items-center gap-4">
               <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-[#fbbf24] to-[#f59e0b] text-[#064e3b] text-2xl font-black font-heading flex items-center justify-center shadow-lg border border-[#fbbf24]/40 shrink-0">
-                {student.name.charAt(0)}
+                {currentStudent.name.charAt(0)}
               </div>
               <div>
                 <div className="flex items-center gap-2 flex-wrap">
                   <h2 className="text-xl sm:text-2xl font-bold text-white font-heading">
-                    {student.name}
+                    {currentStudent.name}
                   </h2>
                   <span className="px-3 py-1 rounded-full bg-[#fbbf24]/20 text-[#fbbf24] text-xs font-bold border border-[#fbbf24]/30">
-                    مستوى {student.level}
+                    مستوى {currentStudent.level}
                   </span>
+                  {currentStudent.isGoogleLinked && currentStudent.googleEmail && (
+                    <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 text-xs font-bold border border-emerald-500/40 flex items-center gap-1">
+                      <ShieldCheck className="w-3 h-3 text-emerald-400" />
+                      <span>حساب Google موثق</span>
+                    </span>
+                  )}
                   <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-[#86efac] text-xs font-bold border border-emerald-500/30 font-mono">
-                    {student.name} - {student.password || '123'}
+                    {currentStudent.name} - {currentStudent.password || '123'}
                   </span>
                 </div>
                 <p className="text-xs sm:text-sm text-[#f0f9f6]/90 mt-1">
-                  موضع الحفظ الحالي: <strong className="text-[#fbbf24]">سورة {student.currentSurahName} (الآية {student.currentAyah})</strong>
+                  موضع الحفظ الحالي: <strong className="text-[#fbbf24]">سورة {currentStudent.currentSurahName} (الآية {currentStudent.currentAyah})</strong>
                 </p>
                 <p className="text-xs text-[#86efac]/80 mt-0.5">
-                  ولي الأمر: {student.parentName}
+                  ولي الأمر: {currentStudent.parentName}
                 </p>
               </div>
             </div>
@@ -404,6 +522,13 @@ export const ParentPortalView: React.FC<ParentPortalViewProps> = ({
                         {canTake && (
                           <button
                             onClick={() => {
+                              // Mandatory Google verification gate:
+                              // If student has not linked their Google account, block entry until authenticated
+                              if (!currentStudent.isGoogleLinked || !currentStudent.googleEmail) {
+                                setGoogleAuthGateExam(exam);
+                                return;
+                              }
+
                               if (exam.deliveryMode === 'google_form') {
                                 handleLaunchGoogleForm(exam);
                               } else {
@@ -936,12 +1061,12 @@ export const ParentPortalView: React.FC<ParentPortalViewProps> = ({
               <div className="p-4 rounded-2xl bg-[#064e3b]/60 border border-emerald-700/80 space-y-3">
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-xs text-emerald-300 font-bold">
-                    اسمك الثلاثي المعتمد في المنصة:
+                    حسابك والاسم المعتمد في المنصة:
                   </span>
                   <button
                     onClick={() => {
                       if (typeof navigator !== 'undefined' && navigator.clipboard) {
-                        navigator.clipboard.writeText(student.name);
+                        navigator.clipboard.writeText(currentStudent.name);
                         setNameCopiedNotice(true);
                         setTimeout(() => setNameCopiedNotice(false), 3000);
                       }
@@ -962,52 +1087,94 @@ export const ParentPortalView: React.FC<ParentPortalViewProps> = ({
                   </button>
                 </div>
 
-                <div className="text-base sm:text-lg font-black text-white font-heading bg-[#022c22] p-3 rounded-xl border border-emerald-600/50 flex items-center justify-between">
-                  <span>{student.name}</span>
-                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-normal">
-                    مطابق لقوائم المركز
-                  </span>
-                </div>
-
-                <div className="text-xs leading-relaxed text-emerald-100/90 pt-1">
-                  {googleFormModalData.hasPrefill ? (
-                    <div className="flex items-start gap-2 text-emerald-300 bg-emerald-950/60 p-2.5 rounded-xl border border-emerald-600/40">
-                      <Sparkles className="w-4 h-4 text-[#fbbf24] shrink-0 mt-0.5" />
-                      <span>
-                        تم تجهيز الرابط لتعبئة اسمك <strong>تلقائياً</strong> في نموذج الاختبار لتفادي أي خطأ إملائي أو مسافات زائدة.
-                      </span>
-                    </div>
-                  ) : (
-                    <div className="flex items-start gap-2 text-amber-200 bg-amber-950/40 p-2.5 rounded-xl border border-amber-600/40">
-                      <Sparkles className="w-4 h-4 text-[#fbbf24] shrink-0 mt-0.5" />
-                      <span>
-                        تم نسخ اسمك الثلاثي المعتمد تلقائياً؛ يمكنك لصقه (Paste) مباشرة في أول حقل بالنموذج إذا تطلب الأمر.
-                      </span>
+                <div className="space-y-1.5">
+                  <div className="text-base sm:text-lg font-black text-white font-heading bg-[#022c22] p-3 rounded-xl border border-emerald-600/50 flex items-center justify-between">
+                    <span>{currentStudent.name}</span>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-normal">
+                      مطابق لقوائم المركز
+                    </span>
+                  </div>
+                  {currentStudent.googleEmail && (
+                    <div className="text-xs text-emerald-300 bg-emerald-950/70 p-2 rounded-xl border border-emerald-700/50 flex items-center gap-1.5">
+                      <ShieldCheck className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                      <span>الحساب المعتمد: <strong>{currentStudent.googleEmail}</strong></span>
                     </div>
                   )}
                 </div>
+
+                <div className="text-xs leading-relaxed text-emerald-100/90 pt-1">
+                  <div className="flex items-start gap-2 text-emerald-300 bg-emerald-950/60 p-2.5 rounded-xl border border-emerald-600/40">
+                    <Sparkles className="w-4 h-4 text-[#fbbf24] shrink-0 mt-0.5" />
+                    <span>
+                      أجب على أسئلة النموذج بحسابك Google، وفور تسليمك اضغط على زر (احسب درجتي وسجلها) ليقوم النظام تلقائياً برصد درجتك دون الحاجة لمراجعة يدوية.
+                    </span>
+                  </div>
+                </div>
               </div>
 
+              {/* Automatic Scoring Feedback */}
+              {googleScoreFeedback && (
+                <div
+                  className={`p-3.5 rounded-2xl text-xs flex items-start gap-2.5 border ${
+                    googleScoreFeedback.success
+                      ? 'bg-emerald-950/80 border-emerald-500/60 text-emerald-200'
+                      : 'bg-amber-950/80 border-amber-500/60 text-amber-200'
+                  }`}
+                >
+                  {googleScoreFeedback.success ? (
+                    <Award className="w-5 h-5 text-[#fbbf24] shrink-0" />
+                  ) : (
+                    <HelpCircle className="w-5 h-5 text-amber-400 shrink-0" />
+                  )}
+                  <div className="space-y-1">
+                    <p className="font-bold">{googleScoreFeedback.message}</p>
+                    {googleScoreFeedback.success && (
+                      <p className="text-[11px] text-[#86efac]">
+                        تم تحديث درجاتك في المنصة ولوحة الشرف بنجاح!
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
+
               {/* Action Buttons */}
-              <div className="flex flex-col sm:flex-row gap-2.5 pt-2">
+              <div className="flex flex-col gap-2.5 pt-2">
                 <button
                   onClick={() => {
                     window.open(googleFormModalData.prefilledUrl, '_blank');
                   }}
-                  className="flex-1 py-3 px-4 rounded-xl bg-[#fbbf24] hover:bg-[#f59e0b] text-[#064e3b] font-black text-xs sm:text-sm flex items-center justify-center gap-2 shadow-lg shadow-amber-500/20 transition-all cursor-pointer"
+                  className="w-full py-3.5 px-4 rounded-xl bg-[#fbbf24] hover:bg-[#f59e0b] text-[#064e3b] font-black text-xs sm:text-sm flex items-center justify-center gap-2 shadow-lg shadow-amber-500/20 transition-all cursor-pointer"
                 >
                   <ExternalLink className="w-4 h-4 text-[#064e3b]" />
-                  <span>فتح نموذج الاختبار والبدء الآن</span>
+                  <span>1. فتح نموذج الاختبار في نافذة جديدة والبدء</span>
+                </button>
+
+                <button
+                  onClick={() => handleCheckAndRecordGoogleScore(googleFormModalData.exam)}
+                  disabled={isCheckingGoogleScore}
+                  className="w-full py-3 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white text-xs sm:text-sm font-black flex items-center justify-center gap-2 shadow-lg shadow-emerald-950/40 cursor-pointer transition-all disabled:opacity-60"
+                >
+                  {isCheckingGoogleScore ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                      <span>جاري فحص إجاباتك من Google Forms وحساب الدرجة...</span>
+                    </>
+                  ) : (
+                    <>
+                      <RotateCcw className="w-4 h-4 text-emerald-200" />
+                      <span>2. أنهيت الإرسال - احسب درجتي وسجلها تلقائياً الآن</span>
+                    </>
+                  )}
                 </button>
 
                 <button
                   onClick={() => {
                     setGoogleFormModalData(null);
-                    setOpenedGoogleFormExam(googleFormModalData.exam);
+                    setGoogleScoreFeedback(null);
                   }}
-                  className="py-3 px-4 rounded-xl bg-emerald-900/80 hover:bg-emerald-800 text-emerald-200 text-xs font-bold cursor-pointer transition-colors text-center"
+                  className="py-2.5 px-4 rounded-xl bg-emerald-900/60 hover:bg-emerald-900 text-emerald-300 text-xs font-semibold cursor-pointer transition-colors text-center"
                 >
-                  تم تسليم النموذج
+                  إغلاق النافذة
                 </button>
               </div>
             </div>
@@ -1027,24 +1194,129 @@ export const ParentPortalView: React.FC<ParentPortalViewProps> = ({
               <p className="text-xs text-emerald-200/90 leading-relaxed">
                 تم تسجيل فتحك لاختبار <strong>"{openedGoogleFormExam.title}"</strong>.
                 <br />
-                فور تسليمك للنموذج، ستتم مزامنة إجاباتك ودرجاتك واعتمادها تلقائياً في لوحة الشرف بحسابك.
+                فور تسليمك للنموذج، يمكنك الضغط على زر حساب الدرجة لتسجيلها تلقائياً في حسابك.
               </p>
-              <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
+
+              {googleScoreFeedback && (
+                <div
+                  className={`p-3 rounded-xl text-xs text-right border ${
+                    googleScoreFeedback.success
+                      ? 'bg-emerald-950/80 border-emerald-500/60 text-emerald-200'
+                      : 'bg-amber-950/80 border-amber-500/60 text-amber-200'
+                  }`}
+                >
+                  {googleScoreFeedback.message}
+                </div>
+              )}
+
+              <div className="flex flex-col sm:flex-row items-center justify-center gap-2.5 pt-2">
+                <button
+                  onClick={() => handleCheckAndRecordGoogleScore(openedGoogleFormExam)}
+                  disabled={isCheckingGoogleScore}
+                  className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black flex items-center justify-center gap-1.5 shadow-md cursor-pointer disabled:opacity-60"
+                >
+                  {isCheckingGoogleScore ? (
+                    <>
+                      <div className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                      <span>جاري الفحص...</span>
+                    </>
+                  ) : (
+                    <>
+                      <RotateCcw className="w-3.5 h-3.5" />
+                      <span>احسب درجتي وسجلها الآن</span>
+                    </>
+                  )}
+                </button>
                 <button
                   onClick={() => {
                     const url = openedGoogleFormExam.googleFormResponderUrl || openedGoogleFormExam.googleFormUrl;
                     if (url) window.open(url, '_blank');
                   }}
-                  className="px-5 py-2.5 rounded-xl bg-emerald-800 hover:bg-emerald-700 text-white text-xs font-bold flex items-center gap-1.5 shadow-md cursor-pointer"
+                  className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-emerald-800 hover:bg-emerald-700 text-white text-xs font-bold flex items-center justify-center gap-1.5 shadow-md cursor-pointer"
                 >
                   <ExternalLink className="w-4 h-4" />
-                  <span>إعادة فتح النموذج</span>
+                  <span>فتح النموذج</span>
                 </button>
                 <button
-                  onClick={() => setOpenedGoogleFormExam(null)}
-                  className="px-6 py-2.5 rounded-xl bg-[#fbbf24] text-[#064e3b] text-xs font-black cursor-pointer shadow-md hover:bg-[#f59e0b]"
+                  onClick={() => {
+                    setOpenedGoogleFormExam(null);
+                    setGoogleScoreFeedback(null);
+                  }}
+                  className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-[#fbbf24] text-[#064e3b] text-xs font-black cursor-pointer shadow-md hover:bg-[#f59e0b]"
                 >
                   تم، العودة للحساب
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* MANDATORY GOOGLE AUTH GATEKEEPER MODAL BEFORE EXAM ENTRY */}
+        {googleAuthGateExam && (
+          <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4">
+            <div className="bg-[#022c22] border border-[#fbbf24]/60 rounded-3xl w-full max-w-md p-6 sm:p-7 shadow-2xl space-y-4 text-center">
+              <div className="w-16 h-16 rounded-2xl bg-amber-500/20 text-[#fbbf24] border border-[#fbbf24]/40 flex items-center justify-center mx-auto">
+                <svg className="w-8 h-8" viewBox="0 0 24 24">
+                  <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                  <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                  <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
+                  <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
+                </svg>
+              </div>
+
+              <h3 className="text-lg sm:text-xl font-black text-white font-heading">
+                تسجيل الدخول بـ Google مطلوب لدخول الاختبار
+              </h3>
+
+              <div className="p-3.5 rounded-2xl bg-[#064e3b]/70 border border-emerald-700/60 text-right space-y-2">
+                <p className="text-xs text-emerald-100 font-semibold leading-relaxed">
+                  أهلاً بك يا <strong>{currentStudent.name}</strong>! لدخول اختبار:
+                  <span className="block text-[#fbbf24] font-bold mt-1 text-sm">"{googleAuthGateExam.title}"</span>
+                </p>
+                <p className="text-[11px] text-emerald-300/90 leading-relaxed">
+                  يشترط النظام تسجيل الدخول بحساب Google المعتمد لديك، حتى يتسنى التحقق من هويتك وتوثيق إجاباتك ورصد درجاتك في سجلك تلقائياً دون أي تدخل يدوي.
+                </p>
+              </div>
+
+              {googleLinkError && (
+                <div className="p-3 rounded-xl bg-red-500/20 border border-red-500/40 text-red-200 text-xs text-right">
+                  {googleLinkError}
+                </div>
+              )}
+
+              <div className="flex flex-col gap-2.5 pt-2">
+                <button
+                  onClick={() => handleLinkGoogleAccount(googleAuthGateExam)}
+                  disabled={isLinkingGoogle}
+                  className="w-full py-3.5 px-4 rounded-2xl bg-white hover:bg-slate-100 text-slate-800 font-extrabold text-sm flex items-center justify-center gap-2.5 shadow-xl transition-all cursor-pointer disabled:opacity-60"
+                >
+                  {isLinkingGoogle ? (
+                    <div className="flex items-center gap-2 text-slate-600">
+                      <div className="w-4 h-4 border-2 border-slate-400 border-t-emerald-600 rounded-full animate-spin" />
+                      <span>جاري التحقق بحساب Google...</span>
+                    </div>
+                  ) : (
+                    <>
+                      <svg className="w-5 h-5 shrink-0" viewBox="0 0 24 24">
+                        <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                        <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                        <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
+                        <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
+                      </svg>
+                      <span>تسجيل الدخول بحساب Google والبدء الآن</span>
+                    </>
+                  )}
+                </button>
+
+                <button
+                  onClick={() => {
+                    setGoogleAuthGateExam(null);
+                    setGoogleLinkError('');
+                  }}
+                  disabled={isLinkingGoogle}
+                  className="w-full py-2 px-4 rounded-xl text-emerald-300 hover:text-white text-xs font-semibold cursor-pointer transition-colors"
+                >
+                  إلغاء والعودة
                 </button>
               </div>
             </div>

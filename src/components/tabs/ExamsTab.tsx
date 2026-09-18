@@ -124,6 +124,9 @@ export const ExamsTab: React.FC<ExamsTabProps> = ({
   const [isExportingSheets, setIsExportingSheets] = useState(false);
   const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error'; text: string; linkUrl?: string } | null>(null);
 
+  // Restrict linking accounts of the exam to supervisor Mohamed Montaser
+  const isMontaserSupervisor = Boolean(isSupervisor || (currentUserName && (currentUserName.includes('محمد منتصر') || currentUserName.includes('منتصر'))));
+
   // Deletion Confirmation Modal State
   const [examToDelete, setExamToDelete] = useState<Exam | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -535,6 +538,10 @@ export const ExamsTab: React.FC<ExamsTabProps> = ({
 
   // Generate Form inside the Exam Builder modal before saving
   const handleGenerateFormInModal = async () => {
+    if (!isMontaserSupervisor) {
+      alert('عذراً، صلاحية ربط حسابات الاختبار وإنشاء نماذج Google Forms مقتصرة حصرياً على المعلم المشرف (محمد منتصر).');
+      return;
+    }
     if (!formTitle.trim()) {
       alert('يرجى كتابة عنوان الاختبار أولاً.');
       return;
@@ -590,6 +597,10 @@ export const ExamsTab: React.FC<ExamsTabProps> = ({
 
   // Generate Google Form and Sheet on-demand for an existing Exam
   const handleGenerateGoogleFormForExam = async (targetExam: Exam) => {
+    if (!isMontaserSupervisor) {
+      alert('عذراً، صلاحية ربط وإنشاء نماذج الاختبار مقتصرة حصرياً على المعلم المشرف (محمد منتصر).');
+      return;
+    }
     setIsSaving(true);
     setStatusMessage(null);
     try {
@@ -694,6 +705,10 @@ export const ExamsTab: React.FC<ExamsTabProps> = ({
 
   // Connect Google Account for Sheets Export
   const handleConnectGoogle = async () => {
+    if (!isMontaserSupervisor) {
+      alert('عذراً، ربط وتفويض حسابات الاختبار وGoogle Workspace مقتصر حصرياً على المعلم المشرف (محمد منتصر).');
+      return;
+    }
     setIsSaving(true);
     try {
       const { email } = await GoogleWorkspaceService.linkGoogleAccount();

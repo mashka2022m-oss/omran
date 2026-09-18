@@ -426,7 +426,12 @@ export function clearLegacyLocalStorage() {
       'omran_chats_data',
       'omran_teachers_data',
       'omran_violations_data',
-      'omran_halaqahs_data'
+      'omran_halaqahs_data',
+      'omran_exams_data',
+      'omran_submissions_data',
+      'omran_leaderboard_data',
+      'omran_google_tokens',
+      'omran_google_config'
     ];
     for (const k of keysToRemove) {
       localStorage.removeItem(k);

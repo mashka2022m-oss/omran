@@ -92,6 +92,11 @@ export interface Student {
   notes?: string;
   halaqahId?: string; // ID of the halaqah this student belongs to
   halaqahName?: string; // Cached display name of halaqah
+  googleEmail?: string; // بريد حساب Google المرتبط بالطالب
+  googleUid?: string; // معرف Google UID المرتبط
+  googleName?: string; // اسم الحساب في Google
+  googlePhotoUrl?: string; // صورة الحساب في Google
+  isGoogleLinked?: boolean; // هل حساب الطالب موثق ومربوط بـ Google
   createdAt: string;
 }
 
@@ -271,6 +276,9 @@ export interface ExamSubmission {
   examTitle: string;
   studentId: string;
   studentName: string;
+  studentGoogleEmail?: string;
+  googleEmail?: string;
+  googleUid?: string;
   halaqahId: string;
   halaqahName: string;
   attemptNumber: number; // رقم المحاولة

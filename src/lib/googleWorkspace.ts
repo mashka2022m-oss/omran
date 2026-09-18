@@ -1,8 +1,8 @@
 import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
-import { auth, db } from './firebase';
+import { auth, db, OmranDataService } from './firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
-import { Exam, ExamQuestion, ExamSubmission, GoogleOAuthConfig, FullBackupData, Student, AttendanceRecord, StudentEvaluation, Halaqah } from '../types';
+import { Exam, ExamQuestion, ExamSubmission, ExamSubmissionAnswer, GoogleOAuthConfig, FullBackupData, Student, AttendanceRecord, StudentEvaluation, Halaqah } from '../types';
 
 export const GOOGLE_SCOPES = [
   'https://www.googleapis.com/auth/forms.body',
@@ -220,6 +220,380 @@ export class GoogleWorkspaceService {
       savedInCloud: true
     };
     await this.saveGoogleAuthConfig(config);
+  }
+
+  // -------------------------------------------------------------
+  // STUDENT GOOGLE AUTHENTICATION & AUTOMATIC GRADE LOOKUP
+  // -------------------------------------------------------------
+
+  // Student Sign-in with Google: seamlessly links or registers student profile with their Google account
+  static async signInStudentWithGoogle(
+    existingStudents: Student[]
+  ): Promise<{
+    student: Student;
+    user: { email: string; displayName: string; uid: string; photoURL?: string };
+    isNew: boolean;
+  }> {
+    let googleUser: { email: string; displayName: string; uid: string; photoURL?: string } | null = null;
+
+    try {
+      const provider = new GoogleAuthProvider();
+      provider.addScope('email');
+      provider.addScope('profile');
+      provider.setCustomParameters({ prompt: 'select_account' });
+      const result = await signInWithPopup(auth, provider);
+      if (result?.user) {
+        googleUser = {
+          email: result.user.email || '',
+          displayName: result.user.displayName || '',
+          uid: result.user.uid,
+          photoURL: result.user.photoURL || undefined
+        };
+      }
+    } catch (popupErr: any) {
+      if (popupErr.code === 'auth/popup-closed-by-user') {
+        throw new PopupClosedByUserError();
+      }
+      if (popupErr.code === 'auth/popup-blocked') {
+        throw new PopupBlockedError();
+      }
+
+      // Fallback via GIS if available
+      if (typeof window !== 'undefined' && firebaseConfig.oAuthClientId) {
+        try {
+          await loadGoogleGISScript();
+          if (window.google?.accounts?.oauth2) {
+            const gisRes = await requestAccessTokenViaGIS(firebaseConfig.oAuthClientId, ['email', 'profile']);
+            if (gisRes?.email) {
+              googleUser = {
+                email: gisRes.email,
+                displayName: gisRes.email.split('@')[0],
+                uid: `gis_${Date.now()}`
+              };
+            }
+          }
+        } catch {
+          // ignore GIS error
+        }
+      }
+
+      if (!googleUser) {
+        const domain = typeof window !== 'undefined' ? window.location.hostname : '';
+        if (popupErr.code === 'auth/unauthorized-domain') {
+          throw new UnauthorizedDomainError(domain, firebaseConfig.projectId);
+        }
+        throw popupErr;
+      }
+    }
+
+    if (!googleUser || !googleUser.email) {
+      throw new Error('تعذر استلام بيانات حساب Google.');
+    }
+
+    const cleanEmail = googleUser.email.trim().toLowerCase();
+    const cleanName = googleUser.displayName ? googleUser.displayName.trim() : '';
+
+    // 1. Search for an existing student with this Google email or Google UID
+    let matchedStudent = existingStudents.find(
+      s => (s.googleEmail && s.googleEmail.trim().toLowerCase() === cleanEmail) ||
+           (s.googleUid && s.googleUid === googleUser!.uid)
+    );
+
+    // 2. If not matched by email, try matching by name using normalized Arabic
+    if (!matchedStudent && cleanName) {
+      const normGoogleName = normalizeArabicText(cleanName);
+      matchedStudent = existingStudents.find(s => {
+        const normS = normalizeArabicText(s.name);
+        return normS === normGoogleName ||
+               (normGoogleName.length >= 6 && normS.includes(normGoogleName)) ||
+               (normS.length >= 6 && normGoogleName.includes(normS));
+      });
+    }
+
+    if (matchedStudent) {
+      // Update student profile in Firestore with Google linking
+      const updatedStudent: Student = {
+        ...matchedStudent,
+        googleEmail: cleanEmail,
+        googleUid: googleUser.uid,
+        googleName: cleanName || matchedStudent.name,
+        googlePhotoUrl: googleUser.photoURL || matchedStudent.googlePhotoUrl,
+        isGoogleLinked: true
+      };
+      await OmranDataService.saveStudent(updatedStudent);
+      return { student: updatedStudent, user: googleUser, isNew: false };
+    }
+
+    // 3. New student onboarding: create student profile in Firestore directly
+    const newStudentId = `std_g_${Date.now()}`;
+    const newStudentName = cleanName || cleanEmail.split('@')[0];
+    const newStudent: Student = {
+      id: newStudentId,
+      name: newStudentName,
+      password: '123',
+      phone: '',
+      age: 12,
+      parentName: `ولي أمر ${newStudentName}`,
+      parentPhones: [],
+      currentSurah: 78,
+      currentSurahName: 'النبأ',
+      currentAyah: 1,
+      dailyNewTarget: 'نصف وجه',
+      dailyReviewTarget: 'وجه واحد',
+      level: 'متوسط',
+      halaqahId: 'halaqah-zubeir',
+      halaqahName: 'حلقة الزبير بن العوام رضي الله عنه',
+      googleEmail: cleanEmail,
+      googleUid: googleUser.uid,
+      googleName: cleanName,
+      googlePhotoUrl: googleUser.photoURL,
+      isGoogleLinked: true,
+      createdAt: new Date().toISOString()
+    };
+
+    await OmranDataService.saveStudent(newStudent);
+    return { student: newStudent, user: googleUser, isNew: true };
+  }
+
+  // Link Google Account to an already logged-in student
+  static async linkStudentGoogleAccount(student: Student): Promise<Student> {
+    const provider = new GoogleAuthProvider();
+    provider.addScope('email');
+    provider.addScope('profile');
+    provider.setCustomParameters({ prompt: 'select_account' });
+    const result = await signInWithPopup(auth, provider);
+    const googleUser = result.user;
+
+    if (!googleUser || !googleUser.email) {
+      throw new Error('تعذر استلام بيانات حساب Google.');
+    }
+
+    const updatedStudent: Student = {
+      ...student,
+      googleEmail: googleUser.email.trim().toLowerCase(),
+      googleUid: googleUser.uid,
+      googleName: googleUser.displayName || student.name,
+      googlePhotoUrl: googleUser.photoURL || student.googlePhotoUrl,
+      isGoogleLinked: true
+    };
+
+    await OmranDataService.saveStudent(updatedStudent);
+    return updatedStudent;
+  }
+
+  // Look up Google Form response for a student by their registered Google email/name and save score automatically
+  static async fetchAndRecordStudentGoogleFormScore(
+    exam: Exam,
+    student: Student,
+    existingSubmissions: ExamSubmission[] = []
+  ): Promise<{
+    found: boolean;
+    submission?: ExamSubmission;
+    message: string;
+  }> {
+    if (!exam.googleFormId) {
+      return { found: false, message: 'هذا الاختبار غير مرتبط بنموذج Google Form بعد.' };
+    }
+
+    const token = await this.getValidAccessToken();
+    if (!token) {
+      return {
+        found: false,
+        message: 'يتطلب فحص نتائج Google Forms سحابياً اتصال حساب المعلم المشرف (الشيخ محمد منتصر).'
+      };
+    }
+
+    try {
+      // 1. Fetch form structure
+      const formMetaRes = await fetch(`https://forms.googleapis.com/v1/forms/${exam.googleFormId}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (!formMetaRes.ok) {
+        throw new Error('تعذر الاتصال بخدمة Google Forms لجلب بيانات النموذج.');
+      }
+      const formMeta = await formMetaRes.json();
+      const items: any[] = formMeta.items || [];
+
+      // 2. Fetch responses
+      const responsesRes = await fetch(`https://forms.googleapis.com/v1/forms/${exam.googleFormId}/responses`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (!responsesRes.ok) {
+        throw new Error('تعذر استيراد الردود من Google Forms.');
+      }
+      const responsesData = await responsesRes.json();
+      const responses: any[] = responsesData.responses || [];
+
+      if (responses.length === 0) {
+        return {
+          found: false,
+          message: 'لم يتم العثور على أي تسليمات مسجلة في نموذج Google حتى الآن. تأكد من إكمال النموذج والضغط على (إرسال / Submit).'
+        };
+      }
+
+      const cleanStudentEmail = (student.googleEmail || '').trim().toLowerCase();
+      const normStudentName = normalizeArabicText(student.name);
+
+      // Map question IDs
+      const questionMap: Record<string, ExamQuestion> = {};
+      let studentNameQId: string | null = null;
+      let emailQId: string | null = null;
+
+      items.forEach(item => {
+        const qId = item.questionItem?.question?.questionId;
+        const title = item.title || '';
+        if (!qId) return;
+        if (title.includes('اسم')) {
+          studentNameQId = qId;
+        } else if (title.includes('بريد') || title.includes('إيميل') || title.toLowerCase().includes('email')) {
+          emailQId = qId;
+        } else {
+          const matched = exam.questions.find(eq => title.includes(eq.title) || eq.title.includes(title));
+          if (matched) questionMap[qId] = matched;
+        }
+      });
+
+      // Find the student's response (newest first)
+      const sortedResponses = [...responses].reverse();
+
+      const matchedResponse = sortedResponses.find(resp => {
+        // Match by respondentEmail
+        const respondentEmail = (resp.respondentEmail || '').trim().toLowerCase();
+        if (cleanStudentEmail && respondentEmail && respondentEmail === cleanStudentEmail) {
+          return true;
+        }
+
+        const answersObj = resp.answers || {};
+
+        // Match by email field if asked
+        if (emailQId && answersObj[emailQId]) {
+          const val = answersObj[emailQId].textAnswers?.answers?.[0]?.value?.trim().toLowerCase();
+          if (val && cleanStudentEmail && val === cleanStudentEmail) {
+            return true;
+          }
+        }
+
+        // Match by student name
+        let respName = '';
+        if (studentNameQId && answersObj[studentNameQId]) {
+          respName = answersObj[studentNameQId].textAnswers?.answers?.[0]?.value?.trim() || '';
+        }
+        if (!respName) {
+          for (const qId of Object.keys(answersObj)) {
+            const it = items.find(i => i.questionItem?.question?.questionId === qId);
+            if (it?.title?.includes('اسم')) {
+              respName = answersObj[qId].textAnswers?.answers?.[0]?.value?.trim() || '';
+              break;
+            }
+          }
+        }
+
+        if (respName) {
+          const normRespName = normalizeArabicText(respName);
+          if (normRespName === normStudentName || normRespName.includes(normStudentName) || normStudentName.includes(normRespName)) {
+            return true;
+          }
+        }
+
+        return false;
+      });
+
+      if (!matchedResponse) {
+        return {
+          found: false,
+          message: `لم يتم العثور على تسليم مسجل بحسابك Google (${cleanStudentEmail || student.name}). يرجى التأكد من تقديم النموذج بنفس الحساب المسجل.`
+        };
+      }
+
+      // Calculate score
+      const answersObj = matchedResponse.answers || {};
+      const answers: ExamSubmissionAnswer[] = [];
+      let totalScore = 0;
+      let hasPendingEssay = false;
+
+      if (typeof matchedResponse.totalSubmittedGrade === 'number') {
+        totalScore = matchedResponse.totalSubmittedGrade;
+      }
+
+      exam.questions.forEach(q => {
+        let studentAnsText = '';
+        for (const [formQId, examQ] of Object.entries(questionMap)) {
+          if (examQ.id === q.id && answersObj[formQId]) {
+            const txt = answersObj[formQId].textAnswers?.answers || [];
+            studentAnsText = txt.map((a: any) => a.value).join(', ');
+            break;
+          }
+        }
+
+        const isAuto = q.type === 'multiple_choice' || q.type === 'true_false';
+        let isCorrect = false;
+        let points = 0;
+
+        if (isAuto && q.correctAnswer !== undefined) {
+          if (studentAnsText.toLowerCase() === String(q.correctAnswer).trim().toLowerCase()) {
+            isCorrect = true;
+            points = q.points;
+          }
+        } else if (!isAuto) {
+          hasPendingEssay = true;
+        }
+
+        if (typeof matchedResponse.totalSubmittedGrade !== 'number' && isCorrect) {
+          totalScore += points;
+        }
+
+        answers.push({
+          questionId: q.id,
+          questionTitle: q.title,
+          questionType: q.type,
+          studentAnswer: studentAnsText || 'تمت الإجابة في Google Forms',
+          isAutoGraded: isAuto,
+          isCorrect: isAuto ? isCorrect : undefined,
+          pointsEarned: points,
+          maxPoints: q.points
+        });
+      });
+
+      const maxPossibleScore = exam.totalPoints || exam.questions.reduce((s, q) => s + q.points, 0) || 100;
+      const percentage = Math.round((totalScore / maxPossibleScore) * 100);
+
+      const previousAttempts = existingSubmissions.filter(s => s.examId === exam.id && s.studentId === student.id);
+      const attemptNumber = previousAttempts.length + 1;
+
+      const submission: ExamSubmission = {
+        id: `sub-${exam.id}-${student.id}-${Date.now()}`,
+        examId: exam.id,
+        examTitle: exam.title,
+        studentId: student.id,
+        studentName: student.name,
+        studentGoogleEmail: cleanStudentEmail,
+        halaqahId: student.halaqahId || '',
+        halaqahName: student.halaqahName || 'الحلقة',
+        attemptNumber,
+        answers,
+        totalScoreEarned: totalScore,
+        maxPossibleScore,
+        percentage,
+        pointsGrantedForLeaderboard: exam.grantsLeaderboardPoints ? totalScore : 0,
+        status: hasPendingEssay ? 'needs_grading' : 'completed',
+        submittedAt: matchedResponse.lastSubmittedTime || matchedResponse.createTime || new Date().toISOString()
+      };
+
+      // Save submission directly to Firestore
+      await OmranDataService.saveSubmission(submission);
+
+      return {
+        found: true,
+        submission,
+        message: `تم العثور على إجاباتك بحسابك Google بنجاح! درجتك المحصلة: ${totalScore} من ${maxPossibleScore} (${percentage}%) وتم قيدها في سجلك ولوحة الشرف فوراً!`
+      };
+    } catch (err: any) {
+      console.error('Error fetching Google Form score for student:', err);
+      return {
+        found: false,
+        message: `حدث خطأ أثناء فحص النتيجة من Google Forms: ${err?.message || 'يرجى المحاولة مجدداً.'}`
+      };
+    }
   }
 
   // Link Supervisor Google Account with Google Forms and Sheets permissions

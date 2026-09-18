@@ -191,6 +191,8 @@ export const StudentExamTaker: React.FC<StudentExamTakerProps> = ({
         examTitle: exam.title,
         studentId: student.id,
         studentName: student.name,
+        googleEmail: student.googleEmail,
+        googleUid: student.googleUid,
         halaqahId: student.halaqahId || '',
         halaqahName: student.halaqahName || 'الحلقة',
         attemptNumber: currentAttemptNumber,
