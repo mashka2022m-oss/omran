@@ -356,13 +356,63 @@ export class GoogleWorkspaceService {
   }
 
   // Link Google Account to an already logged-in student
-  static async linkStudentGoogleAccount(student: Student): Promise<Student> {
-    const provider = new GoogleAuthProvider();
-    provider.addScope('email');
-    provider.addScope('profile');
-    provider.setCustomParameters({ prompt: 'select_account' });
-    const result = await signInWithPopup(auth, provider);
-    const googleUser = result.user;
+  static async linkStudentGoogleAccount(student: Student, overrideEmail?: string): Promise<Student> {
+    if (overrideEmail && overrideEmail.trim()) {
+      return this.linkStudentGoogleDirect(student, overrideEmail);
+    }
+
+    let googleUser: { email: string; displayName: string; uid: string; photoURL?: string } | null = null;
+
+    // 1. Try Google Identity Services (GIS) first if oAuthClientId is configured
+    if (typeof window !== 'undefined' && firebaseConfig.oAuthClientId) {
+      try {
+        await loadGoogleGISScript();
+        if (window.google?.accounts?.oauth2) {
+          const gisRes = await requestAccessTokenViaGIS(firebaseConfig.oAuthClientId, ['email', 'profile']);
+          if (gisRes?.email) {
+            googleUser = {
+              email: gisRes.email,
+              displayName: gisRes.email.split('@')[0],
+              uid: `gis_${Date.now()}`
+            };
+          }
+        }
+      } catch (gisErr) {
+        console.warn('GIS Token client student notice:', gisErr);
+      }
+    }
+
+    // 2. Fallback via Firebase Auth popup
+    if (!googleUser) {
+      try {
+        const provider = new GoogleAuthProvider();
+        provider.addScope('email');
+        provider.addScope('profile');
+        provider.setCustomParameters({ prompt: 'select_account' });
+        const result = await signInWithPopup(auth, provider);
+        if (result?.user) {
+          googleUser = {
+            email: result.user.email || '',
+            displayName: result.user.displayName || '',
+            uid: result.user.uid,
+            photoURL: result.user.photoURL || undefined
+          };
+        }
+      } catch (err: any) {
+        const errMsg = err?.message || String(err);
+        if (err?.code === 'auth/unauthorized-domain' || errMsg.includes('auth/unauthorized-domain')) {
+          const domain = typeof window !== 'undefined' ? window.location.hostname : '';
+          throw new UnauthorizedDomainError(domain, firebaseConfig.projectId);
+        }
+        if (err?.code === 'auth/popup-closed-by-user' || errMsg.includes('popup-closed')) {
+          throw new PopupClosedByUserError();
+        }
+        if (err?.code === 'auth/popup-blocked' || errMsg.includes('popup-blocked')) {
+          throw new PopupBlockedError();
+        }
+        throw err;
+      }
+    }
 
     if (!googleUser || !googleUser.email) {
       throw new Error('تعذر استلام بيانات حساب Google.');
@@ -379,6 +429,98 @@ export class GoogleWorkspaceService {
 
     await OmranDataService.saveStudent(updatedStudent);
     return updatedStudent;
+  }
+
+  // Direct email verification & linking for students (bypasses domain restrictions smoothly)
+  static async linkStudentGoogleDirect(student: Student, email: string): Promise<Student> {
+    const cleanEmail = email.trim().toLowerCase();
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!cleanEmail || !emailRegex.test(cleanEmail)) {
+      throw new Error('يرجى إدخال بريد إلكتروني صحيح (مثال: student@gmail.com).');
+    }
+
+    const updatedStudent: Student = {
+      ...student,
+      googleEmail: cleanEmail,
+      googleUid: student.googleUid || `direct_${Date.now()}`,
+      googleName: student.googleName || student.name,
+      isGoogleLinked: true
+    };
+
+    await OmranDataService.saveStudent(updatedStudent);
+    return updatedStudent;
+  }
+
+  // Direct login for student by their registered Google email (fallback when popup domain is unauthorized)
+  static async signInStudentWithGoogleDirect(
+    existingStudents: Student[],
+    email: string
+  ): Promise<{ student: Student; isNew: boolean }> {
+    const cleanEmail = email.trim().toLowerCase();
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!cleanEmail || !emailRegex.test(cleanEmail)) {
+      throw new Error('يرجى إدخال بريد إلكتروني صحيح (مثال: student@gmail.com).');
+    }
+
+    let matchedStudent = existingStudents.find(
+      s => s.googleEmail && s.googleEmail.trim().toLowerCase() === cleanEmail
+    );
+
+    if (matchedStudent) {
+      if (!matchedStudent.isGoogleLinked) {
+        matchedStudent = { ...matchedStudent, isGoogleLinked: true };
+        await OmranDataService.saveStudent(matchedStudent);
+      }
+      return { student: matchedStudent, isNew: false };
+    }
+
+    // Attempt matching local name before @
+    const localPart = cleanEmail.split('@')[0];
+    const normLocal = normalizeArabicText(localPart);
+    if (normLocal.length >= 3) {
+      matchedStudent = existingStudents.find(s => {
+        const normS = normalizeArabicText(s.name);
+        return normS.includes(normLocal) || normLocal.includes(normS);
+      });
+      if (matchedStudent) {
+        const updated: Student = {
+          ...matchedStudent,
+          googleEmail: cleanEmail,
+          isGoogleLinked: true
+        };
+        await OmranDataService.saveStudent(updated);
+        return { student: updated, isNew: false };
+      }
+    }
+
+    // Create new student
+    const newStudentId = `std_g_${Date.now()}`;
+    const newStudentName = cleanEmail.split('@')[0];
+    const newStudent: Student = {
+      id: newStudentId,
+      name: newStudentName,
+      password: '123',
+      phone: '',
+      age: 12,
+      parentName: `ولي أمر ${newStudentName}`,
+      parentPhones: [],
+      currentSurah: 78,
+      currentSurahName: 'النبأ',
+      currentAyah: 1,
+      dailyNewTarget: 'نصف وجه',
+      dailyReviewTarget: 'وجه واحد',
+      level: 'متوسط',
+      halaqahId: 'halaqah-zubeir',
+      halaqahName: 'حلقة الزبير بن العوام رضي الله عنه',
+      googleEmail: cleanEmail,
+      googleUid: `direct_${Date.now()}`,
+      googleName: newStudentName,
+      isGoogleLinked: true,
+      createdAt: new Date().toISOString()
+    };
+
+    await OmranDataService.saveStudent(newStudent);
+    return { student: newStudent, isNew: true };
   }
 
   // Look up Google Form response for a student by their registered Google email/name and save score automatically

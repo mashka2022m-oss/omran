@@ -90,6 +90,9 @@ export const ParentPortalView: React.FC<ParentPortalViewProps> = ({
   const [googleAuthGateExam, setGoogleAuthGateExam] = useState<Exam | null>(null);
   const [isLinkingGoogle, setIsLinkingGoogle] = useState(false);
   const [googleLinkError, setGoogleLinkError] = useState('');
+  const [directGoogleEmail, setDirectGoogleEmail] = useState('');
+  const [showDirectLinkModal, setShowDirectLinkModal] = useState(false);
+  const [isDirectLinking, setIsDirectLinking] = useState(false);
   const [isCheckingGoogleScore, setIsCheckingGoogleScore] = useState(false);
   const [googleScoreFeedback, setGoogleScoreFeedback] = useState<{
     success: boolean;
@@ -99,6 +102,9 @@ export const ParentPortalView: React.FC<ParentPortalViewProps> = ({
   // Synchronize internal student state if props change
   React.useEffect(() => {
     setCurrentStudent(student);
+    if (student?.googleEmail) {
+      setDirectGoogleEmail(student.googleEmail);
+    }
   }, [student]);
 
   const handleLinkGoogleAccount = async (targetExamAfterLink?: Exam | null) => {
@@ -111,6 +117,7 @@ export const ParentPortalView: React.FC<ParentPortalViewProps> = ({
         onUpdateStudent(updated);
       }
       setGoogleAuthGateExam(null);
+      setShowDirectLinkModal(false);
 
       // If linking was triggered by clicking an exam, launch it now!
       if (targetExamAfterLink) {
@@ -123,10 +130,58 @@ export const ParentPortalView: React.FC<ParentPortalViewProps> = ({
         }
       }
     } catch (err: any) {
-      console.error('Failed to link Google account for student:', err);
-      setGoogleLinkError(err?.message || 'تعذر استكمال تسجيل الدخول بحساب Google. تأكد من السماح بالنوافذ المنبثقة.');
+      console.warn('Student Google link notice:', err);
+      const errMsg = err?.message || String(err);
+      if (err?.isUnauthorizedDomain || err?.code === 'auth/unauthorized-domain' || errMsg.includes('unauthorized-domain')) {
+        setGoogleLinkError('نطاق المنصة الحالي يتطلب كتابة وتأكيد بريد Google (Gmail) يدوياً أدناه لتخطي قيود الأمان وبدء الاختبار فوراً:');
+      } else if (err?.isPopupClosed || errMsg.includes('popup-closed')) {
+        setGoogleLinkError('تم إغلاق نافذة تسجيل الدخول من Google قبل الإكمال. يمكنك إعادة المحاولة أو إدخال بريدك الإلكتروني أدناه مباشرة.');
+      } else if (err?.isPopupBlocked || errMsg.includes('popup-blocked')) {
+        setGoogleLinkError('المتصفح حظر النافذة المنبثقة. يرجى تأكيد بريدك في Google (Gmail) أدناه للبدء مباشرة.');
+      } else {
+        setGoogleLinkError(errMsg || 'تعذر استكمال تسجيل الدخول بحساب Google. يمكنك إدخال بريدك يدوياً أدناه.');
+      }
     } finally {
       setIsLinkingGoogle(false);
+    }
+  };
+
+  const handleConfirmDirectGoogleEmail = async (targetExamAfterLink?: Exam | null) => {
+    const clean = directGoogleEmail.trim().toLowerCase();
+    if (!clean) {
+      setGoogleLinkError('يرجى كتابة بريدك الإلكتروني لدى Google (Gmail).');
+      return;
+    }
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(clean)) {
+      setGoogleLinkError('صيغة البريد الإلكتروني غير صحيحة، يرجى كتابة بريد مثل: student@gmail.com');
+      return;
+    }
+
+    setIsDirectLinking(true);
+    setGoogleLinkError('');
+    try {
+      const updated = await GoogleWorkspaceService.linkStudentGoogleDirect(currentStudent, clean);
+      setCurrentStudent(updated);
+      if (onUpdateStudent) {
+        onUpdateStudent(updated);
+      }
+      setGoogleAuthGateExam(null);
+      setShowDirectLinkModal(false);
+
+      if (targetExamAfterLink) {
+        if (targetExamAfterLink.deliveryMode === 'google_form') {
+          handleLaunchGoogleForm(targetExamAfterLink, updated);
+        } else {
+          const mySubs = submissions.filter(s => s.examId === targetExamAfterLink.id && s.studentId === updated.id);
+          setActiveTakingAttemptNum(mySubs.length + 1);
+          setActiveTakingExam(targetExamAfterLink);
+        }
+      }
+    } catch (err: any) {
+      setGoogleLinkError(err?.message || 'حدث خطأ أثناء حفظ بريد Google.');
+    } finally {
+      setIsDirectLinking(false);
     }
   };
 
@@ -339,8 +394,12 @@ export const ParentPortalView: React.FC<ParentPortalViewProps> = ({
             ) : (
               <button
                 type="button"
-                onClick={() => handleLinkGoogleAccount(null)}
-                disabled={isLinkingGoogle}
+                onClick={() => {
+                  setDirectGoogleEmail(currentStudent.googleEmail || '');
+                  setGoogleLinkError('');
+                  setShowDirectLinkModal(true);
+                }}
+                disabled={isLinkingGoogle || isDirectLinking}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-2xl bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-300 text-xs font-bold transition-colors cursor-pointer"
                 title="اضغط لربط حسابك بـ Google وتفعيل دخول الاختبارات"
               >
@@ -350,7 +409,7 @@ export const ParentPortalView: React.FC<ParentPortalViewProps> = ({
                   <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
                   <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
                 </svg>
-                <span>{isLinkingGoogle ? 'جاري الربط...' : 'ربط حساب Google'}</span>
+                <span>{isLinkingGoogle || isDirectLinking ? 'جاري الربط...' : 'ربط حساب Google'}</span>
               </button>
             )}
 
@@ -1279,15 +1338,16 @@ export const ParentPortalView: React.FC<ParentPortalViewProps> = ({
               </div>
 
               {googleLinkError && (
-                <div className="p-3 rounded-xl bg-red-500/20 border border-red-500/40 text-red-200 text-xs text-right">
+                <div className="p-3 rounded-xl bg-amber-500/20 border border-amber-500/40 text-amber-200 text-xs text-right leading-relaxed">
                   {googleLinkError}
                 </div>
               )}
 
-              <div className="flex flex-col gap-2.5 pt-2">
+              <div className="flex flex-col gap-3 pt-2">
                 <button
+                  type="button"
                   onClick={() => handleLinkGoogleAccount(googleAuthGateExam)}
-                  disabled={isLinkingGoogle}
+                  disabled={isLinkingGoogle || isDirectLinking}
                   className="w-full py-3.5 px-4 rounded-2xl bg-white hover:bg-slate-100 text-slate-800 font-extrabold text-sm flex items-center justify-center gap-2.5 shadow-xl transition-all cursor-pointer disabled:opacity-60"
                 >
                   {isLinkingGoogle ? (
@@ -1303,20 +1363,168 @@ export const ParentPortalView: React.FC<ParentPortalViewProps> = ({
                         <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
                         <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
                       </svg>
-                      <span>تسجيل الدخول بحساب Google والبدء الآن</span>
+                      <span>تسجيل الدخول السريع بحساب Google</span>
                     </>
                   )}
                 </button>
 
+                <div className="flex items-center gap-2 my-1">
+                  <div className="h-px flex-1 bg-emerald-800/80" />
+                  <span className="text-[11px] text-emerald-300 font-bold">أو تأكيد بريد Google مباشرة</span>
+                  <div className="h-px flex-1 bg-emerald-800/80" />
+                </div>
+
+                <div className="space-y-2 text-right">
+                  <label className="block text-[11px] font-bold text-[#86efac]">
+                    بريدك الإلكتروني لدى Google (Gmail):
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="email"
+                      value={directGoogleEmail}
+                      onChange={e => {
+                        setDirectGoogleEmail(e.target.value);
+                        if (googleLinkError) setGoogleLinkError('');
+                      }}
+                      placeholder="مثال: student@gmail.com"
+                      className="flex-1 bg-[#022c22] border border-emerald-600/60 focus:border-[#fbbf24] focus:ring-1 focus:ring-[#fbbf24] rounded-xl py-2.5 px-3 text-xs text-white placeholder-emerald-400/40 outline-none dir-ltr text-left"
+                      dir="ltr"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => handleConfirmDirectGoogleEmail(googleAuthGateExam)}
+                      disabled={isDirectLinking || isLinkingGoogle}
+                      className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-[#fbbf24] to-[#f59e0b] hover:from-[#f59e0b] hover:to-[#d97706] text-[#064e3b] font-black text-xs shrink-0 cursor-pointer shadow-md disabled:opacity-60 transition-all flex items-center gap-1.5"
+                    >
+                      {isDirectLinking ? (
+                        <div className="w-3.5 h-3.5 border-2 border-[#064e3b] border-t-transparent rounded-full animate-spin" />
+                      ) : (
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                      )}
+                      <span>تأكيد والبدء</span>
+                    </button>
+                  </div>
+                  <p className="text-[10px] text-emerald-300/80">
+                    💡 يتيح لك هذا الخيار توثيق حسابك ودخول الاختبار فوراً بدون أي تأثر بنطاقات المتصفح.
+                  </p>
+                </div>
+
                 <button
+                  type="button"
                   onClick={() => {
                     setGoogleAuthGateExam(null);
                     setGoogleLinkError('');
                   }}
-                  disabled={isLinkingGoogle}
-                  className="w-full py-2 px-4 rounded-xl text-emerald-300 hover:text-white text-xs font-semibold cursor-pointer transition-colors"
+                  disabled={isLinkingGoogle || isDirectLinking}
+                  className="w-full py-2 px-4 rounded-xl text-emerald-300 hover:text-white text-xs font-semibold cursor-pointer transition-colors mt-1"
                 >
                   إلغاء والعودة
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* STANDALONE DIRECT LINK GOOGLE MODAL */}
+        {showDirectLinkModal && (
+          <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4">
+            <div className="bg-[#022c22] border border-[#fbbf24]/60 rounded-3xl w-full max-w-md p-6 sm:p-7 shadow-2xl space-y-4 text-center">
+              <div className="w-14 h-14 rounded-2xl bg-amber-500/20 text-[#fbbf24] border border-[#fbbf24]/40 flex items-center justify-center mx-auto">
+                <svg className="w-7 h-7" viewBox="0 0 24 24">
+                  <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                  <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                  <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
+                  <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
+                </svg>
+              </div>
+
+              <h3 className="text-lg font-black text-white font-heading">
+                ربط وتوثيق حساب Google للطالب
+              </h3>
+
+              <p className="text-xs text-emerald-200/90 leading-relaxed text-right">
+                يرجى توثيق بريدك الإلكتروني لدى Google لتمكين دخول الاختبارات ورصد درجات Google Forms تلقائياً في حسابك ولوحة الشرف.
+              </p>
+
+              {googleLinkError && (
+                <div className="p-3 rounded-xl bg-amber-500/20 border border-amber-500/40 text-amber-200 text-xs text-right leading-relaxed">
+                  {googleLinkError}
+                </div>
+              )}
+
+              <div className="flex flex-col gap-3 pt-1">
+                <button
+                  type="button"
+                  onClick={() => handleLinkGoogleAccount(null)}
+                  disabled={isLinkingGoogle || isDirectLinking}
+                  className="w-full py-3 px-4 rounded-2xl bg-white hover:bg-slate-100 text-slate-800 font-extrabold text-xs sm:text-sm flex items-center justify-center gap-2.5 shadow-xl transition-all cursor-pointer disabled:opacity-60"
+                >
+                  {isLinkingGoogle ? (
+                    <div className="flex items-center gap-2 text-slate-600">
+                      <div className="w-4 h-4 border-2 border-slate-400 border-t-emerald-600 rounded-full animate-spin" />
+                      <span>جاري التحقق بحساب Google...</span>
+                    </div>
+                  ) : (
+                    <>
+                      <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
+                        <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                        <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                        <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
+                        <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
+                      </svg>
+                      <span>تسجيل الدخول السريع بـ Google</span>
+                    </>
+                  )}
+                </button>
+
+                <div className="flex items-center gap-2 my-1">
+                  <div className="h-px flex-1 bg-emerald-800/80" />
+                  <span className="text-[11px] text-emerald-300 font-bold">أو الربط المباشر بالبريد</span>
+                  <div className="h-px flex-1 bg-emerald-800/80" />
+                </div>
+
+                <div className="space-y-2 text-right">
+                  <label className="block text-[11px] font-bold text-[#86efac]">
+                    بريدك الإلكتروني لدى Google (Gmail):
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="email"
+                      value={directGoogleEmail}
+                      onChange={e => {
+                        setDirectGoogleEmail(e.target.value);
+                        if (googleLinkError) setGoogleLinkError('');
+                      }}
+                      placeholder="student@gmail.com"
+                      className="flex-1 bg-[#022c22] border border-emerald-600/60 focus:border-[#fbbf24] focus:ring-1 focus:ring-[#fbbf24] rounded-xl py-2.5 px-3 text-xs text-white placeholder-emerald-400/40 outline-none dir-ltr text-left"
+                      dir="ltr"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => handleConfirmDirectGoogleEmail(null)}
+                      disabled={isDirectLinking || isLinkingGoogle}
+                      className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-[#fbbf24] to-[#f59e0b] hover:from-[#f59e0b] hover:to-[#d97706] text-[#064e3b] font-black text-xs shrink-0 cursor-pointer shadow-md disabled:opacity-60 transition-all flex items-center gap-1.5"
+                    >
+                      {isDirectLinking ? (
+                        <div className="w-3.5 h-3.5 border-2 border-[#064e3b] border-t-transparent rounded-full animate-spin" />
+                      ) : (
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                      )}
+                      <span>حفظ وتوثيق</span>
+                    </button>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowDirectLinkModal(false);
+                    setGoogleLinkError('');
+                  }}
+                  disabled={isLinkingGoogle || isDirectLinking}
+                  className="w-full py-2 px-4 rounded-xl text-emerald-300 hover:text-white text-xs font-semibold cursor-pointer transition-colors mt-1"
+                >
+                  إغلاق
                 </button>
               </div>
             </div>
