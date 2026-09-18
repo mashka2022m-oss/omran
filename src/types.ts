@@ -197,4 +197,110 @@ export interface FullBackupData {
   teachers?: TeacherAccount[];
   halaqahs?: Halaqah[];
   violations?: BehaviorViolation[];
+  exams?: Exam[];
+  submissions?: ExamSubmission[];
+  leaderboardSettings?: LeaderboardSettings;
+  googleOAuth?: GoogleOAuthConfig;
+}
+
+export type ExamQuestionType = 'multiple_choice' | 'true_false' | 'essay' | 'short_answer';
+
+export interface ExamQuestion {
+  id: string;
+  title: string; // نص السؤال
+  type: ExamQuestionType;
+  options?: string[]; // خيارات الإجابة
+  correctAnswer?: string | number; // الإجابة الصحيحة للتقييم التلقائي
+  points: number; // درجة / نقاط السؤال
+  explanation?: string; // توضيح أو إجابة نموذجية
+  timeLimitSeconds?: number; // وقت السؤال المخصص بالثواني (اختياري)
+}
+
+export type ExamScheduleType = 'now' | 'scheduled';
+export type ExamGradeVisibility = 'immediate' | 'after_deadline' | 'manual';
+export type ExamTimeLimitMode = 'none' | 'total' | 'per_question';
+
+export interface Exam {
+  id: string;
+  title: string; // اسم الاختبار (إلزامي)
+  description?: string; // وصف أو تعليمات الاختبار
+  scheduleType: ExamScheduleType; // فوري أو مجدول
+  startDate?: string; // تاريخ ووقت الظهور
+  hasDeadline: boolean; // هل له موعد انتهاء أم للأبد
+  deadlineDate?: string; // موعد الانتهاء
+  attemptLimitType: 'unlimited' | 'limited'; // عدد المحاولات
+  maxAttempts?: number; // عدد المحاولات المسموحة (إذا كانت محددة)
+  timeLimitMode?: ExamTimeLimitMode; // نمط المؤقت الزمني: بدون / وقت كلي للاختبار / وقت مخصص لكل سؤال
+  totalTimeMinutes?: number; // إجمالي وقت الاختبار بالدقائق (إذا تم اختيار وقت كلي)
+  questionTimeSeconds?: number; // الوقت الافتراضي لكل سؤال بالثواني (إذا تم اختيار وقت لكل سؤال)
+  gradeVisibility: ExamGradeVisibility; // ظهور النتيجة: فوري / بعد انتهاء الموعد / بعد تصحيح المعلم
+  grantsLeaderboardPoints: boolean; // هل يمنح نقاطاً للوحة الشرف
+  totalPoints: number; // إجمالي نقاط ودرجات الاختبار
+  targetHalaqat: string[]; // ['all'] أو مصفوفة معرفات الحلقات المستهدفة
+  questions: ExamQuestion[]; // قائمة الأسئلة
+  googleFormId?: string; // معرف Google Form المرتبط
+  googleFormUrl?: string; // رابط النموذج للتعديل
+  googleFormResponderUrl?: string; // رابط النموذج للطلاب
+  googleSpreadsheetId?: string; // معرف Google Sheets المرتبط
+  googleSpreadsheetUrl?: string; // رابط جدول الردود
+  createdById: string;
+  createdByName: string;
+  createdAt: string;
+  updatedAt?: string;
+}
+
+export interface ExamSubmissionAnswer {
+  questionId: string;
+  questionTitle: string;
+  questionType: ExamQuestionType;
+  studentAnswer: string;
+  isAutoGraded: boolean;
+  isCorrect?: boolean;
+  pointsEarned: number;
+  maxPoints: number;
+  teacherFeedback?: string;
+}
+
+export interface ExamSubmission {
+  id: string;
+  examId: string;
+  examTitle: string;
+  studentId: string;
+  studentName: string;
+  halaqahId: string;
+  halaqahName: string;
+  attemptNumber: number; // رقم المحاولة
+  answers: ExamSubmissionAnswer[];
+  totalScoreEarned: number;
+  maxPossibleScore: number;
+  percentage: number;
+  pointsGrantedForLeaderboard: number;
+  status: 'completed' | 'needs_grading'; // needs_grading if essay questions are pending
+  submittedAt: string;
+  gradedAt?: string;
+  gradedByTeacherName?: string;
+  teacherGeneralFeedback?: string;
+}
+
+export type LeaderboardScope = 'per_halaqah' | 'all_unified' | 'custom_groups';
+
+export interface LeaderboardGroup {
+  id: string;
+  name: string;
+  halaqahIds: string[];
+}
+
+export interface LeaderboardSettings {
+  scope: LeaderboardScope;
+  customGroups?: LeaderboardGroup[];
+  includeExamPoints: boolean;
+  includeEvaluationScores: boolean;
+  updatedAt: string;
+}
+
+export interface GoogleOAuthConfig {
+  connectedEmail?: string;
+  connectedAt?: string;
+  isLinked: boolean;
+  lastSyncAt?: string;
 }

@@ -84,6 +84,22 @@ service cloud.firestore {
         && request.resource.data.studentId is string;
       allow delete: if isValidId(violationId);
     }
+
+    // Quran Exams & Quizzes
+    match /exams/{examId} {
+      allow read: if true;
+      allow create, update: if isValidId(examId)
+        && request.resource.data.title is string;
+      allow delete: if isValidId(examId);
+    }
+
+    // Exam Submissions & Corrections
+    match /exam_submissions/{submissionId} {
+      allow read: if true;
+      allow create, update: if isValidId(submissionId)
+        && request.resource.data.examId is string;
+      allow delete: if isValidId(submissionId);
+    }
   }
 }
 

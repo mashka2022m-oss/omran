@@ -26,14 +26,26 @@ import {
   TeacherAccount,
   BehaviorViolation,
   FullBackupData,
-  Halaqah
+  Halaqah,
+  Exam,
+  ExamQuestion,
+  ExamSubmission,
+  LeaderboardSettings,
+  GoogleOAuthConfig
 } from '../types';
 
 export { firebaseConfig };
 
 const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
-export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
+export const db = getFirestore(app);
 export const auth = getAuth(app);
+
+export const DEFAULT_LEADERBOARD_SETTINGS: LeaderboardSettings = {
+  scope: 'all_unified',
+  includeExamPoints: true,
+  includeEvaluationScores: true,
+  updatedAt: new Date().toISOString()
+};
 
 export enum OperationType {
   CREATE = 'create',
@@ -272,6 +284,134 @@ export const INITIAL_VIOLATIONS: BehaviorViolation[] = [
   }
 ];
 
+// Initial Rich Seed Quran Exams with Questions, Timers, and Answers
+export const INITIAL_EXAMS: Exam[] = [
+  {
+    id: 'exam-sample-tajweed-1',
+    title: 'اختبار أحكام النون الساكنة والتنوين والمدود القرآنية',
+    description: 'اختبار تقييمي شامل وممتع لأحكام التجويد الأساسية: الإظهار، الإدغام، الإقلاب، الإخفاء، والمد المتصل والمنفصل.',
+    scheduleType: 'now',
+    startDate: new Date().toISOString(),
+    hasDeadline: false,
+    attemptLimitType: 'unlimited',
+    maxAttempts: 3,
+    timeLimitMode: 'total',
+    totalTimeMinutes: 10,
+    questionTimeSeconds: 30,
+    gradeVisibility: 'immediate',
+    grantsLeaderboardPoints: true,
+    totalPoints: 25,
+    targetHalaqat: ['all'],
+    questions: [
+      {
+        id: 'q-tajweed-1',
+        title: 'ما هو الحكم التجويدي في قوله تعالى: (مِن بَعْدِ) ؟',
+        type: 'multiple_choice',
+        options: ['إقلاب', 'إظهار حلقي', 'إدغام بغنة', 'إخفاء حقيقي'],
+        correctAnswer: 'إقلاب',
+        points: 5,
+        explanation: 'حكم النون الساكنة إذا جاء بعدها حرف الباء هو الإقلاب، حيث تُقلب النون ميماً مخفاة بغنة.'
+      },
+      {
+        id: 'q-tajweed-2',
+        title: 'حروف الإظهار الحلقي مجموعة في أوائل كلمات: (أخي هاك علماً حازه غير خاسر).',
+        type: 'true_false',
+        options: ['صح', 'خطأ'],
+        correctAnswer: 'صح',
+        points: 5,
+        explanation: 'نعم، حروف الإظهار الحلقي الستة هي: الهمزة، والهاء، والعين، والحاء، والغين، والخاء.'
+      },
+      {
+        id: 'q-tajweed-3',
+        title: 'ما نوع المد في قوله تعالى: (جَآءَ) ؟',
+        type: 'multiple_choice',
+        options: ['مد متصل واجب', 'مد منفصل جائز', 'مد لازم كلمي', 'مد عارض للسكون'],
+        correctAnswer: 'مد متصل واجب',
+        points: 5,
+        explanation: 'المد المتصل هو أن يجتمع حرف المد والهمزة في كلمة واحدة، وحكمه الوجوب ويمد 4 أو 5 حركات.'
+      },
+      {
+        id: 'q-tajweed-4',
+        title: 'أي من الحروف التالية يُعد من حروف الإدغام بغير غنة؟',
+        type: 'multiple_choice',
+        options: ['الراء واللام (ر، ل)', 'الياء والنون (ي، ن)', 'الميم والواو (م، و)', 'الكاف والقاف (ك، ق)'],
+        correctAnswer: 'الراء واللام (ر، ل)',
+        points: 5,
+        explanation: 'حروف الإدغام بغير غنة هما اللام والراء فقط (ل، ر).'
+      },
+      {
+        id: 'q-tajweed-5',
+        title: 'في قوله تعالى: (أَنفُسَكُمْ) الحكم التجويدي للنون الساكنة هو الإخفاء الحقيقي عند حرف الفاء.',
+        type: 'true_false',
+        options: ['صح', 'خطأ'],
+        correctAnswer: 'صح',
+        points: 5,
+        explanation: 'حرف الفاء من حروف الإخفاء الحقيقي الـ 15، فينطق بالنون بصفة بين الإظهار والإدغام مع بقاء الغنة.'
+      }
+    ],
+    createdById: 'teacher-1',
+    createdByName: 'الشيخ محمد منتصر',
+    createdAt: new Date().toISOString()
+  },
+  {
+    id: 'exam-sample-fatihah-juzamma',
+    title: 'اختبار معاني وتفسير سورة الفاتحة وقصار السور',
+    description: 'اختبار تدبر وفهم معاني الآيات العظيمة في سورة الفاتحة وقصار سور جزء عم المبارك.',
+    scheduleType: 'now',
+    startDate: new Date().toISOString(),
+    hasDeadline: false,
+    attemptLimitType: 'unlimited',
+    maxAttempts: 2,
+    timeLimitMode: 'total',
+    totalTimeMinutes: 8,
+    gradeVisibility: 'immediate',
+    grantsLeaderboardPoints: true,
+    totalPoints: 20,
+    targetHalaqat: ['all'],
+    questions: [
+      {
+        id: 'q-fatihah-1',
+        title: 'ما معنى قوله تعالى في سورة الفاتحة: (الصِّرَاطَ الْمُسْتَقِيمَ) ؟',
+        type: 'multiple_choice',
+        options: ['طريق الإسلام والحق الواضح الموصل لرضوان الله', 'طريق التجارة والرزق', 'طريق السفر بين البلدان', 'أبواب الجنة فقط'],
+        correctAnswer: 'طريق الإسلام والحق الواضح الموصل لرضوان الله',
+        points: 5,
+        explanation: 'الصراط المستقيم هو دين الإسلام والتمسك بكتاب الله وسنة رسوله صلى الله عليه وسلم.'
+      },
+      {
+        id: 'q-fatihah-2',
+        title: 'سورة الإخلاص تعدل ثلث القرآن الكريم في الأجر والفضل.',
+        type: 'true_false',
+        options: ['صح', 'خطأ'],
+        correctAnswer: 'صح',
+        points: 5,
+        explanation: 'ثبت في الصحيحين عن النبي صلى الله عليه وسلم أن قل هو الله أحد تعدل ثلث القرآن لاشتمالها على توحيد الله وتمجيده.'
+      },
+      {
+        id: 'q-fatihah-3',
+        title: 'في سورة الفلق، ما معنى قوله تعالى: (وَمِن شَرِّ غَاسِقٍ إِذَا وَقَبَ) ؟',
+        type: 'multiple_choice',
+        options: ['من شر الليل المظلم إذا دخل واشتد ظلامه', 'من شر الرياح الشديدة', 'من شر الجبال العالية', 'من شر حرارة الشمس'],
+        correctAnswer: 'من شر الليل المظلم إذا دخل واشتد ظلامه',
+        points: 5,
+        explanation: 'الغاسق هو الليل، وإذا وقب أي دخل واشتدت ظلمته وتنتشر فيه الهوام والشرور.'
+      },
+      {
+        id: 'q-fatihah-4',
+        title: 'في سورة الكوثر، المقصود بـ (الْكَوْثَرَ) هو الخير الكثير ومنه نهر في الجنة أعطاه الله لنبيه ﷺ.',
+        type: 'true_false',
+        options: ['صح', 'خطأ'],
+        correctAnswer: 'صح',
+        points: 5,
+        explanation: 'الكوثر هو الخير العظيم والوفير في الدنيا والآخرة، ومنه النهر العظيم في الجنة.'
+      }
+    ],
+    createdById: 'teacher-1',
+    createdByName: 'الشيخ محمد منتصر',
+    createdAt: new Date().toISOString()
+  }
+];
+
 // Clear any legacy local storage data to ensure pure Firebase Firestore operation
 export function clearLegacyLocalStorage() {
   try {
@@ -355,6 +495,14 @@ export class OmranDataService {
             halaqahName: 'حلقات الصحابي الزبير بن العوام رضي الله عنه'
           };
           await setDoc(doc(db, 'settings', 'main'), updatedSet);
+        }
+      }
+
+      // 6. Seed Quran Exams if empty
+      const examSnap = await getDocs(collection(db, 'exams'));
+      if (examSnap.empty) {
+        for (const ex of INITIAL_EXAMS) {
+          await setDoc(doc(db, 'exams', ex.id), ex);
         }
       }
     } catch (e) {
@@ -869,9 +1017,267 @@ export class OmranDataService {
     }
   }
 
+  // Helper to sanitize exams and prevent undefined questions
+  static sanitizeExam(raw: any): Exam {
+    const rawQuestions = Array.isArray(raw?.questions)
+      ? raw.questions
+      : typeof raw?.questions === 'object' && raw?.questions !== null
+      ? Object.values(raw.questions)
+      : [];
+
+    const cleanQuestions: ExamQuestion[] = rawQuestions.map((q: any, idx: number) => ({
+      id: q?.id || `q-${raw?.id || 'exam'}-${idx + 1}`,
+      title: q?.title || `سؤال رقم ${idx + 1}`,
+      type: q?.type || 'multiple_choice',
+      options: Array.isArray(q?.options)
+        ? q.options
+        : q?.type === 'true_false'
+        ? ['صح', 'خطأ']
+        : ['الخيار 1', 'الخيار 2', 'الخيار 3'],
+      correctAnswer: q?.correctAnswer !== undefined ? q.correctAnswer : (q?.type === 'true_false' ? 'صح' : undefined),
+      points: Number(q?.points) || 5,
+      explanation: q?.explanation || '',
+      timeLimitSeconds: q?.timeLimitSeconds ? Number(q.timeLimitSeconds) : undefined
+    }));
+
+    return {
+      id: raw?.id || `exam-${Date.now()}`,
+      title: raw?.title || 'اختبار قرآني',
+      description: raw?.description || '',
+      scheduleType: raw?.scheduleType || 'now',
+      startDate: raw?.startDate || new Date().toISOString(),
+      hasDeadline: Boolean(raw?.hasDeadline),
+      deadlineDate: raw?.deadlineDate || undefined,
+      attemptLimitType: raw?.attemptLimitType || 'unlimited',
+      maxAttempts: raw?.maxAttempts ? Number(raw.maxAttempts) : 1,
+      timeLimitMode: raw?.timeLimitMode || 'total',
+      totalTimeMinutes: raw?.totalTimeMinutes ? Number(raw.totalTimeMinutes) : 10,
+      questionTimeSeconds: raw?.questionTimeSeconds ? Number(raw.questionTimeSeconds) : 30,
+      gradeVisibility: raw?.gradeVisibility || 'immediate',
+      grantsLeaderboardPoints: raw?.grantsLeaderboardPoints ?? true,
+      totalPoints: Number(raw?.totalPoints) || cleanQuestions.reduce((s, q) => s + q.points, 0) || 20,
+      targetHalaqat: Array.isArray(raw?.targetHalaqat) && raw.targetHalaqat.length > 0 ? raw.targetHalaqat : ['all'],
+      questions: cleanQuestions.length > 0 ? cleanQuestions : INITIAL_EXAMS[0].questions,
+      googleFormId: raw?.googleFormId,
+      googleFormUrl: raw?.googleFormUrl,
+      googleFormResponderUrl: raw?.googleFormResponderUrl,
+      googleSpreadsheetId: raw?.googleSpreadsheetId,
+      googleSpreadsheetUrl: raw?.googleSpreadsheetUrl,
+      createdById: raw?.createdById || 'teacher-1',
+      createdByName: raw?.createdByName || 'الشيخ المعلم',
+      createdAt: raw?.createdAt || new Date().toISOString(),
+      updatedAt: raw?.updatedAt
+    };
+  }
+
+  // Load Exams directly from Firestore
+  static async loadExams(): Promise<Exam[]> {
+    try {
+      const snap = await getDocs(collection(db, 'exams'));
+      const list: Exam[] = [];
+      snap.forEach(d => {
+        const raw = d.data();
+        list.push(this.sanitizeExam({ ...raw, id: d.id || raw.id }));
+      });
+
+      if (list.length === 0) {
+        for (const ex of INITIAL_EXAMS) {
+          await setDoc(doc(db, 'exams', ex.id), ex);
+        }
+        return INITIAL_EXAMS;
+      }
+
+      list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      return list;
+    } catch (e) {
+      handleFirestoreError(e, OperationType.LIST, 'exams');
+      return INITIAL_EXAMS;
+    }
+  }
+
+  // Save Exam directly in Firestore
+  static async saveExam(exam: Exam): Promise<void> {
+    try {
+      const sanitized = this.sanitizeExam(exam);
+      const cleanExam = JSON.parse(JSON.stringify(sanitized));
+      await setDoc(doc(db, 'exams', exam.id), cleanExam);
+    } catch (e) {
+      handleFirestoreError(e, OperationType.WRITE, `exams/${exam.id}`);
+      throw e;
+    }
+  }
+
+  // Delete Exam directly from Firestore
+  static async deleteExam(examId: string): Promise<void> {
+    try {
+      await deleteDoc(doc(db, 'exams', examId));
+    } catch (e) {
+      handleFirestoreError(e, OperationType.DELETE, `exams/${examId}`);
+      throw e;
+    }
+  }
+
+  // Subscribe to Exams in real time
+  static subscribeExams(callback: (exams: Exam[]) => void): () => void {
+    try {
+      return onSnapshot(collection(db, 'exams'), snap => {
+        const list: Exam[] = [];
+        snap.forEach(d => {
+          const raw = d.data();
+          list.push(OmranDataService.sanitizeExam({ ...raw, id: d.id || raw.id }));
+        });
+        if (list.length === 0) {
+          callback(INITIAL_EXAMS);
+          return;
+        }
+        list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+        callback(list);
+      }, err => {
+        handleFirestoreError(err, OperationType.LIST, 'exams');
+      });
+    } catch (e) {
+      return () => {};
+    }
+  }
+
+  // Load Exam Submissions directly from Firestore
+  static async loadSubmissions(examId?: string): Promise<ExamSubmission[]> {
+    try {
+      const q = examId
+        ? query(collection(db, 'exam_submissions'), where('examId', '==', examId))
+        : collection(db, 'exam_submissions');
+      const snap = await getDocs(q);
+      const list: ExamSubmission[] = [];
+      snap.forEach(d => list.push(d.data() as ExamSubmission));
+      list.sort((a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime());
+      return list;
+    } catch (e) {
+      handleFirestoreError(e, OperationType.LIST, 'exam_submissions');
+      return [];
+    }
+  }
+
+  // Save Exam Submission directly in Firestore
+  static async saveSubmission(submission: ExamSubmission): Promise<void> {
+    try {
+      const cleanSubmission = JSON.parse(JSON.stringify(submission));
+      await setDoc(doc(db, 'exam_submissions', submission.id), cleanSubmission);
+    } catch (e) {
+      handleFirestoreError(e, OperationType.WRITE, `exam_submissions/${submission.id}`);
+      throw e;
+    }
+  }
+
+  // Delete Submission
+  static async deleteSubmission(submissionId: string): Promise<void> {
+    try {
+      await deleteDoc(doc(db, 'exam_submissions', submissionId));
+    } catch (e) {
+      handleFirestoreError(e, OperationType.DELETE, `exam_submissions/${submissionId}`);
+      throw e;
+    }
+  }
+
+  // Subscribe to Exam Submissions in real time
+  static subscribeSubmissions(callback: (submissions: ExamSubmission[]) => void): () => void {
+    try {
+      return onSnapshot(collection(db, 'exam_submissions'), snap => {
+        const list: ExamSubmission[] = [];
+        snap.forEach(d => list.push(d.data() as ExamSubmission));
+        list.sort((a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime());
+        callback(list);
+      }, err => {
+        handleFirestoreError(err, OperationType.LIST, 'exam_submissions');
+      });
+    } catch (e) {
+      return () => {};
+    }
+  }
+
+  // Load Leaderboard Settings
+  static async loadLeaderboardSettings(): Promise<LeaderboardSettings> {
+    try {
+      const snap = await getDoc(doc(db, 'settings', 'leaderboard'));
+      if (snap.exists()) {
+        return snap.data() as LeaderboardSettings;
+      }
+      await setDoc(doc(db, 'settings', 'leaderboard'), DEFAULT_LEADERBOARD_SETTINGS);
+      return DEFAULT_LEADERBOARD_SETTINGS;
+    } catch (e) {
+      handleFirestoreError(e, OperationType.GET, 'settings/leaderboard');
+      return DEFAULT_LEADERBOARD_SETTINGS;
+    }
+  }
+
+  // Save Leaderboard Settings
+  static async saveLeaderboardSettings(settings: LeaderboardSettings): Promise<void> {
+    try {
+      await setDoc(doc(db, 'settings', 'leaderboard'), settings);
+    } catch (e) {
+      handleFirestoreError(e, OperationType.WRITE, 'settings/leaderboard');
+      throw e;
+    }
+  }
+
+  // Subscribe to Leaderboard Settings
+  static subscribeLeaderboardSettings(callback: (settings: LeaderboardSettings) => void): () => void {
+    try {
+      return onSnapshot(doc(db, 'settings', 'leaderboard'), snap => {
+        if (snap.exists()) {
+          callback(snap.data() as LeaderboardSettings);
+        }
+      }, err => {
+        handleFirestoreError(err, OperationType.GET, 'settings/leaderboard');
+      });
+    } catch (e) {
+      return () => {};
+    }
+  }
+
+  // Load Google OAuth Configuration
+  static async loadGoogleOAuthConfig(): Promise<GoogleOAuthConfig> {
+    try {
+      const snap = await getDoc(doc(db, 'settings', 'google_oauth'));
+      if (snap.exists()) {
+        return snap.data() as GoogleOAuthConfig;
+      }
+      return { isLinked: false };
+    } catch (e) {
+      handleFirestoreError(e, OperationType.GET, 'settings/google_oauth');
+      return { isLinked: false };
+    }
+  }
+
+  // Save Google OAuth Configuration
+  static async saveGoogleOAuthConfig(config: GoogleOAuthConfig): Promise<void> {
+    try {
+      await setDoc(doc(db, 'settings', 'google_oauth'), config);
+    } catch (e) {
+      handleFirestoreError(e, OperationType.WRITE, 'settings/google_oauth');
+      throw e;
+    }
+  }
+
+  // Subscribe to Google OAuth Configuration in Real-time
+  static subscribeGoogleOAuthConfig(callback: (config: GoogleOAuthConfig) => void): () => void {
+    try {
+      return onSnapshot(doc(db, 'settings', 'google_oauth'), snap => {
+        if (snap.exists()) {
+          callback(snap.data() as GoogleOAuthConfig);
+        } else {
+          callback({ isLinked: false });
+        }
+      }, err => {
+        handleFirestoreError(err, OperationType.GET, 'settings/google_oauth');
+      });
+    } catch (e) {
+      return () => {};
+    }
+  }
+
   // Export Full Database (Complete Cloud Firestore Backup)
   static async exportFullBackup(): Promise<FullBackupData> {
-    const [students, attendance, evaluations, evaluationCriteria, settings, chatMessages, teachers, halaqahs, violations] =
+    const [students, attendance, evaluations, evaluationCriteria, settings, chatMessages, teachers, halaqahs, violations, exams, submissions, leaderboardSettings, googleOAuth] =
       await Promise.all([
         this.loadStudents(),
         this.loadAttendance(),
@@ -881,11 +1287,15 @@ export class OmranDataService {
         this.loadChats(),
         this.loadTeachers(),
         this.loadHalaqahs(),
-        this.loadViolations()
+        this.loadViolations(),
+        this.loadExams(),
+        this.loadSubmissions(),
+        this.loadLeaderboardSettings(),
+        this.loadGoogleOAuthConfig()
       ]);
 
     return {
-      version: '1.5.0',
+      version: '2.0.0',
       exportDate: new Date().toISOString(),
       students,
       attendance,
@@ -896,6 +1306,10 @@ export class OmranDataService {
       teachers,
       halaqahs,
       violations,
+      exams,
+      submissions,
+      leaderboardSettings,
+      googleOAuth,
       userAccounts: [
         {
           id: 'admin-1',
@@ -917,6 +1331,8 @@ export class OmranDataService {
     teachersCount: number;
     halaqahsCount?: number;
     violationsCount?: number;
+    examsCount?: number;
+    submissionsCount?: number;
   }> {
     if (!backup || typeof backup !== 'object') {
       throw new Error('ملف النسخة الاحتياطية غير صالح أو تالف.');
@@ -929,7 +1345,6 @@ export class OmranDataService {
       ? backup.evaluationCriteria
       : DEFAULT_CRITERIA;
     const settingsData = backup.settings || DEFAULT_SETTINGS;
-    const chatList = Array.isArray(backup.chatMessages) ? backup.chatMessages : [];
     const teachersList = Array.isArray(backup.teachers) && backup.teachers.length > 0
       ? backup.teachers
       : INITIAL_TEACHERS;
@@ -937,6 +1352,9 @@ export class OmranDataService {
       ? backup.halaqahs
       : DEFAULT_HALAQAHS;
     const violationsList = Array.isArray(backup.violations) ? backup.violations : [];
+    const examsList = Array.isArray(backup.exams) ? backup.exams : [];
+    const submissionsList = Array.isArray(backup.submissions) ? backup.submissions : [];
+    const leaderboardSettings = backup.leaderboardSettings || DEFAULT_LEADERBOARD_SETTINGS;
 
     // Persist directly to Firestore concurrently
     try {
@@ -963,8 +1381,20 @@ export class OmranDataService {
       for (const v of violationsList) {
         if (v?.id) promises.push(setDoc(doc(db, 'violations', v.id), v));
       }
+      for (const ex of examsList) {
+        if (ex?.id) promises.push(setDoc(doc(db, 'exams', ex.id), ex));
+      }
+      for (const sub of submissionsList) {
+        if (sub?.id) promises.push(setDoc(doc(db, 'exam_submissions', sub.id), sub));
+      }
       if (settingsData) {
         promises.push(setDoc(doc(db, 'settings', 'main'), settingsData));
+      }
+      if (leaderboardSettings) {
+        promises.push(setDoc(doc(db, 'settings', 'leaderboard'), leaderboardSettings));
+      }
+      if (backup.googleOAuth) {
+        promises.push(setDoc(doc(db, 'settings', 'google_oauth'), backup.googleOAuth));
       }
 
       await Promise.all(promises);
@@ -980,7 +1410,9 @@ export class OmranDataService {
       criteriaCount: criteriaList.length,
       teachersCount: teachersList.length,
       halaqahsCount: halaqahsList.length,
-      violationsCount: violationsList.length
+      violationsCount: violationsList.length,
+      examsCount: examsList.length,
+      submissionsCount: submissionsList.length
     };
   }
 }

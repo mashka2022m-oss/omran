@@ -14,7 +14,8 @@ import {
   Lock,
   Unlock,
   ShieldAlert,
-  Layers
+  Layers,
+  FileText
 } from 'lucide-react';
 import {
   Student,
@@ -26,7 +27,11 @@ import {
   UserRole,
   TeacherAccount,
   BehaviorViolation,
-  Halaqah
+  Halaqah,
+  Exam,
+  ExamSubmission,
+  LeaderboardSettings,
+  GoogleOAuthConfig
 } from './types';
 import {
   OmranDataService,
@@ -54,6 +59,7 @@ import { BehaviorTab } from './components/tabs/BehaviorTab';
 import { ParentsWhatsAppTab } from './components/tabs/ParentsWhatsAppTab';
 import { ReportsTab } from './components/tabs/ReportsTab';
 import { DataBackupTab } from './components/tabs/DataBackupTab';
+import { ExamsTab } from './components/tabs/ExamsTab';
 
 export function App() {
   // Authentication State
@@ -101,6 +107,10 @@ export function App() {
   const [criteria, setCriteria] = useState<EvaluationCriteria[]>(DEFAULT_CRITERIA);
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
   const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
+  const [exams, setExams] = useState<Exam[]>([]);
+  const [submissions, setSubmissions] = useState<ExamSubmission[]>([]);
+  const [leaderboardSettings, setLeaderboardSettings] = useState<LeaderboardSettings | null>(null);
+  const [googleAuthConfig, setGoogleAuthConfig] = useState<GoogleOAuthConfig>({ isLinked: false });
   const [isLoadingData, setIsLoadingData] = useState(true);
 
   // Parse URL on initial load and handle hash / search changes
@@ -184,7 +194,11 @@ export function App() {
         loadedChats,
         loadedTeachers,
         loadedViolations,
-        loadedHalaqahs
+        loadedHalaqahs,
+        loadedExams,
+        loadedSubmissions,
+        loadedLeaderboard,
+        loadedGoogleOAuth
       ] = await Promise.all([
         OmranDataService.loadStudents(),
         OmranDataService.loadAttendance(),
@@ -194,7 +208,11 @@ export function App() {
         OmranDataService.loadChats(),
         OmranDataService.loadTeachers(),
         OmranDataService.loadViolations(),
-        OmranDataService.loadHalaqahs()
+        OmranDataService.loadHalaqahs(),
+        OmranDataService.loadExams(),
+        OmranDataService.loadSubmissions(),
+        OmranDataService.loadLeaderboardSettings(),
+        OmranDataService.loadGoogleOAuthConfig()
       ]);
 
       setStudents(loadedStudents);
@@ -206,6 +224,10 @@ export function App() {
       setTeachers(loadedTeachers);
       setViolations(loadedViolations);
       setHalaqahs(loadedHalaqahs);
+      setExams(loadedExams);
+      setSubmissions(loadedSubmissions);
+      setLeaderboardSettings(loadedLeaderboard);
+      setGoogleAuthConfig(loadedGoogleOAuth);
     } catch (e) {
       console.error('Error loading initial data:', e);
     } finally {
@@ -242,6 +264,18 @@ export function App() {
     const unsubHalaqahs = OmranDataService.subscribeHalaqahs(newHalaqahs => {
       setHalaqahs(newHalaqahs);
     });
+    const unsubExams = OmranDataService.subscribeExams(newExams => {
+      setExams(newExams);
+    });
+    const unsubSubmissions = OmranDataService.subscribeSubmissions(newSubs => {
+      setSubmissions(newSubs);
+    });
+    const unsubLeaderboard = OmranDataService.subscribeLeaderboardSettings(newLead => {
+      setLeaderboardSettings(newLead);
+    });
+    const unsubGoogle = OmranDataService.subscribeGoogleOAuthConfig(newGoogle => {
+      setGoogleAuthConfig(newGoogle);
+    });
 
     return () => {
       unsubStudents();
@@ -252,6 +286,10 @@ export function App() {
       unsubTeachers();
       unsubViolations();
       unsubHalaqahs();
+      unsubExams();
+      unsubSubmissions();
+      unsubLeaderboard();
+      unsubGoogle();
     };
   }, []);
 
@@ -675,7 +713,49 @@ export function App() {
     await OmranDataService.deleteViolation(id);
   };
 
-  // 13. Navigation Handlers
+  // 13. Exam Handlers
+  const handleSaveExam = async (exam: Exam) => {
+    setExams(prev => {
+      const idx = prev.findIndex(e => e.id === exam.id);
+      if (idx >= 0) {
+        const copy = [...prev];
+        copy[idx] = exam;
+        return copy;
+      }
+      return [exam, ...prev];
+    });
+    await OmranDataService.saveExam(exam);
+  };
+
+  const handleDeleteExam = async (id: string) => {
+    setExams(prev => prev.filter(e => e.id !== id));
+    await OmranDataService.deleteExam(id);
+  };
+
+  const handleSaveSubmission = async (sub: ExamSubmission) => {
+    setSubmissions(prev => {
+      const idx = prev.findIndex(s => s.id === sub.id);
+      if (idx >= 0) {
+        const copy = [...prev];
+        copy[idx] = sub;
+        return copy;
+      }
+      return [sub, ...prev];
+    });
+    await OmranDataService.saveSubmission(sub);
+  };
+
+  const handleSaveLeaderboardSettings = async (settings: LeaderboardSettings) => {
+    setLeaderboardSettings(settings);
+    await OmranDataService.saveLeaderboardSettings(settings);
+  };
+
+  const handleRefreshGoogleAuth = async () => {
+    const cfg = await OmranDataService.loadGoogleOAuthConfig();
+    setGoogleAuthConfig(cfg);
+  };
+
+  // 14. Navigation Handlers
   const handleNavigateTab = (tab: string) => {
     setActiveTab(tab);
   };
@@ -747,8 +827,11 @@ export function App() {
           evaluations={evaluations}
           settings={settings}
           violations={violations}
+          exams={exams}
+          submissions={submissions}
           isLoggedInStudent={!!currentUser}
           onLogout={handleLogout}
+          onSaveSubmission={handleSaveSubmission}
         />
       </div>
     );
@@ -844,6 +927,7 @@ export function App() {
     { id: 'students', label: 'الطلاب والتسجيل', icon: Users, badge: displayedStudents.length },
     { id: 'attendance', label: 'الحضور والغياب', icon: UserCheck },
     { id: 'evaluation', label: 'تقييم التسميع', icon: BookOpen },
+    { id: 'exams', label: 'قسم الاختبارات', icon: FileText, badge: exams.length > 0 ? exams.length : undefined },
     { id: 'behavior', label: 'المخالفات السلوكية', icon: ShieldAlert, badge: displayedViolations.length > 0 ? displayedViolations.length : undefined },
     { id: 'parents', label: 'رسائل الواتساب', icon: MessageCircle },
     { id: 'reports', label: 'التقارير الدورية', icon: Award },
@@ -962,15 +1046,11 @@ export function App() {
                 onClick={() => setActiveTab(item.id)}
                 className={`flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-bold whitespace-nowrap transition-all cursor-pointer ${
                   isActive
-                    ? item.isHighlight
-                      ? 'bg-gradient-to-r from-[#fbbf24] to-[#d97706] text-[#064e3b] shadow-lg shadow-amber-950/60 font-black'
-                      : 'bg-[#fbbf24] text-[#064e3b] shadow-lg shadow-amber-950/40 font-black'
-                    : item.isHighlight
-                    ? 'text-[#fbbf24] hover:bg-[#022c22]/70'
+                    ? 'bg-[#fbbf24] text-[#064e3b] shadow-lg shadow-amber-950/40 font-black'
                     : 'text-[#86efac]/80 hover:text-white hover:bg-[#022c22]/60'
                 }`}
               >
-                <Icon className={`w-4 h-4 ${isActive ? 'text-[#064e3b]' : item.isHighlight ? 'text-[#fbbf24]' : 'text-[#86efac]'}`} />
+                <Icon className={`w-4 h-4 ${isActive ? 'text-[#064e3b]' : 'text-[#86efac]'}`} />
                 <span>{item.label}</span>
                 {item.badge !== undefined && (
                   <span
@@ -1039,6 +1119,25 @@ export function App() {
             onUpdateStudentAIPlan={handleUpdateStudentAIPlan}
             onNavigateToWhatsApp={handleNavigateToWhatsApp}
             onNavigateToBehavior={handleNavigateToBehavior}
+          />
+        )}
+
+        {activeTab === 'exams' && (
+          <ExamsTab
+            exams={exams}
+            submissions={submissions}
+            students={students}
+            halaqahs={halaqahs}
+            currentUserId={currentUser?.teacherId || currentUser?.studentId || 'admin'}
+            currentUserName={currentUser?.username || settings.teacherName}
+            isSupervisor={isSupervisor}
+            googleAuthConfig={googleAuthConfig}
+            leaderboardSettings={leaderboardSettings || undefined}
+            onSaveExam={handleSaveExam}
+            onDeleteExam={handleDeleteExam}
+            onSaveSubmission={handleSaveSubmission}
+            onSaveLeaderboardSettings={handleSaveLeaderboardSettings}
+            onRefreshGoogleAuth={handleRefreshGoogleAuth}
           />
         )}
 
