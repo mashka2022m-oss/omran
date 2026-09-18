@@ -1961,4 +1961,117 @@ export class GoogleWorkspaceService {
 
     return { spreadsheetId, spreadsheetUrl };
   }
+
+  /**
+   * Export JSON Backup directly into Google Drive in a dedicated timestamped file
+   * (النسخ الاحتياطي في Google Drive مع التاريخ والساعة في مجلد مخصص)
+   */
+  static async exportBackupToGoogleDrive(
+    backup: FullBackupData,
+    authConfig?: GoogleOAuthConfig
+  ): Promise<{ fileId: string; fileName: string; folderName: string; webViewLink: string }> {
+    const token = await this.getValidAccessToken();
+    if (!token) {
+      throw new Error('حساب Google غير متصل أو انتهت صلاحية الجلسة. يرجى ربط حساب Google أولاً.');
+    }
+
+    const folderName = 'نسخ منصة عمران القرآنية الاحتياطية';
+
+    // 1. Search for existing backup folder or create it
+    let folderId: string | null = null;
+    try {
+      const searchRes = await fetch(
+        `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(`mimeType='application/vnd.google-apps.folder' and name='${folderName}' and trashed=false`)}&fields=files(id,name)`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      if (searchRes.ok) {
+        const searchData = await searchRes.json();
+        if (searchData.files && searchData.files.length > 0) {
+          folderId = searchData.files[0].id;
+        }
+      }
+    } catch (e) {
+      console.warn('Error searching for backup folder:', e);
+    }
+
+    if (!folderId) {
+      const createFolderRes = await fetch('https://www.googleapis.com/drive/v3/files', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          name: folderName,
+          mimeType: 'application/vnd.google-apps.folder',
+          description: 'مجلد مخصص لحفظ النسخ الاحتياطية لمنصة عمران القرآنية'
+        })
+      });
+
+      if (!createFolderRes.ok) {
+        const err = await createFolderRes.json().catch(() => ({}));
+        throw new Error(`تعذر إنشاء مجلد النسخ في Google Drive: ${err?.error?.message || createFolderRes.statusText}`);
+      }
+      const folderData = await createFolderRes.json();
+      folderId = folderData.id;
+    }
+
+    // 2. Prepare timestamped file name
+    const now = new Date();
+    const pad = (n: number) => n.toString().padStart(2, '0');
+    const timeFormatted = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}_${pad(now.getHours())}-${pad(now.getMinutes())}`;
+    const fileName = `omran_backup_${timeFormatted}.json`;
+
+    // 3. Upload JSON file to Google Drive via multipart
+    const metadata = {
+      name: fileName,
+      parents: folderId ? [folderId] : [],
+      mimeType: 'application/json',
+      description: `نسخة احتياطية كاملة لمنصة عمران القرآنية تم تصديرها بتاريخ ${now.toLocaleString('ar-SA')}`
+    };
+
+    const boundary = '-------314159265358979323846';
+    const delimiter = `\r\n--${boundary}\r\n`;
+    const closeDelimiter = `\r\n--${boundary}--`;
+
+    const jsonContent = JSON.stringify(backup, null, 2);
+
+    const multipartRequestBody =
+      delimiter +
+      'Content-Type: application/json; charset=UTF-8\r\n\r\n' +
+      JSON.stringify(metadata) +
+      delimiter +
+      'Content-Type: application/json\r\n\r\n' +
+      jsonContent +
+      closeDelimiter;
+
+    const uploadRes = await fetch(
+      'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,webViewLink',
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': `multipart/related; boundary=${boundary}`
+        },
+        body: multipartRequestBody
+      }
+    );
+
+    if (!uploadRes.ok) {
+      const err = await uploadRes.json().catch(() => ({}));
+      throw new Error(`فشل رفع النسخة الاحتياطية إلى Google Drive: ${err?.error?.message || uploadRes.statusText}`);
+    }
+
+    const uploadData = await uploadRes.json();
+    const fileId = uploadData.id;
+    const webViewLink = uploadData.webViewLink || `https://drive.google.com/file/d/${fileId}/view`;
+
+    return {
+      fileId,
+      fileName,
+      folderName,
+      webViewLink
+    };
+  }
 }

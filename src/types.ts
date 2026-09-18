@@ -97,6 +97,10 @@ export interface Student {
   googleName?: string; // اسم الحساب في Google
   googlePhotoUrl?: string; // صورة الحساب في Google
   isGoogleLinked?: boolean; // هل حساب الطالب موثق ومربوط بـ Google
+  completedNewPages?: number[]; // الأوجه المكتملة في الحفظ الجديد (5 نقاط لكل وجه)
+  completedReviewPages?: number[]; // الأوجه المكتملة في المراجعة (نقطة واحدة لكل وجه)
+  totalPagePoints?: number; // إجمالي نقاط الأوجه المكتملة
+  listeningPoints?: number; // نقاط إتمام واجبات الاستماع
   createdAt: string;
 }
 
@@ -140,6 +144,15 @@ export interface StudentEvaluation {
     tomorrowReviewItems?: QuranRecitationItem[];
     tomorrowSuggestedSheikh?: string;
     tomorrowDailyNote?: string;
+    tomorrowListeningAssignment?: {
+      surahNumber: number;
+      surahName: string;
+      requiredListeningCount: number;
+      youtubeUrl?: string;
+      youtubeVideoId?: string;
+    };
+    pagesCompletedToday?: number[];
+    pointsEarnedToday?: number;
   };
   aiFeedback?: {
     studentProgressStatus: 'متقدم' | 'منتظم' | 'متأخر' | 'يحتاج مساعدة';
@@ -206,6 +219,9 @@ export interface FullBackupData {
   submissions?: ExamSubmission[];
   leaderboardSettings?: LeaderboardSettings;
   googleOAuth?: GoogleOAuthConfig;
+  recordings?: SurahRecording[];
+  recordingsConfig?: RecordingsConfig;
+  listeningLogs?: StudentListeningLog[];
 }
 
 export type ExamQuestionType = 'multiple_choice' | 'true_false' | 'essay' | 'short_answer';
@@ -318,3 +334,47 @@ export interface GoogleOAuthConfig {
   accessToken?: string;
   savedInCloud?: boolean;
 }
+
+export interface SurahRecordingSegment {
+  ayahNumber: number;
+  ayahText?: string;
+  startTimeSeconds: number;
+  endTimeSeconds: number;
+}
+
+export interface SurahRecording {
+  id: string;
+  surahNumber: number;
+  surahName: string;
+  youtubeUrl: string;
+  youtubeVideoId: string;
+  title?: string;
+  reciterName?: string;
+  status: 'processing' | 'ready';
+  segments: SurahRecordingSegment[];
+  defaultListeningCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface RecordingsConfig {
+  isPublishedToStudents: boolean;
+  updatedAt: string;
+}
+
+export interface StudentListeningLog {
+  id: string;
+  studentId: string;
+  studentName: string;
+  halaqahId?: string;
+  surahNumber: number;
+  surahName: string;
+  fromAyah: number;
+  toAyah: number;
+  targetCount: number;
+  completedCount: number;
+  isFullyCompleted: boolean;
+  date: string; // YYYY-MM-DD
+  timestamp: string;
+}
+

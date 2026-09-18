@@ -31,7 +31,10 @@ import {
   ExamQuestion,
   ExamSubmission,
   LeaderboardSettings,
-  GoogleOAuthConfig
+  GoogleOAuthConfig,
+  SurahRecording,
+  RecordingsConfig,
+  StudentListeningLog
 } from '../types';
 
 export { firebaseConfig };
@@ -41,6 +44,11 @@ export const db = firebaseConfig.firestoreDatabaseId
   ? getFirestore(app, firebaseConfig.firestoreDatabaseId)
   : getFirestore(app);
 export const auth = getAuth(app);
+
+export const DEFAULT_RECORDINGS_CONFIG: RecordingsConfig = {
+  isPublishedToStudents: false,
+  updatedAt: new Date().toISOString()
+};
 
 export const DEFAULT_LEADERBOARD_SETTINGS: LeaderboardSettings = {
   scope: 'all_unified',
@@ -1294,24 +1302,184 @@ export class OmranDataService {
     }
   }
 
+  // ==========================================
+  // SURAH RECORDINGS MANAGEMENT (Supervisor Only)
+  // ==========================================
+
+  // Load All Surah Recordings
+  static async loadRecordings(): Promise<SurahRecording[]> {
+    try {
+      const snap = await getDocs(collection(db, 'surah_recordings'));
+      const list: SurahRecording[] = [];
+      snap.forEach(d => list.push(d.data() as SurahRecording));
+      return list.sort((a, b) => a.surahNumber - b.surahNumber);
+    } catch (e) {
+      handleFirestoreError(e, OperationType.LIST, 'surah_recordings');
+      return [];
+    }
+  }
+
+  // Save / Update Surah Recording
+  static async saveRecording(recording: SurahRecording): Promise<void> {
+    try {
+      await setDoc(doc(db, 'surah_recordings', recording.id), recording);
+    } catch (e) {
+      handleFirestoreError(e, OperationType.WRITE, `surah_recordings/${recording.id}`);
+      throw e;
+    }
+  }
+
+  // Delete Surah Recording
+  static async deleteRecording(recordingId: string): Promise<void> {
+    try {
+      await deleteDoc(doc(db, 'surah_recordings', recordingId));
+    } catch (e) {
+      handleFirestoreError(e, OperationType.DELETE, `surah_recordings/${recordingId}`);
+      throw e;
+    }
+  }
+
+  // Subscribe to Surah Recordings in Realtime
+  static subscribeRecordings(callback: (recordings: SurahRecording[]) => void): () => void {
+    try {
+      return onSnapshot(collection(db, 'surah_recordings'), snap => {
+        const list: SurahRecording[] = [];
+        snap.forEach(d => list.push(d.data() as SurahRecording));
+        callback(list.sort((a, b) => a.surahNumber - b.surahNumber));
+      }, err => {
+        handleFirestoreError(err, OperationType.LIST, 'surah_recordings');
+      });
+    } catch (e) {
+      return () => {};
+    }
+  }
+
+  // Load Recordings Config (Publish toggle)
+  static async loadRecordingsConfig(): Promise<RecordingsConfig> {
+    try {
+      const snap = await getDoc(doc(db, 'settings', 'recordings_config'));
+      if (snap.exists()) {
+        return snap.data() as RecordingsConfig;
+      }
+      return DEFAULT_RECORDINGS_CONFIG;
+    } catch (e) {
+      handleFirestoreError(e, OperationType.GET, 'settings/recordings_config');
+      return DEFAULT_RECORDINGS_CONFIG;
+    }
+  }
+
+  // Save Recordings Config
+  static async saveRecordingsConfig(config: RecordingsConfig): Promise<void> {
+    try {
+      await setDoc(doc(db, 'settings', 'recordings_config'), config);
+    } catch (e) {
+      handleFirestoreError(e, OperationType.WRITE, 'settings/recordings_config');
+      throw e;
+    }
+  }
+
+  // Subscribe to Recordings Config
+  static subscribeRecordingsConfig(callback: (config: RecordingsConfig) => void): () => void {
+    try {
+      return onSnapshot(doc(db, 'settings', 'recordings_config'), snap => {
+        if (snap.exists()) {
+          callback(snap.data() as RecordingsConfig);
+        } else {
+          callback(DEFAULT_RECORDINGS_CONFIG);
+        }
+      }, err => {
+        handleFirestoreError(err, OperationType.GET, 'settings/recordings_config');
+      });
+    } catch (e) {
+      return () => {};
+    }
+  }
+
+  // ==========================================
+  // STUDENT LISTENING LOGS
+  // ==========================================
+
+  // Load Listening Logs
+  static async loadListeningLogs(studentId?: string): Promise<StudentListeningLog[]> {
+    try {
+      let q;
+      if (studentId) {
+        q = query(collection(db, 'listening_logs'), where('studentId', '==', studentId));
+      } else {
+        q = collection(db, 'listening_logs');
+      }
+      const snap = await getDocs(q);
+      const list: StudentListeningLog[] = [];
+      snap.forEach(d => list.push(d.data() as StudentListeningLog));
+      return list.sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+    } catch (e) {
+      handleFirestoreError(e, OperationType.LIST, 'listening_logs');
+      return [];
+    }
+  }
+
+  // Save / Update Student Listening Log
+  static async saveListeningLog(log: StudentListeningLog): Promise<void> {
+    try {
+      await setDoc(doc(db, 'listening_logs', log.id), log);
+    } catch (e) {
+      handleFirestoreError(e, OperationType.WRITE, `listening_logs/${log.id}`);
+      throw e;
+    }
+  }
+
+  // Subscribe to Listening Logs
+  static subscribeListeningLogs(callback: (logs: StudentListeningLog[]) => void): () => void {
+    try {
+      return onSnapshot(collection(db, 'listening_logs'), snap => {
+        const list: StudentListeningLog[] = [];
+        snap.forEach(d => list.push(d.data() as StudentListeningLog));
+        callback(list.sort((a, b) => b.timestamp.localeCompare(a.timestamp)));
+      }, err => {
+        handleFirestoreError(err, OperationType.LIST, 'listening_logs');
+      });
+    } catch (e) {
+      return () => {};
+    }
+  }
+
   // Export Full Database (Complete Cloud Firestore Backup)
   static async exportFullBackup(): Promise<FullBackupData> {
-    const [students, attendance, evaluations, evaluationCriteria, settings, chatMessages, teachers, halaqahs, violations, exams, submissions, leaderboardSettings, googleOAuth] =
-      await Promise.all([
-        this.loadStudents(),
-        this.loadAttendance(),
-        this.loadEvaluations(),
-        this.loadCriteria(),
-        this.loadSettings(),
-        this.loadChats(),
-        this.loadTeachers(),
-        this.loadHalaqahs(),
-        this.loadViolations(),
-        this.loadExams(),
-        this.loadSubmissions(),
-        this.loadLeaderboardSettings(),
-        this.loadGoogleOAuthConfig()
-      ]);
+    const [
+      students,
+      attendance,
+      evaluations,
+      evaluationCriteria,
+      settings,
+      chatMessages,
+      teachers,
+      halaqahs,
+      violations,
+      exams,
+      submissions,
+      leaderboardSettings,
+      googleOAuth,
+      recordings,
+      recordingsConfig,
+      listeningLogs
+    ] = await Promise.all([
+      this.loadStudents(),
+      this.loadAttendance(),
+      this.loadEvaluations(),
+      this.loadCriteria(),
+      this.loadSettings(),
+      this.loadChats(),
+      this.loadTeachers(),
+      this.loadHalaqahs(),
+      this.loadViolations(),
+      this.loadExams(),
+      this.loadSubmissions(),
+      this.loadLeaderboardSettings(),
+      this.loadGoogleOAuthConfig(),
+      this.loadRecordings(),
+      this.loadRecordingsConfig(),
+      this.loadListeningLogs()
+    ]);
 
     return {
       version: '2.0.0',
@@ -1329,6 +1497,9 @@ export class OmranDataService {
       submissions,
       leaderboardSettings,
       googleOAuth,
+      recordings,
+      recordingsConfig,
+      listeningLogs,
       userAccounts: [
         {
           id: 'admin-1',
@@ -1341,7 +1512,7 @@ export class OmranDataService {
     };
   }
 
-  // Import / Restore Full Database directly into Firestore
+  // Import / Restore Full Database directly into Firestore (replaces existing data)
   static async importFullBackup(backup: FullBackupData): Promise<{
     studentsCount: number;
     attendanceCount: number;
@@ -1352,6 +1523,7 @@ export class OmranDataService {
     violationsCount?: number;
     examsCount?: number;
     submissionsCount?: number;
+    recordingsCount?: number;
   }> {
     if (!backup || typeof backup !== 'object') {
       throw new Error('ملف النسخة الاحتياطية غير صالح أو تالف.');
@@ -1374,8 +1546,38 @@ export class OmranDataService {
     const examsList = Array.isArray(backup.exams) ? backup.exams : [];
     const submissionsList = Array.isArray(backup.submissions) ? backup.submissions : [];
     const leaderboardSettings = backup.leaderboardSettings || DEFAULT_LEADERBOARD_SETTINGS;
+    const recordingsList = Array.isArray(backup.recordings) ? backup.recordings : [];
+    const recordingsConfig = backup.recordingsConfig || DEFAULT_RECORDINGS_CONFIG;
+    const listeningLogsList = Array.isArray(backup.listeningLogs) ? backup.listeningLogs : [];
 
-    // Persist directly to Firestore concurrently
+    // Helper to safely clear collections to guarantee complete replacement of data
+    const clearCol = async (colName: string) => {
+      try {
+        const snap = await getDocs(collection(db, colName));
+        const delP: Promise<any>[] = [];
+        snap.forEach(d => delP.push(deleteDoc(d.ref)));
+        await Promise.all(delP);
+      } catch (err) {
+        console.warn(`Could not clear col ${colName}`, err);
+      }
+    };
+
+    // Clear prior data to ensure full replacement
+    await Promise.all([
+      clearCol('students'),
+      clearCol('attendance'),
+      clearCol('evaluations'),
+      clearCol('criteria'),
+      clearCol('teachers'),
+      clearCol('halaqahs'),
+      clearCol('violations'),
+      clearCol('exams'),
+      clearCol('exam_submissions'),
+      clearCol('surah_recordings'),
+      clearCol('listening_logs')
+    ]);
+
+    // Persist new data directly to Firestore concurrently
     try {
       const promises: Promise<any>[] = [];
 
@@ -1406,6 +1608,13 @@ export class OmranDataService {
       for (const sub of submissionsList) {
         if (sub?.id) promises.push(setDoc(doc(db, 'exam_submissions', sub.id), sub));
       }
+      for (const rec of recordingsList) {
+        if (rec?.id) promises.push(setDoc(doc(db, 'surah_recordings', rec.id), rec));
+      }
+      for (const log of listeningLogsList) {
+        if (log?.id) promises.push(setDoc(doc(db, 'listening_logs', log.id), log));
+      }
+
       if (settingsData) {
         promises.push(setDoc(doc(db, 'settings', 'main'), settingsData));
       }
@@ -1414,6 +1623,9 @@ export class OmranDataService {
       }
       if (backup.googleOAuth) {
         promises.push(setDoc(doc(db, 'settings', 'google_oauth'), backup.googleOAuth));
+      }
+      if (recordingsConfig) {
+        promises.push(setDoc(doc(db, 'settings', 'recordings_config'), recordingsConfig));
       }
 
       await Promise.all(promises);
@@ -1431,7 +1643,8 @@ export class OmranDataService {
       halaqahsCount: halaqahsList.length,
       violationsCount: violationsList.length,
       examsCount: examsList.length,
-      submissionsCount: submissionsList.length
+      submissionsCount: submissionsList.length,
+      recordingsCount: recordingsList.length
     };
   }
 }
