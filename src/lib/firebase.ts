@@ -441,6 +441,14 @@ export function clearLegacyLocalStorage() {
   }
 }
 
+// Deep sanitize any object before sending to Firestore so no 'undefined' fields ever reach setDoc
+export function cleanFirestoreData<T>(obj: T): T {
+  if (obj === null || obj === undefined) {
+    return null as any;
+  }
+  return JSON.parse(JSON.stringify(obj, (_, v) => (v === undefined ? null : v)));
+}
+
 // Firestore Realtime Cloud Service (Direct Cloud-Only Architecture)
 export class OmranDataService {
   // Check Connection and Seed initial data in Firestore if empty
@@ -667,7 +675,8 @@ export class OmranDataService {
   // Save Student directly in Firestore
   static async saveStudent(student: Student): Promise<void> {
     try {
-      await setDoc(doc(db, 'students', student.id), student);
+      const clean = cleanFirestoreData(student);
+      await setDoc(doc(db, 'students', student.id), clean);
     } catch (e) {
       handleFirestoreError(e, OperationType.WRITE, `students/${student.id}`);
       throw e;

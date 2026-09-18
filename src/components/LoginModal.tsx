@@ -49,8 +49,6 @@ export const LoginModal: React.FC<LoginModalProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isGoogleSigningIn, setIsGoogleSigningIn] = useState(false);
   const [googleError, setGoogleError] = useState('');
-  const [showDirectGoogleInput, setShowDirectGoogleInput] = useState(false);
-  const [directStudentEmail, setDirectStudentEmail] = useState('');
 
   const handleGoogleStudentLogin = async () => {
     setGoogleError('');
@@ -66,41 +64,15 @@ export const LoginModal: React.FC<LoginModalProps> = ({
     } catch (err: any) {
       console.warn('Google Student Sign-In notice:', err);
       const errMsg = err?.message || String(err);
-      if (err?.isUnauthorizedDomain || err?.code === 'auth/unauthorized-domain' || errMsg.includes('unauthorized-domain')) {
-        setGoogleError('نطاق المنصة يتطلب الدخول بالبريد الإلكتروني المربوط بحسابك مباشرة أدناه:');
-        setShowDirectGoogleInput(true);
-      } else if (err?.isPopupClosed || errMsg.includes('popup-closed')) {
-        setGoogleError('تم إغلاق نافذة تسجيل الدخول من Google قبل الإكمال. يمكنك إعادة المحاولة أو إدخال بريدك أدناه.');
-        setShowDirectGoogleInput(true);
+      if (err?.isPopupClosed || errMsg.includes('popup-closed')) {
+        setGoogleError('تم إغلاق نافذة تسجيل الدخول من Google قبل استكمال التفويض. يرجى الضغط مرة أخرى والموافقة.');
       } else if (err?.isPopupBlocked || errMsg.includes('popup-blocked')) {
-        setGoogleError('المتصفح حظر النافذة المنبثقة. يمكنك تسجيل الدخول ببريدك الإلكتروني مباشرة أدناه.');
-        setShowDirectGoogleInput(true);
+        setGoogleError('المتصفح حظر النافذة المنبثقة. يرجى السماح بالنوافذ المنبثقة لموقع المنصة.');
       } else {
-        setGoogleError(errMsg || 'تعذر تسجيل الدخول بحساب Google. يمكنك إدخال بريدك الإلكتروني مباشرة أدناه.');
-        setShowDirectGoogleInput(true);
+        setGoogleError(errMsg || 'تعذر تسجيل الدخول بحساب Google. يرجى المحاولة مرة أخرى.');
       }
     } finally {
       setIsGoogleSigningIn(false);
-    }
-  };
-
-  const handleDirectStudentGoogleEmailLogin = async () => {
-    setGoogleError('');
-    setLoginError('');
-    const clean = directStudentEmail.trim().toLowerCase();
-    if (!clean) {
-      setGoogleError('يرجى كتابة بريدك الإلكتروني المسجل في Google (Gmail).');
-      return;
-    }
-    try {
-      const { student } = await GoogleWorkspaceService.signInStudentWithGoogleDirect(students, clean);
-      onLoginSuccess({
-        username: student.name,
-        role: 'student',
-        studentId: student.id
-      });
-    } catch (err: any) {
-      setGoogleError(err.message || 'لم يتم العثور على طالب مرتبط بهذا البريد. يمكنك تسجيل الدخول باسمك أو إنشاء حساب.');
     }
   };
 
@@ -299,34 +271,6 @@ export const LoginModal: React.FC<LoginModalProps> = ({
               <p className="text-[11px] text-emerald-200/80 text-center mt-2" dir="rtl">
                 ✨ اربط حسابك بـ Google لتتمكن من دخول الاختبارات وتوثيق درجاتك تلقائياً.
               </p>
-
-              {showDirectGoogleInput && (
-                <div className="mt-3 p-3.5 rounded-2xl bg-[#022c22] border border-emerald-500/50 space-y-2 text-right">
-                  <label className="block text-xs font-bold text-[#86efac]">
-                    أدخل بريدك الإلكتروني المسجل في Google (Gmail):
-                  </label>
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="email"
-                      value={directStudentEmail}
-                      onChange={e => {
-                        setDirectStudentEmail(e.target.value);
-                        if (googleError) setGoogleError('');
-                      }}
-                      placeholder="student@gmail.com"
-                      className="flex-1 bg-[#064e3b]/80 border border-[#065f46] focus:border-[#fbbf24] focus:ring-1 focus:ring-[#fbbf24] rounded-xl py-2 px-3 text-xs text-white placeholder-emerald-400/40 outline-none dir-ltr text-left"
-                      dir="ltr"
-                    />
-                    <button
-                      type="button"
-                      onClick={handleDirectStudentGoogleEmailLogin}
-                      className="px-3.5 py-2 rounded-xl bg-[#fbbf24] hover:bg-[#f59e0b] text-[#064e3b] font-black text-xs shrink-0 cursor-pointer shadow-md transition-all"
-                    >
-                      دخول
-                    </button>
-                  </div>
-                </div>
-              )}
 
               {googleError && (
                 <div className="mt-2.5 p-2.5 rounded-xl bg-amber-500/20 border border-amber-500/40 text-amber-200 text-xs flex items-center gap-2 leading-relaxed">

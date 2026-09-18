@@ -104,7 +104,10 @@ function loadGoogleGISScript(): Promise<void> {
   });
 }
 
-function requestAccessTokenViaGIS(clientId: string, scopes: string[]): Promise<{ email: string; accessToken: string }> {
+function requestAccessTokenViaGIS(
+  clientId: string,
+  scopes: string[]
+): Promise<{ email: string; displayName?: string; photoURL?: string | null; accessToken: string }> {
   return new Promise((resolve, reject) => {
     try {
       if (!window.google?.accounts?.oauth2) {
@@ -126,6 +129,8 @@ function requestAccessTokenViaGIS(clientId: string, scopes: string[]): Promise<{
 
           const accessToken = response.access_token;
           let email = 'حساب Google المتصل';
+          let displayName = '';
+          let photoURL: string | null = null;
           try {
             const userInfoRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
               headers: { Authorization: `Bearer ${accessToken}` }
@@ -133,12 +138,14 @@ function requestAccessTokenViaGIS(clientId: string, scopes: string[]): Promise<{
             if (userInfoRes.ok) {
               const uData = await userInfoRes.json();
               if (uData.email) email = uData.email;
+              if (uData.name) displayName = uData.name;
+              if (uData.picture) photoURL = uData.picture;
             }
           } catch {
             // Ignore userInfo error
           }
 
-          resolve({ email, accessToken });
+          resolve({ email, displayName, photoURL, accessToken });
         },
         error_callback: (err) => {
           reject(err);
@@ -231,10 +238,10 @@ export class GoogleWorkspaceService {
     existingStudents: Student[]
   ): Promise<{
     student: Student;
-    user: { email: string; displayName: string; uid: string; photoURL?: string };
+    user: { email: string; displayName: string; uid: string; photoURL?: string | null };
     isNew: boolean;
   }> {
-    let googleUser: { email: string; displayName: string; uid: string; photoURL?: string } | null = null;
+    let googleUser: { email: string; displayName: string; uid: string; photoURL?: string | null } | null = null;
 
     try {
       const provider = new GoogleAuthProvider();
@@ -247,7 +254,7 @@ export class GoogleWorkspaceService {
           email: result.user.email || '',
           displayName: result.user.displayName || '',
           uid: result.user.uid,
-          photoURL: result.user.photoURL || undefined
+          photoURL: result.user.photoURL || null
         };
       }
     } catch (popupErr: any) {
@@ -267,8 +274,9 @@ export class GoogleWorkspaceService {
             if (gisRes?.email) {
               googleUser = {
                 email: gisRes.email,
-                displayName: gisRes.email.split('@')[0],
-                uid: `gis_${Date.now()}`
+                displayName: gisRes.displayName || gisRes.email.split('@')[0],
+                uid: `gis_${Date.now()}`,
+                photoURL: gisRes.photoURL || null
               };
             }
           }
@@ -317,7 +325,7 @@ export class GoogleWorkspaceService {
         googleEmail: cleanEmail,
         googleUid: googleUser.uid,
         googleName: cleanName || matchedStudent.name,
-        googlePhotoUrl: googleUser.photoURL || matchedStudent.googlePhotoUrl,
+        googlePhotoUrl: googleUser.photoURL || matchedStudent.googlePhotoUrl || null,
         isGoogleLinked: true
       };
       await OmranDataService.saveStudent(updatedStudent);
@@ -345,8 +353,8 @@ export class GoogleWorkspaceService {
       halaqahName: 'حلقة الزبير بن العوام رضي الله عنه',
       googleEmail: cleanEmail,
       googleUid: googleUser.uid,
-      googleName: cleanName,
-      googlePhotoUrl: googleUser.photoURL,
+      googleName: cleanName || newStudentName,
+      googlePhotoUrl: googleUser.photoURL || null,
       isGoogleLinked: true,
       createdAt: new Date().toISOString()
     };
@@ -356,12 +364,8 @@ export class GoogleWorkspaceService {
   }
 
   // Link Google Account to an already logged-in student
-  static async linkStudentGoogleAccount(student: Student, overrideEmail?: string): Promise<Student> {
-    if (overrideEmail && overrideEmail.trim()) {
-      return this.linkStudentGoogleDirect(student, overrideEmail);
-    }
-
-    let googleUser: { email: string; displayName: string; uid: string; photoURL?: string } | null = null;
+  static async linkStudentGoogleAccount(student: Student): Promise<Student> {
+    let googleUser: { email: string; displayName: string; uid: string; photoURL?: string | null } | null = null;
 
     // 1. Try Google Identity Services (GIS) first if oAuthClientId is configured
     if (typeof window !== 'undefined' && firebaseConfig.oAuthClientId) {
@@ -372,8 +376,9 @@ export class GoogleWorkspaceService {
           if (gisRes?.email) {
             googleUser = {
               email: gisRes.email,
-              displayName: gisRes.email.split('@')[0],
-              uid: `gis_${Date.now()}`
+              displayName: gisRes.displayName || gisRes.email.split('@')[0],
+              uid: `gis_${Date.now()}`,
+              photoURL: gisRes.photoURL || null
             };
           }
         }
@@ -395,7 +400,7 @@ export class GoogleWorkspaceService {
             email: result.user.email || '',
             displayName: result.user.displayName || '',
             uid: result.user.uid,
-            photoURL: result.user.photoURL || undefined
+            photoURL: result.user.photoURL || null
           };
         }
       } catch (err: any) {
@@ -423,7 +428,7 @@ export class GoogleWorkspaceService {
       googleEmail: googleUser.email.trim().toLowerCase(),
       googleUid: googleUser.uid,
       googleName: googleUser.displayName || student.name,
-      googlePhotoUrl: googleUser.photoURL || student.googlePhotoUrl,
+      googlePhotoUrl: googleUser.photoURL || student.googlePhotoUrl || null,
       isGoogleLinked: true
     };
 
@@ -537,6 +542,14 @@ export class GoogleWorkspaceService {
       return { found: false, message: 'هذا الاختبار غير مرتبط بنموذج Google Form بعد.' };
     }
 
+    // Strict registration check: only linked, registered platform students can take exams and record scores
+    if (!student.isGoogleLinked || !student.googleEmail) {
+      return {
+        found: false,
+        message: 'لا يمكن احتساب النتيجة: يجب أن يكون حسابك مسجلاً ومربوطاً بحساب Google على المنصة. فقط طلاب المنصة المسجلين هم من يستطيعون أداء الاختبار.'
+      };
+    }
+
     const token = await this.getValidAccessToken();
     if (!token) {
       return {
@@ -598,52 +611,53 @@ export class GoogleWorkspaceService {
       // Find the student's response (newest first)
       const sortedResponses = [...responses].reverse();
 
-      const matchedResponse = sortedResponses.find(resp => {
-        // Match by respondentEmail
+      // 1. First priority: Match by authenticated Google email (whichever name was typed in form is linked directly to this student)
+      let matchedResponse = sortedResponses.find(resp => {
         const respondentEmail = (resp.respondentEmail || '').trim().toLowerCase();
         if (cleanStudentEmail && respondentEmail && respondentEmail === cleanStudentEmail) {
           return true;
         }
 
         const answersObj = resp.answers || {};
-
-        // Match by email field if asked
         if (emailQId && answersObj[emailQId]) {
           const val = answersObj[emailQId].textAnswers?.answers?.[0]?.value?.trim().toLowerCase();
           if (val && cleanStudentEmail && val === cleanStudentEmail) {
             return true;
           }
         }
-
-        // Match by student name
-        let respName = '';
-        if (studentNameQId && answersObj[studentNameQId]) {
-          respName = answersObj[studentNameQId].textAnswers?.answers?.[0]?.value?.trim() || '';
-        }
-        if (!respName) {
-          for (const qId of Object.keys(answersObj)) {
-            const it = items.find(i => i.questionItem?.question?.questionId === qId);
-            if (it?.title?.includes('اسم')) {
-              respName = answersObj[qId].textAnswers?.answers?.[0]?.value?.trim() || '';
-              break;
-            }
-          }
-        }
-
-        if (respName) {
-          const normRespName = normalizeArabicText(respName);
-          if (normRespName === normStudentName || normRespName.includes(normStudentName) || normStudentName.includes(normRespName)) {
-            return true;
-          }
-        }
-
         return false;
       });
+
+      // 2. Secondary fallback (only if Google Forms settings did not record respondent email):
+      if (!matchedResponse && normStudentName) {
+        matchedResponse = sortedResponses.find(resp => {
+          const answersObj = resp.answers || {};
+          let respName = '';
+          if (studentNameQId && answersObj[studentNameQId]) {
+            respName = answersObj[studentNameQId].textAnswers?.answers?.[0]?.value?.trim() || '';
+          }
+          if (!respName) {
+            for (const qId of Object.keys(answersObj)) {
+              const it = items.find(i => i.questionItem?.question?.questionId === qId);
+              if (it?.title?.includes('اسم')) {
+                respName = answersObj[qId].textAnswers?.answers?.[0]?.value?.trim() || '';
+                break;
+              }
+            }
+          }
+
+          if (respName) {
+            const normRespName = normalizeArabicText(respName);
+            return normRespName === normStudentName || normRespName.includes(normStudentName) || normStudentName.includes(normRespName);
+          }
+          return false;
+        });
+      }
 
       if (!matchedResponse) {
         return {
           found: false,
-          message: `لم يتم العثور على تسليم مسجل بحسابك Google (${cleanStudentEmail || student.name}). يرجى التأكد من تقديم النموذج بنفس الحساب المسجل.`
+          message: `لم يتم العثور على تسليم مسجل بحساب Google الخاص بك (${cleanStudentEmail}). يرجى التأكد من تسليم النموذج من نفس حساب Google المسجل في المنصة والضغط على زر الإرسال (Submit).`
         };
       }
 
