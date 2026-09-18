@@ -219,11 +219,14 @@ export interface ExamQuestion {
 export type ExamScheduleType = 'now' | 'scheduled';
 export type ExamGradeVisibility = 'immediate' | 'after_deadline' | 'manual';
 export type ExamTimeLimitMode = 'none' | 'total' | 'per_question';
+export type ExamDeliveryMode = 'platform' | 'google_form';
 
 export interface Exam {
   id: string;
   title: string; // اسم الاختبار (إلزامي)
   description?: string; // وصف أو تعليمات الاختبار
+  deliveryMode?: ExamDeliveryMode; // 'platform' (داخل المنصة) | 'google_form' (عبر نموذج Google Forms)
+  autoCreateGoogleForm?: boolean; // هل يتم إنشاء وتوليد نموذج جوجل فورم وجدول الشيت تلقائياً عند الحفظ
   scheduleType: ExamScheduleType; // فوري أو مجدول
   startDate?: string; // تاريخ ووقت الظهور
   hasDeadline: boolean; // هل له موعد انتهاء أم للأبد
@@ -303,4 +306,6 @@ export interface GoogleOAuthConfig {
   connectedAt?: string;
   isLinked: boolean;
   lastSyncAt?: string;
+  accessToken?: string;
+  savedInCloud?: boolean;
 }

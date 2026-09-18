@@ -53,6 +53,7 @@ export const ParentPortalView: React.FC<ParentPortalViewProps> = ({
   const [activeTakingExam, setActiveTakingExam] = useState<Exam | null>(null);
   const [activeTakingAttemptNum, setActiveTakingAttemptNum] = useState<number>(1);
   const [viewingReviewSubmission, setViewingReviewSubmission] = useState<ExamSubmission | null>(null);
+  const [openedGoogleFormExam, setOpenedGoogleFormExam] = useState<Exam | null>(null);
 
   const studentAttendance = attendance.filter(a => a.studentId === student.id);
   const studentEvaluations = evaluations.filter(e => e.studentId === student.id);
@@ -233,9 +234,21 @@ export const ParentPortalView: React.FC<ParentPortalViewProps> = ({
                   >
                     <div>
                       <div className="flex items-center justify-between gap-2 mb-2">
-                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-900/60 text-emerald-300 font-bold border border-emerald-700">
-                          {exam.questions.length} أسئلة • {exam.totalPoints} درجات
-                        </span>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-900/60 text-emerald-300 font-bold border border-emerald-700">
+                            {exam.questions.length} أسئلة • {exam.totalPoints} درجات
+                          </span>
+                          {exam.deliveryMode === 'google_form' ? (
+                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-900/80 text-blue-200 font-bold border border-blue-600/50 flex items-center gap-1">
+                              <ExternalLink className="w-3 h-3 text-blue-300" />
+                              Google Forms
+                            </span>
+                          ) : (
+                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-950 text-emerald-300 font-bold border border-emerald-600/40">
+                              نظام المنصة
+                            </span>
+                          )}
+                        </div>
 
                         {isExpired ? (
                           <span className="text-[10px] px-2 py-0.5 rounded-full bg-rose-950 text-rose-300 border border-rose-600/40">
@@ -285,13 +298,36 @@ export const ParentPortalView: React.FC<ParentPortalViewProps> = ({
                         {canTake && (
                           <button
                             onClick={() => {
-                              setActiveTakingAttemptNum(attemptsUsed + 1);
-                              setActiveTakingExam(exam);
+                              if (exam.deliveryMode === 'google_form') {
+                                const targetUrl = exam.googleFormResponderUrl || exam.googleFormUrl;
+                                if (targetUrl) {
+                                  window.open(targetUrl, '_blank');
+                                  setOpenedGoogleFormExam(exam);
+                                } else {
+                                  alert('لم يتم ربط أو توليد رابط Google Form لهذا الاختبار بعد. يرجى التواصل مع المعلم.');
+                                }
+                              } else {
+                                setActiveTakingAttemptNum(attemptsUsed + 1);
+                                setActiveTakingExam(exam);
+                              }
                             }}
-                            className="px-4 py-1.5 rounded-xl bg-[#fbbf24] hover:bg-[#f59e0b] text-[#064e3b] text-xs font-black flex items-center gap-1 cursor-pointer shadow-md transition-all"
+                            className={`px-4 py-1.5 rounded-xl text-xs font-black flex items-center gap-1.5 cursor-pointer shadow-md transition-all ${
+                              exam.deliveryMode === 'google_form'
+                                ? 'bg-blue-600 hover:bg-blue-500 text-white'
+                                : 'bg-[#fbbf24] hover:bg-[#f59e0b] text-[#064e3b]'
+                            }`}
                           >
-                            <Play className="w-3.5 h-3.5 fill-current" />
-                            <span>ابدأ الاختبار الآن</span>
+                            {exam.deliveryMode === 'google_form' ? (
+                              <>
+                                <ExternalLink className="w-3.5 h-3.5" />
+                                <span>بدء الاختبار عبر Google Forms</span>
+                              </>
+                            ) : (
+                              <>
+                                <Play className="w-3.5 h-3.5 fill-current" />
+                                <span>ابدأ الاختبار الآن</span>
+                              </>
+                            )}
                           </button>
                         )}
                       </div>
@@ -612,6 +648,43 @@ export const ParentPortalView: React.FC<ParentPortalViewProps> = ({
                   </div>
                 );
               })}
+            </div>
+          </div>
+        )}
+
+        {/* GOOGLE FORM OPENED MODAL */}
+        {openedGoogleFormExam && (
+          <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+            <div className="bg-[#022c22] border border-[#fbbf24]/50 rounded-3xl w-full max-w-lg p-6 shadow-2xl space-y-4 text-center">
+              <div className="w-14 h-14 rounded-2xl bg-blue-500/20 text-blue-400 border border-blue-500/40 flex items-center justify-center mx-auto">
+                <ExternalLink className="w-7 h-7" />
+              </div>
+              <h3 className="text-lg font-bold text-white">
+                تم توجيهك إلى نموذج Google Forms
+              </h3>
+              <p className="text-xs text-emerald-200/90 leading-relaxed">
+                اختبار: <strong>"{openedGoogleFormExam.title}"</strong>
+                <br />
+                تم فتح صفحة نموذج الاختبار في علامة تبويب جديدة. يرجى الإجابة على الأسئلة بدقة وتسليم النموذج، وسيتم مزامنة نتيجتك واعتمادها في لوحة الشرف فور مراجعة المعلم.
+              </p>
+              <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
+                <button
+                  onClick={() => {
+                    const url = openedGoogleFormExam.googleFormResponderUrl || openedGoogleFormExam.googleFormUrl;
+                    if (url) window.open(url, '_blank');
+                  }}
+                  className="px-5 py-2.5 rounded-xl bg-[#fbbf24] text-[#064e3b] text-xs font-bold flex items-center gap-1.5 shadow-md hover:bg-[#f59e0b] cursor-pointer"
+                >
+                  <ExternalLink className="w-4 h-4" />
+                  <span>إعادة فتح النموذج</span>
+                </button>
+                <button
+                  onClick={() => setOpenedGoogleFormExam(null)}
+                  className="px-5 py-2.5 rounded-xl bg-emerald-900/80 hover:bg-emerald-800 text-emerald-100 text-xs font-bold cursor-pointer"
+                >
+                  حسناً، تم
+                </button>
+              </div>
             </div>
           </div>
         )}

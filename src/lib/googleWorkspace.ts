@@ -1,7 +1,8 @@
-import { GoogleAuthProvider, signInWithPopup, User } from 'firebase/auth';
+import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
 import { auth, db } from './firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
-import { Exam, ExamQuestion, ExamSubmission, GoogleOAuthConfig } from '../types';
+import firebaseConfig from '../../firebase-applet-config.json';
+import { Exam, ExamQuestion, ExamSubmission, GoogleOAuthConfig, FullBackupData, Student, AttendanceRecord, StudentEvaluation, Halaqah } from '../types';
 
 export const GOOGLE_SCOPES = [
   'https://www.googleapis.com/auth/forms.body',
@@ -10,13 +11,135 @@ export const GOOGLE_SCOPES = [
   'https://www.googleapis.com/auth/drive.file'
 ];
 
-let inMemoryGoogleAccessToken: string | null = (() => {
-  try {
-    return sessionStorage.getItem('omran_google_token') || null;
-  } catch (e) {
-    return null;
+declare global {
+  interface Window {
+    google?: {
+      accounts?: {
+        oauth2?: {
+          initTokenClient: (config: {
+            client_id: string;
+            scope: string;
+            callback: (response: { access_token?: string; error?: string; error_description?: string }) => void;
+            error_callback?: (error: any) => void;
+          }) => {
+            requestAccessToken: (overrideConfig?: { prompt?: string }) => void;
+          };
+        };
+      };
+    };
   }
-})();
+}
+
+export class UnauthorizedDomainError extends Error {
+  isUnauthorizedDomain = true;
+  domain: string;
+  projectId: string;
+  firebaseConsoleUrl: string;
+
+  constructor(domain: string, projectId: string) {
+    const consoleUrl = `https://console.firebase.google.com/project/${projectId}/authentication/settings`;
+    super(
+      `نطاق المنصة الحالي (${domain}) يحتاج إلى إضافة في النطاقات المصرح بها في Firebase Authentication، أو يمكنك استخدام رابط Google Form مباشرة دون الحاجة للربط.`
+    );
+    this.name = 'UnauthorizedDomainError';
+    this.domain = domain;
+    this.projectId = projectId;
+    this.firebaseConsoleUrl = consoleUrl;
+  }
+}
+
+export class PopupClosedByUserError extends Error {
+  isPopupClosed = true;
+  constructor() {
+    super(
+      'تم إغلاق نافذة تسجيل الدخول من Google قبل استكمال التفويض. يرجى إعادة المحاولة مع إبقاء النافذة مفتوحة لاختيار حسابك والموافقة على الأذونات.'
+    );
+    this.name = 'PopupClosedByUserError';
+  }
+}
+
+export class PopupBlockedError extends Error {
+  isPopupBlocked = true;
+  constructor() {
+    super(
+      'قام المتصفح بحظر نافذة تسجيل الدخول المنبثقة. يرجى السماح بالنوافذ المنبثقة (Popups) لهذا الموقع من إعدادات المتصفح، أو فتح المنصة في تبويب جديد.'
+    );
+    this.name = 'PopupBlockedError';
+  }
+}
+
+function loadGoogleGISScript(): Promise<void> {
+  if (typeof window === 'undefined') return Promise.resolve();
+  if (window.google?.accounts?.oauth2) return Promise.resolve();
+
+  return new Promise((resolve) => {
+    const existing = document.getElementById('google-gsi-script');
+    if (existing) {
+      if (window.google?.accounts?.oauth2) return resolve();
+      existing.addEventListener('load', () => resolve());
+      existing.addEventListener('error', () => resolve());
+      return;
+    }
+    const script = document.createElement('script');
+    script.id = 'google-gsi-script';
+    script.src = 'https://accounts.google.com/gsi/client';
+    script.async = true;
+    script.defer = true;
+    script.onload = () => resolve();
+    script.onerror = () => resolve();
+    document.head.appendChild(script);
+  });
+}
+
+function requestAccessTokenViaGIS(clientId: string, scopes: string[]): Promise<{ email: string; accessToken: string }> {
+  return new Promise((resolve, reject) => {
+    try {
+      if (!window.google?.accounts?.oauth2) {
+        throw new Error('Google Identity Services library is not loaded');
+      }
+
+      const client = window.google.accounts.oauth2.initTokenClient({
+        client_id: clientId,
+        scope: scopes.join(' '),
+        callback: async (response) => {
+          if (response.error) {
+            reject(new Error(response.error_description || response.error));
+            return;
+          }
+          if (!response.access_token) {
+            reject(new Error('لم يتم استلام رمز تفويض Google.'));
+            return;
+          }
+
+          const accessToken = response.access_token;
+          let email = 'حساب Google المتصل';
+          try {
+            const userInfoRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+              headers: { Authorization: `Bearer ${accessToken}` }
+            });
+            if (userInfoRes.ok) {
+              const uData = await userInfoRes.json();
+              if (uData.email) email = uData.email;
+            }
+          } catch {
+            // Ignore userInfo error
+          }
+
+          resolve({ email, accessToken });
+        },
+        error_callback: (err) => {
+          reject(err);
+        }
+      });
+
+      client.requestAccessToken({ prompt: 'select_account' });
+    } catch (err) {
+      reject(err);
+    }
+  });
+}
+
+let inMemoryGoogleAccessToken: string | null = null;
 
 export class GoogleWorkspaceService {
   static getCachedAccessToken(): string | null {
@@ -25,21 +148,18 @@ export class GoogleWorkspaceService {
 
   static setCachedAccessToken(token: string | null) {
     inMemoryGoogleAccessToken = token;
-    try {
-      if (token) {
-        sessionStorage.setItem('omran_google_token', token);
-      } else {
-        sessionStorage.removeItem('omran_google_token');
-      }
-    } catch (e) {}
   }
 
-  // Load persistent Google Account status from Firestore
+  // Load persistent Google Account status & token from Firestore cloud database
   static async loadGoogleAuthConfig(): Promise<GoogleOAuthConfig> {
     try {
       const snap = await getDoc(doc(db, 'settings', 'google_oauth'));
       if (snap.exists()) {
-        return snap.data() as GoogleOAuthConfig;
+        const data = snap.data() as GoogleOAuthConfig;
+        if (data.accessToken && !inMemoryGoogleAccessToken) {
+          inMemoryGoogleAccessToken = data.accessToken;
+        }
+        return data;
       }
     } catch (e) {
       console.warn('Could not load google auth config from Firestore:', e);
@@ -47,43 +167,138 @@ export class GoogleWorkspaceService {
     return { isLinked: false };
   }
 
-  // Save persistent Google Account status to Firestore
+  // Save persistent Google Account status & token to Firestore cloud database forever
   static async saveGoogleAuthConfig(config: GoogleOAuthConfig): Promise<void> {
     try {
-      await setDoc(doc(db, 'settings', 'google_oauth'), config);
+      await setDoc(doc(db, 'settings', 'google_oauth'), {
+        ...config,
+        savedInCloud: true,
+        updatedAt: new Date().toISOString()
+      });
     } catch (e) {
-      console.error('Error saving google auth config:', e);
+      console.error('Error saving google auth config to Firestore:', e);
     }
   }
 
-  // Link Supervisor Google Account with Google Forms and Sheets permissions
-  static async linkGoogleAccount(): Promise<{ email: string; accessToken: string }> {
-    const provider = new GoogleAuthProvider();
-    GOOGLE_SCOPES.forEach(scope => provider.addScope(scope));
-    provider.setCustomParameters({
-      prompt: 'select_account'
-    });
-
-    const result = await signInWithPopup(auth, provider);
-    const credential = GoogleAuthProvider.credentialFromResult(result);
-    const accessToken = credential?.accessToken;
-
-    if (!accessToken) {
-      throw new Error('لم نتمكن من الحصول على رمز تفويض حساب Google.');
+  // Retrieve valid access token from memory or persistent Firestore
+  static async getValidAccessToken(): Promise<string | null> {
+    if (inMemoryGoogleAccessToken) {
+      return inMemoryGoogleAccessToken;
     }
+    const config = await this.loadGoogleAuthConfig();
+    if (config.isLinked && config.accessToken) {
+      inMemoryGoogleAccessToken = config.accessToken;
+      return config.accessToken;
+    }
+    return null;
+  }
 
-    inMemoryGoogleAccessToken = accessToken;
-    const email = result.user.email || 'حساب Google المتصل';
-
+  // Save manual access token entered by user
+  static async setManualAccessToken(token: string, email = 'حساب Google اليدوي'): Promise<void> {
+    const cleanToken = token.trim();
+    if (!cleanToken) throw new Error('يرجى إدخال رمز التفويض.');
+    inMemoryGoogleAccessToken = cleanToken;
     const config: GoogleOAuthConfig = {
       connectedEmail: email,
       connectedAt: new Date().toISOString(),
       isLinked: true,
-      lastSyncAt: new Date().toISOString()
+      lastSyncAt: new Date().toISOString(),
+      accessToken: cleanToken,
+      savedInCloud: true
     };
-
     await this.saveGoogleAuthConfig(config);
-    return { email, accessToken };
+  }
+
+  // Link Supervisor Google Account with Google Forms and Sheets permissions
+  static async linkGoogleAccount(): Promise<{ email: string; accessToken: string }> {
+    // 1. Try Google Identity Services (GIS) first if oAuthClientId is present
+    if (typeof window !== 'undefined' && firebaseConfig.oAuthClientId) {
+      try {
+        await loadGoogleGISScript();
+        if (window.google?.accounts?.oauth2) {
+          const gisRes = await requestAccessTokenViaGIS(firebaseConfig.oAuthClientId, GOOGLE_SCOPES);
+          if (gisRes?.accessToken) {
+            inMemoryGoogleAccessToken = gisRes.accessToken;
+            const config: GoogleOAuthConfig = {
+              connectedEmail: gisRes.email,
+              connectedAt: new Date().toISOString(),
+              isLinked: true,
+              lastSyncAt: new Date().toISOString(),
+              accessToken: gisRes.accessToken,
+              savedInCloud: true
+            };
+            await this.saveGoogleAuthConfig(config);
+            return gisRes;
+          }
+        }
+      } catch (gisErr: any) {
+        console.warn('GIS Token client attempt notice:', gisErr?.message || gisErr);
+      }
+    }
+
+    // 2. Firebase Auth popup fallback
+    try {
+      const provider = new GoogleAuthProvider();
+      GOOGLE_SCOPES.forEach(scope => provider.addScope(scope));
+      provider.setCustomParameters({
+        prompt: 'select_account'
+      });
+
+      const result = await signInWithPopup(auth, provider);
+      const credential = GoogleAuthProvider.credentialFromResult(result);
+      const accessToken = credential?.accessToken;
+
+      if (!accessToken) {
+        throw new Error('لم نتمكن من الحصول على رمز تفويض حساب Google.');
+      }
+
+      inMemoryGoogleAccessToken = accessToken;
+      const email = result.user.email || 'حساب Google المتصل';
+
+      const config: GoogleOAuthConfig = {
+        connectedEmail: email,
+        connectedAt: new Date().toISOString(),
+        isLinked: true,
+        lastSyncAt: new Date().toISOString(),
+        accessToken: accessToken,
+        savedInCloud: true
+      };
+
+      await this.saveGoogleAuthConfig(config);
+      return { email, accessToken };
+    } catch (err: any) {
+      const errMsg = err?.message || String(err);
+      if (err?.code === 'auth/unauthorized-domain' || errMsg.includes('auth/unauthorized-domain')) {
+        const currentDomain = typeof window !== 'undefined' ? window.location.hostname : 'النطاق الحالي';
+        console.warn(`[Firebase Auth Notice] Unauthorized domain detected: ${currentDomain}`);
+        throw new UnauthorizedDomainError(currentDomain, firebaseConfig.projectId);
+      }
+      if (err?.code === 'auth/popup-closed-by-user' || errMsg.includes('auth/popup-closed-by-user')) {
+        console.warn('[Firebase Auth Notice] Popup closed by user or environment before sign-in completed.');
+        throw new PopupClosedByUserError();
+      }
+      if (err?.code === 'auth/popup-blocked' || errMsg.includes('auth/popup-blocked')) {
+        console.warn('[Firebase Auth Notice] Popup blocked by browser.');
+        throw new PopupBlockedError();
+      }
+      if (err?.code === 'auth/cancelled-popup-request' || errMsg.includes('auth/cancelled-popup-request')) {
+        throw new Error('تم إلغاء طلب تسجيل الدخول نظراً لفتح نافذة جديدة. يرجى المحاولة مجدداً.');
+      }
+      throw err;
+    }
+  }
+
+  // Disconnect Google Account from Firestore
+  static async disconnectGoogleAccount(): Promise<void> {
+    inMemoryGoogleAccessToken = null;
+    const config: GoogleOAuthConfig = {
+      isLinked: false,
+      connectedEmail: undefined,
+      accessToken: undefined,
+      lastSyncAt: new Date().toISOString(),
+      savedInCloud: true
+    };
+    await this.saveGoogleAuthConfig(config);
   }
 
   // Create Google Form and linked Google Sheet for an Exam
@@ -94,12 +309,12 @@ export class GoogleWorkspaceService {
     spreadsheetId?: string;
     spreadsheetUrl?: string;
   }> {
-    const token = tokenOverride || inMemoryGoogleAccessToken;
+    const token = tokenOverride || (await this.getValidAccessToken());
     if (!token) {
-      throw new Error('يرجى تسجيل الدخول بحساب Google أولاً لإنشاء نموذج Google Form وجدول Google Sheets.');
+      throw new Error('يرجى ربط حساب Google أولاً لإنشاء نموذج Google Form وجدول Google Sheets.');
     }
 
-    // 1. Create Initial Google Form
+    // 1. Create the Form
     const createFormRes = await fetch('https://forms.googleapis.com/v1/forms', {
       method: 'POST',
       headers: {
@@ -109,124 +324,128 @@ export class GoogleWorkspaceService {
       body: JSON.stringify({
         info: {
           title: exam.title,
-          documentTitle: `${exam.title} - منصة عمران القرآنية`
+          documentTitle: `${exam.title} - منصة عُمْرَان القرآنية`
         }
       })
     });
 
     if (!createFormRes.ok) {
-      const err = await createFormRes.text();
-      throw new Error(`تعذر إنشاء نموذج Google Forms: ${err}`);
+      const errText = await createFormRes.text();
+      throw new Error(`تعذر إنشاء نموذج Google Forms: ${errText}`);
     }
 
     const formData = await createFormRes.json();
     const formId = formData.formId;
-    const responderUrl = formData.responderUri || `https://docs.google.com/forms/d/e/${formId}/viewform`;
     const formEditUrl = `https://docs.google.com/forms/d/${formId}/edit`;
+    const responderUrl = formData.responderUri || `https://docs.google.com/forms/d/e/${formId}/viewform`;
 
-    // 2. Batch Update Form with Description, Settings, and Questions
+    // 2. Prepare items for Google Form batchUpdate
     const requests: any[] = [
       {
         updateFormInfo: {
           info: {
-            description: `${exam.description || 'اختبار في القرآن الكريم وعلومه'}\n\n* تم إنشاء هذا الاختبار عبر منصة عُمْرَان القرآنية\n* إجمالي الدرجات: ${exam.totalPoints} درجة`
+            description: `${exam.description || 'اختبار في القرآن الكريم وعلومه'}\n\n* تم إعداد هذا الاختبار عبر منصة عُمْرَان القرآنية\n* إجمالي الدرجات: ${exam.totalPoints} درجة`
           },
           updateMask: 'description'
+        }
+      },
+      {
+        createItem: {
+          item: {
+            title: 'اسم الطالب الثلاثي',
+            description: 'يرجى كتابة اسم الطالب المسجل في منصة عمران بدقة',
+            questionItem: {
+              question: {
+                required: true,
+                textQuestion: {
+                  paragraph: false
+                }
+              }
+            }
+          },
+          location: {
+            index: 0
+          }
         }
       }
     ];
 
-    // Add Student Name & Halaqah identity field first
-    requests.push({
-      createItem: {
-        item: {
-          title: 'اسم الطالب الثلاثي',
-          description: 'يرجى كتابة اسم الطالب المسجل في منصة عمران',
-          questionItem: {
-            question: {
-              required: true,
-              textQuestion: {
-                paragraph: false
+    // Add each exam question to Google Form
+    if (exam.questions && exam.questions.length > 0) {
+      exam.questions.forEach((q, idx) => {
+        const questionIndex = idx + 1;
+        if (q.type === 'multiple_choice' || q.type === 'true_false') {
+          const rawOptions = q.options && q.options.length > 0
+            ? q.options
+            : q.type === 'true_false'
+            ? ['صح', 'خطأ']
+            : ['الخيار 1', 'الخيار 2'];
+          
+          const cleanOptions = Array.from(new Set(rawOptions.map(o => String(o || '').trim()).filter(Boolean)));
+          const finalOptions = cleanOptions.length > 0 ? cleanOptions : ['الخيار 1', 'الخيار 2'];
+
+          requests.push({
+            createItem: {
+              item: {
+                title: `${q.title} (${q.points} درجات)`,
+                questionItem: {
+                  question: {
+                    required: true,
+                    choiceQuestion: {
+                      type: 'RADIO',
+                      options: finalOptions.map(opt => ({ value: opt })),
+                      shuffle: false
+                    }
+                  }
+                }
+              },
+              location: {
+                index: questionIndex
               }
             }
-          }
-        },
-        location: {
-          index: 0
+          });
+        } else {
+          requests.push({
+            createItem: {
+              item: {
+                title: `${q.title} (${q.points} درجات - سؤال كتابي)`,
+                description: q.explanation ? `إرشاد: ${q.explanation}` : undefined,
+                questionItem: {
+                  question: {
+                    required: true,
+                    textQuestion: {
+                      paragraph: q.type === 'essay'
+                    }
+                  }
+                }
+              },
+              location: {
+                index: questionIndex
+              }
+            }
+          });
         }
-      }
-    });
-
-    // Add Each Exam Question
-    exam.questions.forEach((q, idx) => {
-      const questionIndex = idx + 1;
-      if (q.type === 'multiple_choice' || q.type === 'true_false') {
-        const optionsList = q.options && q.options.length > 0
-          ? q.options
-          : q.type === 'true_false'
-          ? ['صح', 'خطأ']
-          : ['الخيار 1', 'الخيار 2'];
-
-        requests.push({
-          createItem: {
-            item: {
-              title: `${q.title} (${q.points} درجات)`,
-              questionItem: {
-                question: {
-                  required: true,
-                  choiceQuestion: {
-                    type: 'RADIO',
-                    options: optionsList.map(opt => ({ value: opt })),
-                    shuffle: false
-                  }
-                }
-              }
-            },
-            location: {
-              index: questionIndex
-            }
-          }
-        });
-      } else {
-        // Essay / Short Answer / Text
-        requests.push({
-          createItem: {
-            item: {
-              title: `${q.title} (${q.points} درجات - سؤال كتابي)`,
-              description: q.explanation ? `إرشاد: ${q.explanation}` : undefined,
-              questionItem: {
-                question: {
-                  required: true,
-                  textQuestion: {
-                    paragraph: q.type === 'essay'
-                  }
-                }
-              }
-            },
-            location: {
-              index: questionIndex
-            }
-          }
-        });
-      }
-    });
-
-    const updateRes = await fetch(`https://forms.googleapis.com/v1/forms/${formId}:batchUpdate`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        requests
-      })
-    });
-
-    if (!updateRes.ok) {
-      console.warn('Batch update to Google Form produced a warning:', await updateRes.text());
+      });
     }
 
-    // 3. Create Google Spreadsheet for responses
+    try {
+      const updateRes = await fetch(`https://forms.googleapis.com/v1/forms/${formId}:batchUpdate`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ requests })
+      });
+
+      if (!updateRes.ok) {
+        console.warn('Google Form batch update warning:', await updateRes.text());
+      }
+    } catch (updateErr) {
+      console.warn('Batch update to Google Form encountered an issue:', updateErr);
+    }
+
+    // 3. Create linked Google Spreadsheet without unsupported locale
     let spreadsheetId: string | undefined;
     let spreadsheetUrl: string | undefined;
 
@@ -239,13 +458,16 @@ export class GoogleWorkspaceService {
         },
         body: JSON.stringify({
           properties: {
-            title: `نتائج: ${exam.title} - منصة عمران`,
-            locale: 'ar_SA'
+            title: `نتائج: ${exam.title} - منصة عُمْرَان القرآنية`
+            // DO NOT include locale: 'ar_SA' (causes 400 INVALID_ARGUMENT)
           },
           sheets: [
             {
               properties: {
                 title: 'التسليمات والدرجات',
+                gridProperties: {
+                  frozenRowCount: 1
+                },
                 rightToLeft: true
               }
             }
@@ -304,13 +526,13 @@ export class GoogleWorkspaceService {
     submissions: ExamSubmission[],
     tokenOverride?: string
   ): Promise<boolean> {
-    const token = tokenOverride || inMemoryGoogleAccessToken;
+    const token = tokenOverride || (await this.getValidAccessToken());
     if (!token || !spreadsheetId) return false;
 
     try {
       const rows = submissions.map(sub => [
         sub.studentName,
-        sub.halaqahName,
+        sub.halaqahName || 'الحلقة',
         `المحاولة ${sub.attemptNumber}`,
         new Date(sub.submittedAt).toLocaleString('ar-SA'),
         sub.totalScoreEarned,
@@ -351,7 +573,7 @@ export class GoogleWorkspaceService {
     existingSubmissions: ExamSubmission[] = [],
     tokenOverride?: string
   ): Promise<{ newCount: number; updatedCount: number; importedSubmissions: ExamSubmission[] }> {
-    const token = tokenOverride || inMemoryGoogleAccessToken;
+    const token = tokenOverride || (await this.getValidAccessToken());
     if (!token) {
       throw new Error('يرجى تسجيل الدخول بحساب Google أولاً لمزامنة إجابات Google Forms.');
     }
@@ -369,7 +591,6 @@ export class GoogleWorkspaceService {
     const formMeta = await formMetaRes.json();
     const items: any[] = formMeta.items || [];
 
-    // Map question title / itemId to exam question
     const questionMap: { [questionId: string]: { examQ: ExamQuestion; title: string } } = {};
     let studentNameQuestionId: string | null = null;
 
@@ -381,7 +602,6 @@ export class GoogleWorkspaceService {
       if (qTitle.includes('اسم الطالب')) {
         studentNameQuestionId = qId;
       } else {
-        // match with exam question
         const matched = exam.questions.find(
           eq => qTitle.includes(eq.title) || eq.title.includes(qTitle)
         );
@@ -410,7 +630,6 @@ export class GoogleWorkspaceService {
       const submittedAt = resp.lastSubmittedTime || resp.createTime || new Date().toISOString();
       const answersObj = resp.answers || {};
 
-      // Find student name from answers
       let studentName = '';
       if (studentNameQuestionId && answersObj[studentNameQuestionId]) {
         const textAnswers = answersObj[studentNameQuestionId].textAnswers?.answers || [];
@@ -419,7 +638,6 @@ export class GoogleWorkspaceService {
         }
       }
 
-      // If not found in specific question, look in any text answer
       if (!studentName) {
         for (const qId of Object.keys(answersObj)) {
           const item = items.find(it => it.questionItem?.question?.questionId === qId);
@@ -437,7 +655,6 @@ export class GoogleWorkspaceService {
         studentName = `طالب (${respId.slice(0, 6)})`;
       }
 
-      // Match student with registered students in database
       const matchedStudent = allStudents.find(
         st => st.name.trim().toLowerCase() === studentName.toLowerCase() ||
               st.name.includes(studentName) ||
@@ -447,13 +664,11 @@ export class GoogleWorkspaceService {
       const studentId = matchedStudent?.id || `ext_${respId}`;
       const halaqahId = matchedStudent?.halaqahId || 'unassigned';
 
-      // Parse answers
       const submissionAnswers: any[] = [];
       let totalEarned = 0;
       let hasEssayPending = false;
 
       exam.questions.forEach(q => {
-        // Find corresponding answer in Google Form response
         let studentAnsText = '';
         for (const [formQId, qMeta] of Object.entries(questionMap)) {
           if (qMeta.examQ.id === q.id && answersObj[formQId]) {
@@ -496,7 +711,6 @@ export class GoogleWorkspaceService {
       const percentage = maxPossibleScore > 0 ? Math.round((totalEarned / maxPossibleScore) * 100) : 0;
       const pointsGrantedForLeaderboard = exam.grantsLeaderboardPoints ? totalEarned : 0;
 
-      // Check if this response ID or student already has a submission
       const existingIdx = existingSubmissions.findIndex(
         s => s.id === `gform_${respId}` || (s.studentId === studentId && s.examId === exam.id && s.submittedAt === submittedAt)
       );
@@ -527,7 +741,6 @@ export class GoogleWorkspaceService {
       importedSubmissions.push(submissionData);
     }
 
-    // Save to Firestore
     for (const sub of importedSubmissions) {
       await setDoc(doc(db, 'exam_submissions', sub.id), JSON.parse(JSON.stringify(sub)));
     }
@@ -545,7 +758,7 @@ export class GoogleWorkspaceService {
     submissions: ExamSubmission[],
     tokenOverride?: string
   ): Promise<{ spreadsheetId: string; spreadsheetUrl: string }> {
-    const token = tokenOverride || inMemoryGoogleAccessToken;
+    const token = tokenOverride || (await this.getValidAccessToken());
     if (!token) {
       throw new Error('يرجى ربط وتفويض حساب Google أولاً لتصدير النتائج إلى Google Sheets.');
     }
@@ -558,13 +771,16 @@ export class GoogleWorkspaceService {
       },
       body: JSON.stringify({
         properties: {
-          title: `نتائج: ${title} - منصة عُمْرَان القرآنية`,
-          locale: 'ar_SA'
+          title: `نتائج: ${title} - منصة عُمْرَان القرآنية`
+          // DO NOT include locale: 'ar_SA' (causes 400 INVALID_ARGUMENT)
         },
         sheets: [
           {
             properties: {
               title: 'النتائج والتسليمات',
+              gridProperties: {
+                frozenRowCount: 1
+              },
               rightToLeft: true
             }
           }
@@ -573,8 +789,12 @@ export class GoogleWorkspaceService {
     });
 
     if (!createSheetRes.ok) {
-      const err = await createSheetRes.text();
-      throw new Error(`تعذر إنشاء جدول Google Sheets: ${err}`);
+      const err = await createSheetRes.json().catch(() => ({}));
+      const errMsg = err?.error?.message || (await createSheetRes.text().catch(() => ''));
+      if (createSheetRes.status === 401) {
+        throw new Error('انتهت صلاحية جلسة Google، يرجى إعادة ربط وتفويض الحساب مجدداً.');
+      }
+      throw new Error(`تعذر إنشاء جدول Google Sheets: ${errMsg || 'خطأ غير معروف'}`);
     }
 
     const sheetData = await createSheetRes.json();
@@ -611,7 +831,7 @@ export class GoogleWorkspaceService {
 
     const valuesToInsert = [headers, ...rows];
 
-    await fetch(
+    const valuesRes = await fetch(
       `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/A1:K${valuesToInsert.length}?valueInputOption=USER_ENTERED`,
       {
         method: 'PUT',
@@ -627,7 +847,349 @@ export class GoogleWorkspaceService {
       }
     );
 
+    if (!valuesRes.ok) {
+      console.warn('Values update response not ok:', await valuesRes.text());
+    }
+
+    return { spreadsheetId, spreadsheetUrl };
+  }
+
+  // Export Students Roster to a clean Google Spreadsheet
+  static async exportStudentsToGoogleSheet(
+    students: Student[],
+    halaqahs: Halaqah[],
+    tokenOverride?: string
+  ): Promise<{ spreadsheetId: string; spreadsheetUrl: string }> {
+    const token = tokenOverride || (await this.getValidAccessToken());
+    if (!token) {
+      throw new Error('يرجى ربط وتفويض حساب Google أولاً لتصدير سجل الطلاب إلى Google Sheets.');
+    }
+
+    const halaqahMap = new Map<string, string>();
+    halaqahs.forEach(h => halaqahMap.set(h.id, h.name));
+
+    const dateStr = new Date().toLocaleDateString('ar-SA');
+    const createSheetRes = await fetch('https://sheets.googleapis.com/v4/spreadsheets', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        properties: {
+          title: `سجل طلاب منصة عُمْرَان القرآنية - ${dateStr}`
+        },
+        sheets: [
+          {
+            properties: {
+              title: 'قائمة الطلاب',
+              gridProperties: { frozenRowCount: 1 },
+              rightToLeft: true
+            }
+          }
+        ]
+      })
+    });
+
+    if (!createSheetRes.ok) {
+      const err = await createSheetRes.json().catch(() => ({}));
+      const errMsg = err?.error?.message || (await createSheetRes.text().catch(() => ''));
+      throw new Error(`تعذر إنشاء جدول الطلاب: ${errMsg || 'خطأ غير معروف'}`);
+    }
+
+    const sheetData = await createSheetRes.json();
+    const spreadsheetId = sheetData.spreadsheetId;
+    const spreadsheetUrl = sheetData.spreadsheetUrl || `https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit`;
+
+    const headers = [
+      'اسم الطالب',
+      'الحلقة القرآنية',
+      'رقم هاتف الطالب',
+      'هاتف ولي الأمر',
+      'السورة الحالية',
+      'الآية الحالية',
+      'ورد الحفظ القادم',
+      'مقرر المراجعة',
+      'المستوى',
+      'كلمة المرور'
+    ];
+
+    const rows = students.map(s => [
+      s.name,
+      halaqahMap.get(s.halaqahId || '') || s.halaqahName || 'حلقة غير محددة',
+      s.phone || 'غير مسجل',
+      s.parentPhones?.join(', ') || 'غير مسجل',
+      s.currentSurahName || '',
+      s.currentAyah || 1,
+      s.dailyNewTarget || 'غير محدد',
+      s.dailyReviewTarget || 'غير محدد',
+      s.level || 'متوسط',
+      s.password || '123'
+    ]);
+
+    const valuesToInsert = [headers, ...rows];
+
+    await fetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/A1:L${valuesToInsert.length}?valueInputOption=USER_ENTERED`,
+      {
+        method: 'PUT',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          range: `A1:L${valuesToInsert.length}`,
+          majorDimension: 'ROWS',
+          values: valuesToInsert
+        })
+      }
+    );
+
+    return { spreadsheetId, spreadsheetUrl };
+  }
+
+  // Export Attendance Log to Google Sheets
+  static async exportAttendanceToGoogleSheet(
+    attendance: AttendanceRecord[],
+    students: Student[],
+    tokenOverride?: string
+  ): Promise<{ spreadsheetId: string; spreadsheetUrl: string }> {
+    const token = tokenOverride || (await this.getValidAccessToken());
+    if (!token) {
+      throw new Error('يرجى ربط وتفويض حساب Google أولاً لتصدير سجل الحضور إلى Google Sheets.');
+    }
+
+    const studentMap = new Map<string, Student>();
+    students.forEach(s => studentMap.set(s.id, s));
+
+    const dateStr = new Date().toLocaleDateString('ar-SA');
+    const createSheetRes = await fetch('https://sheets.googleapis.com/v4/spreadsheets', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        properties: {
+          title: `سجل حضور وغياب منصة عُمْرَان القرآنية - ${dateStr}`
+        },
+        sheets: [
+          {
+            properties: {
+              title: 'سجل الحضور والغياب',
+              gridProperties: { frozenRowCount: 1 },
+              rightToLeft: true
+            }
+          }
+        ]
+      })
+    });
+
+    if (!createSheetRes.ok) {
+      const err = await createSheetRes.json().catch(() => ({}));
+      const errMsg = err?.error?.message || (await createSheetRes.text().catch(() => ''));
+      throw new Error(`تعذر إنشاء جدول الحضور: ${errMsg || 'خطأ غير معروف'}`);
+    }
+
+    const sheetData = await createSheetRes.json();
+    const spreadsheetId = sheetData.spreadsheetId;
+    const spreadsheetUrl = sheetData.spreadsheetUrl || `https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit`;
+
+    const headers = [
+      'التاريخ',
+      'اسم الطالب',
+      'حالة الحضور',
+      'ملاحظات الغياب أو التأخر'
+    ];
+
+    const rows = attendance.map(a => [
+      a.date,
+      studentMap.get(a.studentId)?.name || 'طالب غير محدد',
+      a.status,
+      a.note || ''
+    ]);
+
+    const valuesToInsert = [headers, ...rows];
+
+    await fetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/A1:D${valuesToInsert.length}?valueInputOption=USER_ENTERED`,
+      {
+        method: 'PUT',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          range: `A1:D${valuesToInsert.length}`,
+          majorDimension: 'ROWS',
+          values: valuesToInsert
+        })
+      }
+    );
+
+    return { spreadsheetId, spreadsheetUrl };
+  }
+
+  // Export Complete Multi-Tab Platform Backup to Google Sheets
+  static async exportFullPlatformBackupToGoogleSheet(
+    backup: FullBackupData,
+    tokenOverride?: string
+  ): Promise<{ spreadsheetId: string; spreadsheetUrl: string }> {
+    const token = tokenOverride || (await this.getValidAccessToken());
+    if (!token) {
+      throw new Error('يرجى ربط وتفويض حساب Google أولاً لتصدير النسخة الاحتياطية إلى Google Sheets.');
+    }
+
+    const dateStr = new Date().toISOString().split('T')[0];
+    const createSheetRes = await fetch('https://sheets.googleapis.com/v4/spreadsheets', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        properties: {
+          title: `نسخة احتياطية شاملة - منصة عُمْرَان القرآنية (${dateStr})`
+        },
+        sheets: [
+          {
+            properties: {
+              title: 'الطلاب',
+              gridProperties: { frozenRowCount: 1 },
+              rightToLeft: true
+            }
+          },
+          {
+            properties: {
+              title: 'الحضور والغياب',
+              gridProperties: { frozenRowCount: 1 },
+              rightToLeft: true
+            }
+          },
+          {
+            properties: {
+              title: 'التسميع والتقييمات',
+              gridProperties: { frozenRowCount: 1 },
+              rightToLeft: true
+            }
+          },
+          {
+            properties: {
+              title: 'الاختبارات',
+              gridProperties: { frozenRowCount: 1 },
+              rightToLeft: true
+            }
+          },
+          {
+            properties: {
+              title: 'تسليمات الاختبارات',
+              gridProperties: { frozenRowCount: 1 },
+              rightToLeft: true
+            }
+          }
+        ]
+      })
+    });
+
+    if (!createSheetRes.ok) {
+      const err = await createSheetRes.json().catch(() => ({}));
+      const errMsg = err?.error?.message || (await createSheetRes.text().catch(() => ''));
+      throw new Error(`تعذر إنشاء جدول النسخة الاحتياطية: ${errMsg || 'خطأ غير معروف'}`);
+    }
+
+    const sheetData = await createSheetRes.json();
+    const spreadsheetId = sheetData.spreadsheetId;
+    const spreadsheetUrl = sheetData.spreadsheetUrl || `https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit`;
+
+    // 1. Populate Students Sheet
+    const studentHeaders = ['المعرف', 'الاسم', 'الحلقة', 'رقم الهاتف', 'هاتف ولي الأمر', 'المستوى'];
+    const studentRows = (backup.students || []).map(s => [
+      s.id,
+      s.name,
+      s.halaqahName || s.halaqahId || '',
+      s.phone || '',
+      s.parentPhones?.join(', ') || '',
+      s.level || ''
+    ]);
+    const studentValues = [studentHeaders, ...studentRows];
+
+    // 2. Populate Attendance Sheet
+    const attHeaders = ['المعرف', 'التاريخ', 'معرف الطالب', 'الحالة', 'ملاحظات'];
+    const attRows = (backup.attendance || []).map(a => [
+      a.id,
+      a.date,
+      a.studentId,
+      a.status,
+      a.note || ''
+    ]);
+    const attValues = [attHeaders, ...attRows];
+
+    // 3. Populate Evaluations Sheet
+    const evalHeaders = ['المعرف', 'التاريخ', 'معرف الطالب', 'التسميع الجديد', 'المراجعة', 'ملاحظات المعلم'];
+    const evalRows = (backup.evaluations || []).map(e => [
+      e.id,
+      e.date,
+      e.studentId,
+      e.recitationDetails?.newMemorizationAchieved || '',
+      e.recitationDetails?.reviewAchieved || '',
+      e.recitationDetails?.teacherNotes || ''
+    ]);
+    const evalValues = [evalHeaders, ...evalRows];
+
+    // 4. Populate Exams Sheet
+    const examHeaders = ['المعرف', 'عنوان الاختبار', 'النمط', 'إجمالي الدرجات', 'رابط Google Form', 'رابط Google Sheet'];
+    const examRows = (backup.exams || []).map(ex => [
+      ex.id,
+      ex.title,
+      ex.deliveryMode === 'google_form' ? 'Google Forms' : 'منصة عمران',
+      ex.totalPoints,
+      ex.googleFormResponderUrl || ex.googleFormUrl || '',
+      ex.googleSpreadsheetUrl || ''
+    ]);
+    const examValues = [examHeaders, ...examRows];
+
+    // 5. Populate Submissions Sheet
+    const subHeaders = ['المعرف', 'عنوان الاختبار', 'اسم الطالب', 'المحاولة', 'الدرجة', 'النسبة', 'التاريخ'];
+    const subRows = (backup.submissions || []).map(sub => [
+      sub.id,
+      sub.examTitle,
+      sub.studentName,
+      sub.attemptNumber,
+      `${sub.totalScoreEarned} / ${sub.maxPossibleScore}`,
+      `${sub.percentage}%`,
+      sub.submittedAt
+    ]);
+    const subValues = [subHeaders, ...subRows];
+
+    // Write all sheets in parallel
+    await Promise.all([
+      fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/'الطلاب'!A1:G${studentValues.length}?valueInputOption=USER_ENTERED`, {
+        method: 'PUT',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ range: `'الطلاب'!A1:G${studentValues.length}`, majorDimension: 'ROWS', values: studentValues })
+      }),
+      fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/'الحضور والغياب'!A1:E${attValues.length}?valueInputOption=USER_ENTERED`, {
+        method: 'PUT',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ range: `'الحضور والغياب'!A1:E${attValues.length}`, majorDimension: 'ROWS', values: attValues })
+      }),
+      fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/'التسميع والتقييمات'!A1:F${evalValues.length}?valueInputOption=USER_ENTERED`, {
+        method: 'PUT',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ range: `'التسميع والتقييمات'!A1:F${evalValues.length}`, majorDimension: 'ROWS', values: evalValues })
+      }),
+      fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/'الاختبارات'!A1:F${examValues.length}?valueInputOption=USER_ENTERED`, {
+        method: 'PUT',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ range: `'الاختبارات'!A1:F${examValues.length}`, majorDimension: 'ROWS', values: examValues })
+      }),
+      fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/'تسليمات الاختبارات'!A1:G${subValues.length}?valueInputOption=USER_ENTERED`, {
+        method: 'PUT',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ range: `'تسليمات الاختبارات'!A1:G${subValues.length}`, majorDimension: 'ROWS', values: subValues })
+      })
+    ]);
+
     return { spreadsheetId, spreadsheetUrl };
   }
 }
-
