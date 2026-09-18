@@ -68,6 +68,19 @@ export class PopupBlockedError extends Error {
   }
 }
 
+// Normalize Arabic text for robust student name comparisons (hamzas, ta marbuta, spaces, tashkeel)
+export function normalizeArabicText(text: string): string {
+  if (!text) return '';
+  return text
+    .trim()
+    .toLowerCase()
+    .replace(/[أإآ]/g, 'ا')
+    .replace(/ة/g, 'ه')
+    .replace(/ى/g, 'ي')
+    .replace(/[\u064B-\u065F]/g, '') // remove Arabic diacritics
+    .replace(/\s+/g, ' ');
+}
+
 function loadGoogleGISScript(): Promise<void> {
   if (typeof window === 'undefined') return Promise.resolve();
   if (window.google?.accounts?.oauth2) return Promise.resolve();
@@ -315,6 +328,7 @@ export class GoogleWorkspaceService {
     }
 
     // 1. Create the Form
+    const omranFormTitle = `﷽ ${exam.title} - منصة عُمْرَان القرآنية`;
     const createFormRes = await fetch('https://forms.googleapis.com/v1/forms', {
       method: 'POST',
       headers: {
@@ -324,7 +338,7 @@ export class GoogleWorkspaceService {
       body: JSON.stringify({
         info: {
           title: exam.title,
-          documentTitle: `${exam.title} - منصة عُمْرَان القرآنية`
+          documentTitle: omranFormTitle
         }
       })
     });
@@ -339,21 +353,35 @@ export class GoogleWorkspaceService {
     const formEditUrl = `https://docs.google.com/forms/d/${formId}/edit`;
     const responderUrl = formData.responderUri || `https://docs.google.com/forms/d/e/${formId}/viewform`;
 
+    const descriptionText = [
+      '۞ مَنَصَّةُ عُمْرَانَ لِحِلَقِ القُرْآنِ الكَرِيمِ ۞',
+      '═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═',
+      `📖 عنوان الاختبار: ${exam.title}`,
+      `✨ إجمالي درجات الاختبار: ${exam.totalPoints} درجات`,
+      exam.description ? `📝 إرشادات وتوجيهات المعلم: ${exam.description}` : '',
+      '═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═',
+      '📌 تعليمات هامة للطالب الكريم:',
+      '1. اكتب اسمك الثلاثي الكامل المسجل في منصة عمران بدقة لاحتساب درجاتك تلقائياً في لوحة الشرف.',
+      '2. أجب عن كافة الأسئلة ثم اضغط زر (إرسال / Submit).',
+      '3. ستنتقل درجاتك فوراً إلى سجلك في لوحة شرف المنصة بعد المزامنة.'
+    ].filter(Boolean).join('\n');
+
     // 2. Prepare items for Google Form batchUpdate
     const requests: any[] = [
       {
         updateFormInfo: {
           info: {
-            description: `${exam.description || 'اختبار في القرآن الكريم وعلومه'}\n\n* تم إعداد هذا الاختبار عبر منصة عُمْرَان القرآنية\n* إجمالي الدرجات: ${exam.totalPoints} درجة`
+            title: omranFormTitle,
+            description: descriptionText
           },
-          updateMask: 'description'
+          updateMask: 'title,description'
         }
       },
       {
         createItem: {
           item: {
-            title: 'اسم الطالب الثلاثي',
-            description: 'يرجى كتابة اسم الطالب المسجل في منصة عمران بدقة',
+            title: 'اسم الطالب الثلاثي الكامل (كما هو مسجل في منصة عُمْرَان)',
+            description: 'يرجى كتابة اسمك الثلاثي بدقة لاحتساب نتيجتك ونقاطك في لوحة شرف المنصة تلقائياً',
             questionItem: {
               question: {
                 required: true,
@@ -520,6 +548,163 @@ export class GoogleWorkspaceService {
     };
   }
 
+  // Update an existing Google Form on Google's cloud with updated exam title, description, and questions
+  static async updateGoogleForm(
+    exam: Exam,
+    tokenOverride?: string
+  ): Promise<{ success: boolean; message: string }> {
+    if (!exam.googleFormId) {
+      return { success: false, message: 'لا يوجد مُعرّف نموذج Google Form لهذا الاختبار.' };
+    }
+
+    const token = tokenOverride || (await this.getValidAccessToken());
+    if (!token) {
+      return { success: false, message: 'يرجى ربط حساب Google أولاً لتحديث النموذج سحابياً.' };
+    }
+
+    try {
+      // 1. Fetch current items from Google Forms API so we can replace them cleanly
+      const formMetaRes = await fetch(`https://forms.googleapis.com/v1/forms/${exam.googleFormId}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      if (!formMetaRes.ok) {
+        const errText = await formMetaRes.text();
+        return { success: false, message: `تعذر جلب تفاصيل النموذج من Google: ${errText}` };
+      }
+
+      const formMetaData = await formMetaRes.json();
+      const existingItems: any[] = formMetaData.items || [];
+
+      const omranFormTitle = `﷽ ${exam.title} - منصة عُمْرَان القرآنية`;
+      const descriptionText = [
+        '۞ مَنَصَّةُ عُمْرَانَ لِحِلَقِ القُرْآنِ الكَرِيمِ ۞',
+        '═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═',
+        `📖 عنوان الاختبار: ${exam.title}`,
+        `✨ إجمالي درجات الاختبار: ${exam.totalPoints} درجات`,
+        exam.description ? `📝 إرشادات وتوجيهات المعلم: ${exam.description}` : '',
+        '═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═',
+        '📌 تعليمات هامة للطالب الكريم:',
+        '1. اكتب اسمك الثلاثي الكامل المسجل في منصة عمران بدقة لاحتساب درجاتك تلقائياً في لوحة الشرف.',
+        '2. أجب عن كافة الأسئلة ثم اضغط زر (إرسال / Submit).',
+        '3. ستنتقل درجاتك فوراً إلى سجلك في لوحة شرف المنصة بعد المزامنة.'
+      ].filter(Boolean).join('\n');
+
+      const requests: any[] = [
+        {
+          updateFormInfo: {
+            info: {
+              title: omranFormTitle,
+              description: descriptionText
+            },
+            updateMask: 'title,description'
+          }
+        }
+      ];
+
+      // Delete old items in reverse order to keep indexes valid
+      for (let i = existingItems.length - 1; i >= 0; i--) {
+        requests.push({
+          deleteItem: {
+            location: { index: i }
+          }
+        });
+      }
+
+      // Re-create Student Name Item at index 0
+      requests.push({
+        createItem: {
+          item: {
+            title: 'اسم الطالب الثلاثي الكامل (كما هو مسجل في منصة عُمْرَان)',
+            description: 'يرجى كتابة اسمك الثلاثي بدقة لاحتساب نتيجتك ونقاطك في لوحة شرف المنصة تلقائياً',
+            questionItem: {
+              question: {
+                required: true,
+                textQuestion: {
+                  paragraph: false
+                }
+              }
+            }
+          },
+          location: { index: 0 }
+        }
+      });
+
+      // Add each updated question
+      if (exam.questions && exam.questions.length > 0) {
+        exam.questions.forEach((q, idx) => {
+          const questionIndex = idx + 1;
+          if (q.type === 'multiple_choice' || q.type === 'true_false') {
+            const rawOptions = q.options && q.options.length > 0
+              ? q.options
+              : q.type === 'true_false'
+              ? ['صح', 'خطأ']
+              : ['الخيار 1', 'الخيار 2'];
+            const cleanOptions = Array.from(new Set(rawOptions.map(o => String(o || '').trim()).filter(Boolean)));
+            const finalOptions = cleanOptions.length > 0 ? cleanOptions : ['الخيار 1', 'الخيار 2'];
+
+            requests.push({
+              createItem: {
+                item: {
+                  title: `${q.title} (${q.points} درجات)`,
+                  questionItem: {
+                    question: {
+                      required: true,
+                      choiceQuestion: {
+                        type: 'RADIO',
+                        options: finalOptions.map(opt => ({ value: opt })),
+                        shuffle: false
+                      }
+                    }
+                  }
+                },
+                location: { index: questionIndex }
+              }
+            });
+          } else {
+            requests.push({
+              createItem: {
+                item: {
+                  title: `${q.title} (${q.points} درجات - سؤال كتابي)`,
+                  description: q.explanation ? `إرشاد: ${q.explanation}` : undefined,
+                  questionItem: {
+                    question: {
+                      required: true,
+                      textQuestion: {
+                        paragraph: q.type === 'essay'
+                      }
+                    }
+                  }
+                },
+                location: { index: questionIndex }
+              }
+            });
+          }
+        });
+      }
+
+      // Execute batchUpdate on Google Forms API
+      const batchRes = await fetch(`https://forms.googleapis.com/v1/forms/${exam.googleFormId}:batchUpdate`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ requests })
+      });
+
+      if (!batchRes.ok) {
+        const errText = await batchRes.text();
+        return { success: false, message: `تعذر إرسال التحديث لـ Google Forms: ${errText}` };
+      }
+
+      return { success: true, message: 'تم تحديث نموذج Google Forms سحابياً بنجاح.' };
+    } catch (e: any) {
+      console.error('Error updating Google Form:', e);
+      return { success: false, message: e?.message || 'فشل الاتصال بـ Google Forms لتحديث الاختبار.' };
+    }
+  }
+
   // Sync Submissions to Google Sheet
   static async syncSubmissionsToSheet(
     spreadsheetId: string,
@@ -655,14 +840,17 @@ export class GoogleWorkspaceService {
         studentName = `طالب (${respId.slice(0, 6)})`;
       }
 
-      const matchedStudent = allStudents.find(
-        st => st.name.trim().toLowerCase() === studentName.toLowerCase() ||
-              st.name.includes(studentName) ||
-              studentName.includes(st.name)
-      );
+      const normInput = normalizeArabicText(studentName);
+      const matchedStudent = allStudents.find(st => {
+        const normSt = normalizeArabicText(st.name);
+        return normSt === normInput ||
+               normSt.includes(normInput) ||
+               normInput.includes(normSt);
+      });
 
       const studentId = matchedStudent?.id || `ext_${respId}`;
       const halaqahId = matchedStudent?.halaqahId || 'unassigned';
+      const halaqahName = (matchedStudent as any)?.halaqahName || 'الحلقة المعتمدة';
 
       const submissionAnswers: any[] = [];
       let totalEarned = 0;
@@ -722,7 +910,7 @@ export class GoogleWorkspaceService {
         studentId,
         studentName: matchedStudent?.name || studentName,
         halaqahId,
-        halaqahName: 'حلقة مسجلة',
+        halaqahName,
         attemptNumber: 1,
         answers: submissionAnswers,
         totalScoreEarned: totalEarned,
@@ -749,6 +937,57 @@ export class GoogleWorkspaceService {
       newCount,
       updatedCount,
       importedSubmissions
+    };
+  }
+
+  // Batch sync responses for ALL active Google Form exams at once
+  static async syncAllGoogleFormExams(
+    exams: Exam[],
+    allStudents: { id: string; name: string; halaqahId?: string; halaqahName?: string }[],
+    existingSubmissions: ExamSubmission[] = [],
+    tokenOverride?: string
+  ): Promise<{
+    syncedExamsCount: number;
+    totalNewCount: number;
+    totalUpdatedCount: number;
+    errors: string[];
+  }> {
+    const token = tokenOverride || (await this.getValidAccessToken());
+    if (!token) {
+      throw new Error('يرجى تسجيل الدخول بحساب Google أولاً لمزامنة إجابات Google Forms.');
+    }
+
+    const gformExams = exams.filter(
+      ex => ex.deliveryMode === 'google_form' && Boolean(ex.googleFormId)
+    );
+
+    let totalNewCount = 0;
+    let totalUpdatedCount = 0;
+    let syncedExamsCount = 0;
+    const errors: string[] = [];
+
+    for (const ex of gformExams) {
+      try {
+        const res = await this.importResponsesFromGoogleForm(
+          ex,
+          allStudents,
+          existingSubmissions,
+          token
+        );
+        totalNewCount += res.newCount;
+        totalUpdatedCount += res.updatedCount;
+        syncedExamsCount++;
+      } catch (err: any) {
+        console.warn(`Could not sync Google Form responses for exam ${ex.title}:`, err);
+        errors.push(`${ex.title}: ${err?.message || 'تعذر جلب الردود'}`);
+      }
+    }
+
+    return {
+      syncedExamsCount,
+      totalNewCount,
+      totalUpdatedCount,
+      errors
     };
   }
 

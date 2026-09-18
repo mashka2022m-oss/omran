@@ -829,6 +829,9 @@ export function App() {
           violations={violations}
           exams={exams}
           submissions={submissions}
+          students={students}
+          halaqahs={halaqahs}
+          leaderboardSettings={leaderboardSettings || undefined}
           isLoggedInStudent={!!currentUser}
           onLogout={handleLogout}
           onSaveSubmission={handleSaveSubmission}

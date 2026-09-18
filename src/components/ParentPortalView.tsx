@@ -19,9 +19,23 @@ import {
   Sparkles,
   HelpCircle,
   ExternalLink,
-  ChevronLeft
+  ChevronLeft,
+  Trophy,
+  Medal,
+  Copy,
+  Check
 } from 'lucide-react';
-import { Student, AttendanceRecord, StudentEvaluation, AppSettings, BehaviorViolation, Exam, ExamSubmission } from '../types';
+import {
+  Student,
+  AttendanceRecord,
+  StudentEvaluation,
+  AppSettings,
+  BehaviorViolation,
+  Exam,
+  ExamSubmission,
+  LeaderboardSettings,
+  Halaqah
+} from '../types';
 import { StudentExamTaker } from './StudentExamTaker';
 import { OmranDataService } from '../lib/firebase';
 
@@ -33,6 +47,9 @@ interface ParentPortalViewProps {
   violations?: BehaviorViolation[];
   exams?: Exam[];
   submissions?: ExamSubmission[];
+  students?: Student[];
+  halaqahs?: Halaqah[];
+  leaderboardSettings?: LeaderboardSettings;
   isLoggedInStudent?: boolean;
   onLogout?: () => void;
   onSaveSubmission?: (submission: ExamSubmission) => Promise<void>;
@@ -46,6 +63,9 @@ export const ParentPortalView: React.FC<ParentPortalViewProps> = ({
   violations = [],
   exams = [],
   submissions = [],
+  students = [],
+  halaqahs = [],
+  leaderboardSettings,
   isLoggedInStudent,
   onLogout,
   onSaveSubmission
@@ -54,6 +74,13 @@ export const ParentPortalView: React.FC<ParentPortalViewProps> = ({
   const [activeTakingAttemptNum, setActiveTakingAttemptNum] = useState<number>(1);
   const [viewingReviewSubmission, setViewingReviewSubmission] = useState<ExamSubmission | null>(null);
   const [openedGoogleFormExam, setOpenedGoogleFormExam] = useState<Exam | null>(null);
+  const [googleFormModalData, setGoogleFormModalData] = useState<{
+    exam: Exam;
+    rawUrl: string;
+    prefilledUrl: string;
+    hasPrefill: boolean;
+  } | null>(null);
+  const [nameCopiedNotice, setNameCopiedNotice] = useState(false);
 
   const studentAttendance = attendance.filter(a => a.studentId === student.id);
   const studentEvaluations = evaluations.filter(e => e.studentId === student.id);
@@ -85,6 +112,85 @@ export const ParentPortalView: React.FC<ParentPortalViewProps> = ({
     studentAttendance.length > 0
       ? Math.round((presentsCount / studentAttendance.length) * 100)
       : 100;
+
+  // Honor Board / Leaderboard Calculation for Student Portal
+  const activeScope = leaderboardSettings?.scope || 'all_unified';
+  const isPerHalaqahScope = activeScope === 'per_halaqah';
+
+  // Filter students based on supervisor's setting (all halaqat vs per halaqah)
+  const poolStudents = students && students.length > 0 ? students : [student];
+  const eligibleStudents = poolStudents.filter(s => {
+    if (isPerHalaqahScope) {
+      return s.halaqahId === student.halaqahId;
+    }
+    return true;
+  });
+
+  const studentRankList = eligibleStudents.map(st => {
+    const stSubmissions = submissions.filter(sub => sub.studentId === st.id);
+    const examPoints = stSubmissions.reduce((sum, s) => sum + (s.pointsGrantedForLeaderboard || 0), 0);
+    const stEvaluations = evaluations.filter(ev => ev.studentId === st.id);
+    const evalPoints = leaderboardSettings?.includeEvaluationScores
+      ? stEvaluations.reduce((sum, ev) => sum + (ev.totalScore || 0), 0)
+      : 0;
+    const totalPoints = examPoints + evalPoints;
+    const bestPercentage = stSubmissions.reduce((max, s) => Math.max(max, s.percentage || 0), 0);
+    const halaqahName = st.halaqahName || halaqahs?.find(h => h.id === st.halaqahId)?.name || 'الحلقة';
+
+    return {
+      student: st,
+      totalPoints,
+      examPoints,
+      evalPoints,
+      completedExams: stSubmissions.length,
+      bestPercentage,
+      halaqahName
+    };
+  });
+
+  studentRankList.sort((a, b) => b.totalPoints - a.totalPoints || b.bestPercentage - a.bestPercentage);
+
+  const myRankIndex = studentRankList.findIndex(item => item.student.id === student.id);
+  const myRank = myRankIndex >= 0 ? myRankIndex + 1 : null;
+  const myRankingData = myRankIndex >= 0 ? studentRankList[myRankIndex] : null;
+  const studentHalaqahObj = halaqahs?.find(h => h.id === student.halaqahId);
+  const currentHalaqahTitle = student.halaqahName || studentHalaqahObj?.name || 'حلقتك القرآنية';
+
+  // Handle Google Form exam launch with student name prefill and auto-clipboard
+  const handleLaunchGoogleForm = (exam: Exam) => {
+    const rawUrl = exam.googleFormResponderUrl || exam.googleFormUrl;
+    if (!rawUrl) {
+      alert('لم يتم ربط أو توليد رابط Google Form لهذا الاختبار بعد. يرجى التواصل مع المعلم.');
+      return;
+    }
+
+    let prefilledUrl = rawUrl;
+    let hasPrefill = false;
+
+    if (exam.googleFormNameEntryId) {
+      const entryKey = exam.googleFormNameEntryId.startsWith('entry.')
+        ? exam.googleFormNameEntryId
+        : `entry.${exam.googleFormNameEntryId}`;
+      const joinChar = rawUrl.includes('?') ? '&' : '?';
+      prefilledUrl = `${rawUrl}${joinChar}${entryKey}=${encodeURIComponent(student.name)}`;
+      hasPrefill = true;
+    }
+
+    // Auto-copy the registered student name to clipboard so student never misspells it
+    if (typeof navigator !== 'undefined' && navigator.clipboard) {
+      navigator.clipboard.writeText(student.name).then(() => {
+        setNameCopiedNotice(true);
+        setTimeout(() => setNameCopiedNotice(false), 4000);
+      }).catch(() => {});
+    }
+
+    setGoogleFormModalData({
+      exam,
+      rawUrl,
+      prefilledUrl,
+      hasPrefill
+    });
+  };
 
   const handleLogoutAction = () => {
     if (onLogout) {
@@ -299,13 +405,7 @@ export const ParentPortalView: React.FC<ParentPortalViewProps> = ({
                           <button
                             onClick={() => {
                               if (exam.deliveryMode === 'google_form') {
-                                const targetUrl = exam.googleFormResponderUrl || exam.googleFormUrl;
-                                if (targetUrl) {
-                                  window.open(targetUrl, '_blank');
-                                  setOpenedGoogleFormExam(exam);
-                                } else {
-                                  alert('لم يتم ربط أو توليد رابط Google Form لهذا الاختبار بعد. يرجى التواصل مع المعلم.');
-                                }
+                                handleLaunchGoogleForm(exam);
                               } else {
                                 setActiveTakingAttemptNum(attemptsUsed + 1);
                                 setActiveTakingExam(exam);
@@ -337,6 +437,161 @@ export const ParentPortalView: React.FC<ParentPortalViewProps> = ({
               })}
             </div>
           )}
+        </div>
+
+        {/* HONOR BOARD / LEADERBOARD SECTION FOR STUDENTS ACCORDING TO SUPERVISOR CONFIG */}
+        <div className="bg-[#064e3b]/60 border border-[#fbbf24]/40 rounded-[32px] p-6 sm:p-8 space-y-6 shadow-xl backdrop-blur-md">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-[#065f46]">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-[#fbbf24]/20 text-[#fbbf24] border border-[#fbbf24]/30 flex items-center justify-center">
+                <Trophy className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-base sm:text-lg font-bold font-heading text-white flex items-center gap-2">
+                  <span>لوحة الشرف والتفوق القرآني</span>
+                  <span className="text-[10px] px-2.5 py-0.5 rounded-full bg-[#fbbf24] text-[#064e3b] font-black">
+                    {isPerHalaqahScope ? 'ترتيب الحلقة محلياً' : 'الترتيب العام لجميع الحلقات'}
+                  </span>
+                </h3>
+                <p className="text-xs text-emerald-200/80 mt-0.5">
+                  {isPerHalaqahScope
+                    ? `إعداد المشرف: يظهر هنا ترتيب وتنافس طلاب حلقة (${currentHalaqahTitle}) فقط.`
+                    : 'إعداد المشرف: يظهر هنا الترتيب العام الموحد لجميع طلاب الحلقات بالمركز.'}
+                </p>
+              </div>
+            </div>
+
+            {/* Current Student Standing Pill */}
+            {myRank && (
+              <div className="flex items-center gap-3 px-4 py-2 rounded-2xl bg-[#022c22] border border-[#fbbf24]/40 text-xs shadow-md">
+                <Medal className="w-4 h-4 text-[#fbbf24]" />
+                <span className="text-emerald-300">ترتيبك:</span>
+                <span className="font-black text-[#fbbf24] text-sm font-heading">
+                  المركز #{myRank}
+                </span>
+                <span className="text-emerald-400 font-mono font-bold">
+                  ({myRankingData?.totalPoints || 0} نقطة)
+                </span>
+              </div>
+            )}
+          </div>
+
+          {/* Top 3 Podium Cards */}
+          {studentRankList.length > 0 && (
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+              {studentRankList.slice(0, 3).map((item, idx) => {
+                const isMe = item.student.id === student.id;
+                const badges = [
+                  { label: 'الأول 🥇', border: 'border-[#fbbf24]', bg: 'bg-[#fbbf24]/20', text: 'text-[#fbbf24]' },
+                  { label: 'الثاني 🥈', border: 'border-slate-300', bg: 'bg-slate-300/20', text: 'text-slate-200' },
+                  { label: 'الثالث 🥉', border: 'border-amber-600', bg: 'bg-amber-600/20', text: 'text-amber-300' }
+                ];
+                const badge = badges[idx] || badges[0];
+
+                return (
+                  <div
+                    key={item.student.id}
+                    className={`p-4 rounded-2xl border transition-all text-center relative overflow-hidden flex flex-col justify-between ${
+                      isMe
+                        ? 'bg-[#064e3b] border-[#fbbf24] ring-2 ring-[#fbbf24]/40 shadow-xl'
+                        : 'bg-[#022c22]/90 border-[#065f46]'
+                    }`}
+                  >
+                    {isMe && (
+                      <span className="absolute top-2 left-2 text-[9px] px-2 py-0.5 rounded-full bg-[#fbbf24] text-[#064e3b] font-black">
+                        أنت
+                      </span>
+                    )}
+
+                    <div>
+                      <span className={`inline-block px-3 py-1 rounded-full text-xs font-black mb-2 ${badge.bg} ${badge.text} border ${badge.border}`}>
+                        {badge.label}
+                      </span>
+                      <h4 className="text-sm font-bold text-white truncate">{item.student.name}</h4>
+                      <p className="text-[11px] text-emerald-300/70 mt-0.5">{item.halaqahName}</p>
+                    </div>
+
+                    <div className="mt-3 pt-2 border-t border-emerald-800/60 flex items-center justify-around text-xs">
+                      <div>
+                        <span className="text-[10px] text-emerald-400/80 block">النقاط</span>
+                        <strong className="text-[#fbbf24] font-mono text-sm">{item.totalPoints}</strong>
+                      </div>
+                      <div className="w-px h-6 bg-emerald-800/60" />
+                      <div>
+                        <span className="text-[10px] text-emerald-400/80 block">أفضل درجة</span>
+                        <strong className="text-white font-mono text-xs">{item.bestPercentage}%</strong>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Full Rank Table */}
+          <div className="rounded-2xl border border-[#065f46] overflow-hidden bg-[#022c22]/70">
+            <div className="overflow-x-auto">
+              <table className="w-full text-right text-xs">
+                <thead className="bg-[#064e3b]/80 text-emerald-200 border-b border-[#065f46] text-[11px]">
+                  <tr>
+                    <th className="p-3">الترتيب</th>
+                    <th className="p-3">اسم الطالب</th>
+                    {!isPerHalaqahScope && <th className="p-3">الحلقة</th>}
+                    <th className="p-3 text-center">الاختبارات المنجزة</th>
+                    <th className="p-3 text-center">أعلى نسبة</th>
+                    <th className="p-3 text-left">إجمالي النقاط</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#065f46]/40 text-white">
+                  {studentRankList.map((item, idx) => {
+                    const isMe = item.student.id === student.id;
+                    return (
+                      <tr
+                        key={item.student.id}
+                        className={`transition-colors ${
+                          isMe
+                            ? 'bg-[#064e3b] font-bold text-[#fbbf24] border-l-4 border-l-[#fbbf24]'
+                            : 'hover:bg-[#064e3b]/30'
+                        }`}
+                      >
+                        <td className="p-3 font-mono">
+                          <span className={`inline-flex items-center justify-center w-6 h-6 rounded-full text-[11px] font-black ${
+                            idx === 0
+                              ? 'bg-[#fbbf24] text-[#064e3b]'
+                              : idx === 1
+                              ? 'bg-slate-300 text-slate-900'
+                              : idx === 2
+                              ? 'bg-amber-600 text-white'
+                              : 'bg-[#022c22] text-emerald-300 border border-emerald-800'
+                          }`}>
+                            {idx + 1}
+                          </span>
+                        </td>
+                        <td className="p-3">
+                          <div className="flex items-center gap-2">
+                            <span>{item.student.name}</span>
+                            {isMe && (
+                              <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#fbbf24] text-[#064e3b] font-black">
+                                أنت
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                        {!isPerHalaqahScope && (
+                          <td className="p-3 text-emerald-300/80 text-[11px]">{item.halaqahName}</td>
+                        )}
+                        <td className="p-3 text-center font-mono">{item.completedExams}</td>
+                        <td className="p-3 text-center font-mono text-emerald-300">{item.bestPercentage}%</td>
+                        <td className="p-3 text-left font-mono font-bold text-[#fbbf24] text-sm">
+                          {item.totalPoints}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
         </div>
 
         {/* REVIEW PREVIOUS ATTEMPT MODAL */}
@@ -652,20 +907,127 @@ export const ParentPortalView: React.FC<ParentPortalViewProps> = ({
           </div>
         )}
 
-        {/* GOOGLE FORM OPENED MODAL */}
+        {/* SMART GOOGLE FORM LAUNCH & PRE-FILL MODAL */}
+        {googleFormModalData && (
+          <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+            <div className="bg-[#022c22] border border-[#fbbf24]/60 rounded-3xl w-full max-w-lg p-6 sm:p-8 shadow-2xl space-y-5 text-right relative">
+              <button
+                onClick={() => setGoogleFormModalData(null)}
+                className="absolute top-4 left-4 p-2 text-emerald-300 hover:text-white rounded-xl bg-emerald-950/40 cursor-pointer"
+              >
+                <XCircle className="w-5 h-5" />
+              </button>
+
+              <div className="flex items-center gap-3 border-b border-emerald-800/80 pb-4">
+                <div className="w-12 h-12 rounded-2xl bg-blue-500/20 text-blue-300 border border-blue-500/40 flex items-center justify-center shrink-0">
+                  <ExternalLink className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="text-base sm:text-lg font-bold font-heading text-white">
+                    بدء الاختبار عبر Google Forms
+                  </h3>
+                  <p className="text-xs text-[#fbbf24] font-bold mt-0.5">
+                    {googleFormModalData.exam.title}
+                  </p>
+                </div>
+              </div>
+
+              {/* Student Identity Card & Auto-prefill Status */}
+              <div className="p-4 rounded-2xl bg-[#064e3b]/60 border border-emerald-700/80 space-y-3">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs text-emerald-300 font-bold">
+                    اسمك الثلاثي المعتمد في المنصة:
+                  </span>
+                  <button
+                    onClick={() => {
+                      if (typeof navigator !== 'undefined' && navigator.clipboard) {
+                        navigator.clipboard.writeText(student.name);
+                        setNameCopiedNotice(true);
+                        setTimeout(() => setNameCopiedNotice(false), 3000);
+                      }
+                    }}
+                    className="text-[11px] px-2.5 py-1 rounded-lg bg-emerald-900/80 hover:bg-emerald-800 text-emerald-100 flex items-center gap-1 cursor-pointer transition-colors"
+                  >
+                    {nameCopiedNotice ? (
+                      <>
+                        <Check className="w-3.5 h-3.5 text-[#fbbf24]" />
+                        <span className="text-[#fbbf24] font-bold">تم النسخ</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-3.5 h-3.5" />
+                        <span>نسخ الاسم</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                <div className="text-base sm:text-lg font-black text-white font-heading bg-[#022c22] p-3 rounded-xl border border-emerald-600/50 flex items-center justify-between">
+                  <span>{student.name}</span>
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-normal">
+                    مطابق لقوائم المركز
+                  </span>
+                </div>
+
+                <div className="text-xs leading-relaxed text-emerald-100/90 pt-1">
+                  {googleFormModalData.hasPrefill ? (
+                    <div className="flex items-start gap-2 text-emerald-300 bg-emerald-950/60 p-2.5 rounded-xl border border-emerald-600/40">
+                      <Sparkles className="w-4 h-4 text-[#fbbf24] shrink-0 mt-0.5" />
+                      <span>
+                        تم تجهيز الرابط لتعبئة اسمك <strong>تلقائياً</strong> في نموذج الاختبار لتفادي أي خطأ إملائي أو مسافات زائدة.
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="flex items-start gap-2 text-amber-200 bg-amber-950/40 p-2.5 rounded-xl border border-amber-600/40">
+                      <Sparkles className="w-4 h-4 text-[#fbbf24] shrink-0 mt-0.5" />
+                      <span>
+                        تم نسخ اسمك الثلاثي المعتمد تلقائياً؛ يمكنك لصقه (Paste) مباشرة في أول حقل بالنموذج إذا تطلب الأمر.
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex flex-col sm:flex-row gap-2.5 pt-2">
+                <button
+                  onClick={() => {
+                    window.open(googleFormModalData.prefilledUrl, '_blank');
+                  }}
+                  className="flex-1 py-3 px-4 rounded-xl bg-[#fbbf24] hover:bg-[#f59e0b] text-[#064e3b] font-black text-xs sm:text-sm flex items-center justify-center gap-2 shadow-lg shadow-amber-500/20 transition-all cursor-pointer"
+                >
+                  <ExternalLink className="w-4 h-4 text-[#064e3b]" />
+                  <span>فتح نموذج الاختبار والبدء الآن</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    setGoogleFormModalData(null);
+                    setOpenedGoogleFormExam(googleFormModalData.exam);
+                  }}
+                  className="py-3 px-4 rounded-xl bg-emerald-900/80 hover:bg-emerald-800 text-emerald-200 text-xs font-bold cursor-pointer transition-colors text-center"
+                >
+                  تم تسليم النموذج
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* GOOGLE FORM SUBMITTED CONFIRMATION MODAL */}
         {openedGoogleFormExam && (
           <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
             <div className="bg-[#022c22] border border-[#fbbf24]/50 rounded-3xl w-full max-w-lg p-6 shadow-2xl space-y-4 text-center">
-              <div className="w-14 h-14 rounded-2xl bg-blue-500/20 text-blue-400 border border-blue-500/40 flex items-center justify-center mx-auto">
-                <ExternalLink className="w-7 h-7" />
+              <div className="w-14 h-14 rounded-2xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 flex items-center justify-center mx-auto">
+                <CheckCircle2 className="w-7 h-7 text-[#fbbf24]" />
               </div>
               <h3 className="text-lg font-bold text-white">
-                تم توجيهك إلى نموذج Google Forms
+                بارك الله فيك ونفع بك!
               </h3>
               <p className="text-xs text-emerald-200/90 leading-relaxed">
-                اختبار: <strong>"{openedGoogleFormExam.title}"</strong>
+                تم تسجيل فتحك لاختبار <strong>"{openedGoogleFormExam.title}"</strong>.
                 <br />
-                تم فتح صفحة نموذج الاختبار في علامة تبويب جديدة. يرجى الإجابة على الأسئلة بدقة وتسليم النموذج، وسيتم مزامنة نتيجتك واعتمادها في لوحة الشرف فور مراجعة المعلم.
+                فور تسليمك للنموذج، ستتم مزامنة إجاباتك ودرجاتك واعتمادها تلقائياً في لوحة الشرف بحسابك.
               </p>
               <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
                 <button
@@ -673,16 +1035,16 @@ export const ParentPortalView: React.FC<ParentPortalViewProps> = ({
                     const url = openedGoogleFormExam.googleFormResponderUrl || openedGoogleFormExam.googleFormUrl;
                     if (url) window.open(url, '_blank');
                   }}
-                  className="px-5 py-2.5 rounded-xl bg-[#fbbf24] text-[#064e3b] text-xs font-bold flex items-center gap-1.5 shadow-md hover:bg-[#f59e0b] cursor-pointer"
+                  className="px-5 py-2.5 rounded-xl bg-emerald-800 hover:bg-emerald-700 text-white text-xs font-bold flex items-center gap-1.5 shadow-md cursor-pointer"
                 >
                   <ExternalLink className="w-4 h-4" />
                   <span>إعادة فتح النموذج</span>
                 </button>
                 <button
                   onClick={() => setOpenedGoogleFormExam(null)}
-                  className="px-5 py-2.5 rounded-xl bg-emerald-900/80 hover:bg-emerald-800 text-emerald-100 text-xs font-bold cursor-pointer"
+                  className="px-6 py-2.5 rounded-xl bg-[#fbbf24] text-[#064e3b] text-xs font-black cursor-pointer shadow-md hover:bg-[#f59e0b]"
                 >
-                  حسناً، تم
+                  تم، العودة للحساب
                 </button>
               </div>
             </div>

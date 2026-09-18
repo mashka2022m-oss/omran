@@ -159,11 +159,16 @@ export const ExamsTab: React.FC<ExamsTabProps> = ({
   // Delivery Mode: Platform vs Google Forms
   const [formDeliveryMode, setFormDeliveryMode] = useState<ExamDeliveryMode>('platform');
   const [formAutoCreateGoogleForm, setFormAutoCreateGoogleForm] = useState(true);
+  const [formGoogleFormId, setFormGoogleFormId] = useState('');
+  const [formGoogleSpreadsheetId, setFormGoogleSpreadsheetId] = useState('');
+  const [formGoogleFormNameEntryId, setFormGoogleFormNameEntryId] = useState('');
   const [formGoogleFormResponderUrl, setFormGoogleFormResponderUrl] = useState('');
   const [formGoogleFormUrl, setFormGoogleFormUrl] = useState('');
   const [formGoogleSpreadsheetUrl, setFormGoogleSpreadsheetUrl] = useState('');
   const [isGeneratingGoogleForm, setIsGeneratingGoogleForm] = useState(false);
+  const [isUpdatingGoogleFormInCloud, setIsUpdatingGoogleFormInCloud] = useState(false);
   const [isSyncingFormResponses, setIsSyncingFormResponses] = useState<string | null>(null);
+  const [isSyncingAllForms, setIsSyncingAllForms] = useState(false);
 
   // Questions List in Exam Builder
   const [questions, setQuestions] = useState<ExamQuestion[]>([
@@ -282,8 +287,12 @@ export const ExamsTab: React.FC<ExamsTabProps> = ({
       setEditingExamId(examToEdit.id);
       setFormTitle(examToEdit.title);
       setFormDescription(examToEdit.description || '');
-      setFormDeliveryMode(examToEdit.deliveryMode || 'platform');
+      const isGoogleForm = examToEdit.deliveryMode === 'google_form' || Boolean(examToEdit.googleFormId || examToEdit.googleFormResponderUrl);
+      setFormDeliveryMode(isGoogleForm ? 'google_form' : 'platform');
       setFormAutoCreateGoogleForm(examToEdit.autoCreateGoogleForm ?? true);
+      setFormGoogleFormId(examToEdit.googleFormId || '');
+      setFormGoogleSpreadsheetId(examToEdit.googleSpreadsheetId || '');
+      setFormGoogleFormNameEntryId(examToEdit.googleFormNameEntryId || '');
       setFormGoogleFormResponderUrl(examToEdit.googleFormResponderUrl || '');
       setFormGoogleFormUrl(examToEdit.googleFormUrl || '');
       setFormGoogleSpreadsheetUrl(examToEdit.googleSpreadsheetUrl || '');
@@ -306,6 +315,9 @@ export const ExamsTab: React.FC<ExamsTabProps> = ({
       setFormDescription('');
       setFormDeliveryMode('platform');
       setFormAutoCreateGoogleForm(true);
+      setFormGoogleFormId('');
+      setFormGoogleSpreadsheetId('');
+      setFormGoogleFormNameEntryId('');
       setFormGoogleFormResponderUrl('');
       setFormGoogleFormUrl('');
       setFormGoogleSpreadsheetUrl('');
@@ -386,6 +398,11 @@ export const ExamsTab: React.FC<ExamsTabProps> = ({
     try {
       const totalPoints = questions.reduce((sum, q) => sum + (Number(q.points) || 0), 0);
       const examId = editingExamId || `exam-${Date.now()}`;
+      const existingExam = editingExamId ? exams.find(ex => ex.id === editingExamId) : null;
+
+      const targetFormId = formGoogleFormId || existingExam?.googleFormId;
+      const targetSpreadsheetId = formGoogleSpreadsheetId || existingExam?.googleSpreadsheetId;
+      const targetNameEntryId = formGoogleFormNameEntryId.trim() || existingExam?.googleFormNameEntryId;
 
       const examObj: Exam = {
         id: examId,
@@ -393,9 +410,12 @@ export const ExamsTab: React.FC<ExamsTabProps> = ({
         description: formDescription.trim(),
         deliveryMode: formDeliveryMode,
         autoCreateGoogleForm: formAutoCreateGoogleForm,
-        googleFormUrl: formGoogleFormUrl.trim() || undefined,
-        googleFormResponderUrl: formGoogleFormResponderUrl.trim() || undefined,
-        googleSpreadsheetUrl: formGoogleSpreadsheetUrl.trim() || undefined,
+        googleFormId: targetFormId,
+        googleSpreadsheetId: targetSpreadsheetId,
+        googleFormNameEntryId: targetNameEntryId,
+        googleFormUrl: formGoogleFormUrl.trim() || existingExam?.googleFormUrl || undefined,
+        googleFormResponderUrl: formGoogleFormResponderUrl.trim() || existingExam?.googleFormResponderUrl || undefined,
+        googleSpreadsheetUrl: formGoogleSpreadsheetUrl.trim() || existingExam?.googleSpreadsheetUrl || undefined,
         scheduleType: formScheduleType,
         startDate: formScheduleType === 'scheduled' ? formStartDate : new Date().toISOString(),
         hasDeadline: formHasDeadline,
@@ -413,25 +433,37 @@ export const ExamsTab: React.FC<ExamsTabProps> = ({
         createdById: currentUserId,
         createdByName: currentUserName,
         createdAt: editingExamId
-          ? (exams.find(ex => ex.id === editingExamId)?.createdAt || new Date().toISOString())
+          ? (existingExam?.createdAt || new Date().toISOString())
           : new Date().toISOString(),
         updatedAt: new Date().toISOString()
       };
 
-      // Auto-create Google Form and Sheet if deliveryMode is google_form and requested
-      if (formDeliveryMode === 'google_form' && formAutoCreateGoogleForm && !examObj.googleFormResponderUrl) {
+      let cloudSyncNotice = '';
+
+      // If deliveryMode is google_form:
+      if (formDeliveryMode === 'google_form') {
         try {
-          const hasToken = await GoogleWorkspaceService.getValidAccessToken();
-          if (hasToken) {
-            const formRes = await GoogleWorkspaceService.createGoogleFormAndSheet(examObj);
-            examObj.googleFormId = formRes.formId;
-            examObj.googleFormUrl = formRes.formEditUrl;
-            examObj.googleFormResponderUrl = formRes.responderUrl;
-            examObj.googleSpreadsheetId = formRes.spreadsheetId;
-            examObj.googleSpreadsheetUrl = formRes.spreadsheetUrl;
+          const token = await GoogleWorkspaceService.getValidAccessToken();
+          if (token) {
+            // If already has Google Form ID, update questions in cloud!
+            if (examObj.googleFormId) {
+              const updateRes = await GoogleWorkspaceService.updateGoogleForm(examObj, token);
+              if (updateRes.success) {
+                cloudSyncNotice = ' وتم تحديث نموذج Google Forms السحابي تلقائياً بالأسئلة والتعديلات الجديدة!';
+              }
+            } else if (formAutoCreateGoogleForm && !examObj.googleFormResponderUrl) {
+              // Create new Google Form and Sheet
+              const formRes = await GoogleWorkspaceService.createGoogleFormAndSheet(examObj, token);
+              examObj.googleFormId = formRes.formId;
+              examObj.googleFormUrl = formRes.formEditUrl;
+              examObj.googleFormResponderUrl = formRes.responderUrl;
+              examObj.googleSpreadsheetId = formRes.spreadsheetId;
+              examObj.googleSpreadsheetUrl = formRes.spreadsheetUrl;
+              cloudSyncNotice = ' وتم إنشاء نموذج Google Forms وجدول Sheets سحابياً بنجاح!';
+            }
           }
         } catch (gfErr: any) {
-          console.warn('Auto create Google Form warning:', gfErr);
+          console.warn('Google Form cloud sync notice:', gfErr);
         }
       }
 
@@ -439,14 +471,65 @@ export const ExamsTab: React.FC<ExamsTabProps> = ({
       setIsCreatingExam(false);
       setStatusMessage({
         type: 'success',
-        text: `تم حفظ اختبار "${examObj.title}" بنجاح في قاعدة البيانات السحابية وهو متاح للطلاب الآن.`
+        text: `تم حفظ اختبار "${examObj.title}" بنجاح في المنصة${cloudSyncNotice}`
       });
-      setTimeout(() => setStatusMessage(null), 5000);
+      setTimeout(() => setStatusMessage(null), 6000);
     } catch (err: any) {
       console.error('Error saving exam:', err);
       setStatusMessage({ type: 'error', text: `حدث خطأ أثناء حفظ الاختبار: ${err.message || err}` });
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  // Dedicated button to update existing Google Form in cloud on-demand from the modal
+  const handleUpdateGoogleFormNow = async () => {
+    const targetFormId = formGoogleFormId || (editingExamId ? exams.find(e => e.id === editingExamId)?.googleFormId : undefined);
+    if (!targetFormId) {
+      alert('لا يوجد معرّف نموذج Google Form مرتبط لتحديثه. يمكنك توليد نموذج جديد أو حفظ الاختبار أولاً.');
+      return;
+    }
+
+    setIsUpdatingGoogleFormInCloud(true);
+    setStatusMessage(null);
+    try {
+      let token = await GoogleWorkspaceService.getValidAccessToken();
+      if (!token) {
+        const { accessToken } = await GoogleWorkspaceService.linkGoogleAccount();
+        token = accessToken;
+        if (onRefreshGoogleAuth) await onRefreshGoogleAuth();
+      }
+
+      const tempExam: Exam = {
+        id: editingExamId || `exam-${Date.now()}`,
+        title: formTitle.trim(),
+        description: formDescription.trim(),
+        totalPoints: questions.reduce((sum, q) => sum + (Number(q.points) || 0), 0),
+        questions,
+        scheduleType: formScheduleType,
+        hasDeadline: formHasDeadline,
+        attemptLimitType: formAttemptType,
+        timeLimitMode: formTimeLimitMode,
+        gradeVisibility: formGradeVisibility,
+        grantsLeaderboardPoints: formGrantsPoints,
+        targetHalaqat: formTargetHalaqat,
+        googleFormId: targetFormId,
+        createdById: currentUserId,
+        createdByName: currentUserName,
+        createdAt: new Date().toISOString()
+      };
+
+      const res = await GoogleWorkspaceService.updateGoogleForm(tempExam, token);
+      if (res.success) {
+        setStatusMessage({
+          type: 'success',
+          text: `تم تحديث نموذج Google Form السحابي بنجاح (${questions.length} سؤال)! التعديلات أصبحت فعالة وفورية في الرابط.`
+        });
+      }
+    } catch (err: any) {
+      handleGoogleAuthError(err, 'تحديث نموذج Google Forms');
+    } finally {
+      setIsUpdatingGoogleFormInCloud(false);
     }
   };
 

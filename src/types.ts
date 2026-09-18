@@ -246,6 +246,7 @@ export interface Exam {
   googleFormResponderUrl?: string; // رابط النموذج للطلاب
   googleSpreadsheetId?: string; // معرف Google Sheets المرتبط
   googleSpreadsheetUrl?: string; // رابط جدول الردود
+  googleFormNameEntryId?: string; // معرف حقل اسم الطالب في Google Form لتعبئته تلقائياً
   createdById: string;
   createdByName: string;
   createdAt: string;
