@@ -30,7 +30,8 @@ import {
   Flag,
   FastForward,
   Rewind,
-  Repeat
+  Repeat,
+  ArrowLeft
 } from 'lucide-react';
 import { SurahRecording, RecordingsConfig, SurahRecordingSegment } from '../../types';
 import { QURAN_SURAHS, getSurahInfo } from '../../data/quranData';
@@ -61,6 +62,7 @@ export const RecordingsTab: React.FC<RecordingsTabProps> = ({
   const [activeAyahIndex, setActiveAyahIndex] = useState<number>(0);
   const [selectedAyahForPlayback, setSelectedAyahForPlayback] = useState<SurahRecordingSegment | null>(null);
   const [targetSegmentToPlay, setTargetSegmentToPlay] = useState<SurahRecordingSegment | null>(null);
+  const [cuePlaybackState, setCuePlaybackState] = useState<{ time: number; timestamp: number } | null>(null);
   const [currentLiveTime, setCurrentLiveTime] = useState<number>(0);
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -527,7 +529,7 @@ export const RecordingsTab: React.FC<RecordingsTabProps> = ({
     handleUpdateSegmentTiming(activeAyahIndex, 'endTimeSeconds', seconds);
   };
 
-  // Teacher clicks "🏁 تعيين النهاية والتالي" from live audio
+  // Teacher clicks "تعيين النهاية والتالي" from live audio
   const handleSetEndAndAdvance = (seconds: number) => {
     if (!editingRecording || !editingRecording.segments) return;
     const safeVal = Math.round(Math.max(0, seconds) * 100) / 100;
@@ -557,9 +559,14 @@ export const RecordingsTab: React.FC<RecordingsTabProps> = ({
       setEditingRecording(prev => ({ ...prev!, segments: updated }));
       setActiveAyahIndex(nextIndex);
       setSelectedAyahForPlayback({ ...nextSeg });
+      // Ensure player pauses and cues right at safeVal (the start of the next ayah)
+      setTargetSegmentToPlay(null);
+      setCuePlaybackState({ time: safeVal, timestamp: Date.now() });
     } else {
       setEditingRecording(prev => ({ ...prev!, segments: updated }));
       setSelectedAyahForPlayback({ ...curr });
+      setTargetSegmentToPlay(null);
+      setCuePlaybackState({ time: safeVal, timestamp: Date.now() });
     }
   };
 
@@ -667,7 +674,7 @@ export const RecordingsTab: React.FC<RecordingsTabProps> = ({
               onClick={() => setStatusMsg(null)}
               className="text-emerald-400 hover:text-white px-2 py-0.5 text-xs font-bold cursor-pointer"
             >
-              ✕
+              <X className="w-4 h-4" />
             </button>
           </div>
         )}
@@ -841,7 +848,7 @@ export const RecordingsTab: React.FC<RecordingsTabProps> = ({
                 }}
                 className="w-8 h-8 rounded-full bg-[#064e3b] hover:bg-emerald-700 text-emerald-300 hover:text-white flex items-center justify-center transition-colors cursor-pointer"
               >
-                ✕
+                <X className="w-4 h-4" />
               </button>
             </div>
 
@@ -937,6 +944,7 @@ export const RecordingsTab: React.FC<RecordingsTabProps> = ({
                     videoId={editingRecording.youtubeVideoId}
                     activeSegment={editingRecording.segments?.[activeAyahIndex] || null}
                     targetSegmentToPlay={targetSegmentToPlay}
+                    cuePlaybackState={cuePlaybackState}
                     onTimeUpdate={time => setCurrentLiveTime(time)}
                     onDurationReceived={dur => {
                       setVideoPlayerDuration(dur);
@@ -1106,6 +1114,14 @@ export const RecordingsTab: React.FC<RecordingsTabProps> = ({
                                   </span>
                                   <button
                                     type="button"
+                                    onClick={() => handleStepTiming(originalIndex, 'startTimeSeconds', -5)}
+                                    className="px-1.5 py-0.5 rounded bg-[#022c22] hover:bg-[#064e3b] text-[#fbbf24] text-[10px] font-mono font-bold border border-[#fbbf24]/40 cursor-pointer"
+                                    title="تأخير 5 ثوانٍ (-5)"
+                                  >
+                                    -5
+                                  </button>
+                                  <button
+                                    type="button"
                                     onClick={() => handleStepTiming(originalIndex, 'startTimeSeconds', -1)}
                                     className="px-1 py-0.5 rounded bg-[#064e3b] hover:bg-emerald-700 text-white text-[10px] font-mono cursor-pointer"
                                     title="تأخير ثانية"
@@ -1138,11 +1154,20 @@ export const RecordingsTab: React.FC<RecordingsTabProps> = ({
                                   </button>
                                   <button
                                     type="button"
+                                    onClick={() => handleStepTiming(originalIndex, 'startTimeSeconds', 5)}
+                                    className="px-1.5 py-0.5 rounded bg-[#022c22] hover:bg-[#064e3b] text-[#fbbf24] text-[10px] font-mono font-bold border border-[#fbbf24]/40 cursor-pointer"
+                                    title="تقديم 5 ثوانٍ (+5)"
+                                  >
+                                    +5
+                                  </button>
+                                   <button
+                                    type="button"
                                     onClick={() => handleUpdateSegmentTiming(originalIndex, 'startTimeSeconds', Math.round(currentLiveTime * 100) / 100)}
-                                    className="px-1.5 py-0.5 rounded bg-emerald-800/80 hover:bg-emerald-700 text-emerald-200 text-[10px] font-bold border border-emerald-600/50 cursor-pointer"
+                                    className="px-1.5 py-0.5 rounded bg-emerald-800/80 hover:bg-emerald-700 text-emerald-200 text-[10px] font-bold border border-emerald-600/50 cursor-pointer flex items-center gap-1"
                                     title="أخذ وقت المشغل الحالي كبداية لهذه الآية"
                                   >
-                                    📍 وقت المشغل ({formatTimeMMSS(currentLiveTime)})
+                                    <MapPin className="w-3 h-3 text-emerald-300 shrink-0" />
+                                    <span>وقت المشغل ({formatTimeMMSS(currentLiveTime)})</span>
                                   </button>
                                 </div>
 
@@ -1164,6 +1189,14 @@ export const RecordingsTab: React.FC<RecordingsTabProps> = ({
                                   <span className="text-amber-400 font-mono text-[10px]">
                                     ({formatTimeMMSS(seg.endTimeSeconds)})
                                   </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleStepTiming(originalIndex, 'endTimeSeconds', -5)}
+                                    className="px-1.5 py-0.5 rounded bg-[#022c22] hover:bg-[#064e3b] text-[#fbbf24] text-[10px] font-mono font-bold border border-[#fbbf24]/40 cursor-pointer"
+                                    title="تأخير 5 ثوانٍ (-5)"
+                                  >
+                                    -5
+                                  </button>
                                   <button
                                     type="button"
                                     onClick={() => handleStepTiming(originalIndex, 'endTimeSeconds', -1)}
@@ -1198,11 +1231,20 @@ export const RecordingsTab: React.FC<RecordingsTabProps> = ({
                                   </button>
                                   <button
                                     type="button"
+                                    onClick={() => handleStepTiming(originalIndex, 'endTimeSeconds', 5)}
+                                    className="px-1.5 py-0.5 rounded bg-[#022c22] hover:bg-[#064e3b] text-[#fbbf24] text-[10px] font-mono font-bold border border-[#fbbf24]/40 cursor-pointer"
+                                    title="تقديم 5 ثوانٍ (+5)"
+                                  >
+                                    +5
+                                  </button>
+                                  <button
+                                    type="button"
                                     onClick={() => handleUpdateSegmentTiming(originalIndex, 'endTimeSeconds', Math.round(currentLiveTime * 100) / 100)}
-                                    className="px-1.5 py-0.5 rounded bg-amber-800/80 hover:bg-amber-700 text-amber-200 text-[10px] font-bold border border-amber-600/50 cursor-pointer"
+                                    className="px-1.5 py-0.5 rounded bg-amber-800/80 hover:bg-amber-700 text-amber-200 text-[10px] font-bold border border-amber-600/50 cursor-pointer flex items-center gap-1"
                                     title="أخذ وقت المشغل الحالي كنهاية لهذه الآية"
                                   >
-                                    🏁 وقت المشغل ({formatTimeMMSS(currentLiveTime)})
+                                    <Flag className="w-3 h-3 text-amber-300 shrink-0" />
+                                    <span>وقت المشغل ({formatTimeMMSS(currentLiveTime)})</span>
                                   </button>
                                   <button
                                     type="button"
@@ -1213,7 +1255,9 @@ export const RecordingsTab: React.FC<RecordingsTabProps> = ({
                                     className="px-2 py-0.5 rounded bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 text-[10px] font-black border border-amber-400 cursor-pointer shadow-sm flex items-center gap-1"
                                     title="تعيين وقت المشغل كنهاية لهذه الآية والانتقال التلقائي للآية التالية"
                                   >
-                                    <span>🏁 ضبط والتالي ⬅</span>
+                                    <CheckCircle2 className="w-3 h-3 text-slate-950 shrink-0" />
+                                    <span>ضبط والتالي</span>
+                                    <ArrowLeft className="w-3 h-3 text-slate-950 shrink-0" />
                                   </button>
                                 </div>
                               </div>
@@ -1284,7 +1328,7 @@ export const RecordingsTab: React.FC<RecordingsTabProps> = ({
                 onClick={() => setPreviewingRecording(null)}
                 className="w-8 h-8 rounded-full bg-[#064e3b] hover:bg-emerald-700 text-emerald-300 hover:text-white flex items-center justify-center cursor-pointer"
               >
-                ✕
+                <X className="w-4 h-4" />
               </button>
             </div>
 

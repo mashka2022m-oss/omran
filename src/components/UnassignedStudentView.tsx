@@ -86,8 +86,11 @@ export const UnassignedStudentView: React.FC<UnassignedStudentViewProps> = ({
               <p>
                 تم تسجيل وتوثيق بياناتك في المنظومة بنجاح، ولكن لم يتم إرفاق حسابك حتى الآن بإحدى الحلقات القرآنية من قِبل إدارة الحلقات والمشرف العام <span className="text-[#fbbf24] font-bold">({settings?.teacherName || 'الشيخ محمد منتصر'})</span>.
               </p>
-              <div className="bg-[#064e3b]/60 p-3 rounded-xl border border-[#065f46] text-xs text-[#86efac]">
-                📌 <span className="font-bold text-white">الخطوة المطلوبة:</span> يرجى من ولي الأمر أو الطالب إشعار مشرف المسجد أو إدارة الحلقات لتعيين الحلقة المناسبة لمستوى الطالب وسنه.
+              <div className="bg-[#064e3b]/60 p-3 rounded-xl border border-[#065f46] text-xs text-[#86efac] flex items-start gap-2">
+                <Info className="w-4 h-4 text-[#fbbf24] shrink-0 mt-0.5" />
+                <div>
+                  <span className="font-bold text-white">الخطوة المطلوبة:</span> يرجى من ولي الأمر أو الطالب إشعار مشرف المسجد أو إدارة الحلقات لتعيين الحلقة المناسبة لمستوى الطالب وسنه.
+                </div>
               </div>
               <p className="text-xs text-[#86efac] font-semibold pt-1">
                 بمجرد إرفاقك بالحلقة القرآنية، سيتم تفعيل بوابتك السحابية فوراً لتتمكن من:

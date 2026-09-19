@@ -38,7 +38,8 @@ import {
   Flame,
   Medal,
   Crown,
-  Download
+  Download,
+  Info
 } from 'lucide-react';
 import {
   Exam,
@@ -2603,8 +2604,9 @@ export const ExamsTab: React.FC<ExamsTabProps> = ({
               <p className="text-xs text-rose-200/80 mt-1">
                 هل أنت متأكد من رغبتك في حذف تسليم الطالب <strong className="text-white font-bold">"{submissionToDelete.studentName}"</strong> لاختبار <strong className="text-[#fbbf24] font-bold">"{submissionToDelete.examTitle}"</strong> (المحاولة #{submissionToDelete.attemptNumber})؟
               </p>
-              <div className="p-3 rounded-xl bg-amber-950/40 border border-amber-500/30 text-[11px] text-amber-200 mt-2 text-right leading-relaxed">
-                💡 مفيد في حال رغب المعلم بتصحيح خطأ أو إعطاء الطالب فرصة لإعادة الاختبار.
+              <div className="p-3 rounded-xl bg-amber-950/40 border border-amber-500/30 text-[11px] text-amber-200 mt-2 text-right leading-relaxed flex items-center gap-1.5">
+                <Info className="w-3.5 h-3.5 text-[#fbbf24] shrink-0" />
+                <span>مفيد في حال رغب المعلم بتصحيح خطأ أو إعطاء الطالب فرصة لإعادة الاختبار.</span>
               </div>
             </div>
             <div className="flex items-center justify-center gap-3 pt-2">

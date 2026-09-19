@@ -646,7 +646,16 @@ export const StudentExamTaker: React.FC<StudentExamTakerProps> = ({
                 className="w-full p-4 rounded-2xl bg-[#064e3b]/50 border border-[#065f46] text-white text-xs sm:text-sm focus:border-[#fbbf24] focus:outline-none transition-all placeholder:text-emerald-300/40"
               />
               <div className="flex items-center justify-between text-[11px] text-emerald-300/70 px-1">
-                <span>{answersMap[currentQuestion.id]?.trim() ? '✓ تم حفظ المسودة' : 'في انتظار الإجابة'}</span>
+                <span className="flex items-center gap-1">
+                  {answersMap[currentQuestion.id]?.trim() ? (
+                    <>
+                      <Check className="w-3.5 h-3.5 text-[#fbbf24] shrink-0" />
+                      <span className="text-[#fbbf24] font-semibold">تم حفظ المسودة</span>
+                    </>
+                  ) : (
+                    <span>في انتظار الإجابة</span>
+                  )}
+                </span>
                 <span>{answersMap[currentQuestion.id]?.length || 0} حرف</span>
               </div>
             </div>

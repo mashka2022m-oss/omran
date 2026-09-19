@@ -26,7 +26,8 @@ import {
   Check,
   Headphones,
   Radio,
-  ListOrdered
+  ListOrdered,
+  Info
 } from 'lucide-react';
 import { YouTubeAyahPlayer, formatTimeMMSS } from './recordings/YouTubeAyahPlayer';
 import { getAyahTextSync } from '../lib/quranTextService';
@@ -916,11 +917,12 @@ export const ParentPortalView: React.FC<ParentPortalViewProps> = ({
               {studentRankList.slice(0, 3).map((item, idx) => {
                 const isMe = item.student.id === student.id;
                 const badges = [
-                  { label: 'الأول 🥇', border: 'border-[#fbbf24]', bg: 'bg-[#fbbf24]/20', text: 'text-[#fbbf24]' },
-                  { label: 'الثاني 🥈', border: 'border-slate-300', bg: 'bg-slate-300/20', text: 'text-slate-200' },
-                  { label: 'الثالث 🥉', border: 'border-amber-600', bg: 'bg-amber-600/20', text: 'text-amber-300' }
+                  { label: 'المركز الأول', icon: Trophy, border: 'border-[#fbbf24]', bg: 'bg-[#fbbf24]/20', text: 'text-[#fbbf24]' },
+                  { label: 'المركز الثاني', icon: Medal, border: 'border-slate-300', bg: 'bg-slate-300/20', text: 'text-slate-200' },
+                  { label: 'المركز الثالث', icon: Award, border: 'border-amber-600', bg: 'bg-amber-600/20', text: 'text-amber-300' }
                 ];
                 const badge = badges[idx] || badges[0];
+                const BadgeIcon = badge.icon;
 
                 return (
                   <div
@@ -938,8 +940,9 @@ export const ParentPortalView: React.FC<ParentPortalViewProps> = ({
                     )}
 
                     <div>
-                      <span className={`inline-block px-3 py-1 rounded-full text-xs font-black mb-2 ${badge.bg} ${badge.text} border ${badge.border}`}>
-                        {badge.label}
+                      <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black mb-2 ${badge.bg} ${badge.text} border ${badge.border}`}>
+                        <BadgeIcon className="w-3.5 h-3.5 shrink-0" />
+                        <span>{badge.label}</span>
                       </span>
                       <h4 className="text-sm font-bold text-white truncate">{item.student.name}</h4>
                       <p className="text-[11px] text-emerald-300/70 mt-0.5">{item.halaqahName}</p>
@@ -1618,8 +1621,9 @@ export const ParentPortalView: React.FC<ParentPortalViewProps> = ({
                   )}
                 </button>
 
-                <p className="text-[11px] text-emerald-300/80 text-center">
-                  💡 بمجرد تسجيل الدخول بحساب Google، سيتم فتح الاختبار فوراً ورصد نتيجتك لحسابك تلقائياً.
+                <p className="text-[11px] text-emerald-300/80 text-center flex items-center justify-center gap-1.5">
+                  <Info className="w-3.5 h-3.5 text-[#fbbf24] shrink-0" />
+                  <span>بمجرد تسجيل الدخول بحساب Google، سيتم فتح الاختبار فوراً ورصد نتيجتك لحسابك تلقائياً.</span>
                 </p>
 
                 <button

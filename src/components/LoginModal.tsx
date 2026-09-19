@@ -281,8 +281,9 @@ export const LoginModal: React.FC<LoginModalProps> = ({
                   </>
                 )}
               </button>
-              <p className="text-[11px] text-emerald-200/80 text-center mt-2" dir="rtl">
-                ✨ تسجيل دخول فوري ومباشر للمعلمين والمشرفين والطلاب بحساباتهم المربوطة.
+              <p className="text-[11px] text-emerald-200/80 text-center mt-2 flex items-center justify-center gap-1.5" dir="rtl">
+                <Sparkles className="w-3.5 h-3.5 text-[#fbbf24] shrink-0" />
+                <span>تسجيل دخول فوري ومباشر للمعلمين والمشرفين والطلاب بحساباتهم المربوطة.</span>
               </p>
 
               {googleError && (
