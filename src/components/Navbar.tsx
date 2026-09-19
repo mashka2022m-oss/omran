@@ -14,7 +14,7 @@ import {
   ChevronDown,
   Building2
 } from 'lucide-react';
-import { UserRole, AppSettings, Halaqah } from '../types';
+import { UserRole, AppSettings, Halaqah, QuranComplex } from '../types';
 
 interface NavbarProps {
   currentUser: { username: string; role: UserRole; studentId?: string } | null;
@@ -24,6 +24,10 @@ interface NavbarProps {
   teachersCount?: number;
   complexesCount?: number;
   complexName?: string;
+  availableComplexes?: QuranComplex[];
+  activeComplexId?: string;
+  onSwitchComplex?: (complexId: string) => void;
+  onOpenMultiComplexModal?: () => void;
   halaqahs?: Halaqah[];
   assignedHalaqahs?: Halaqah[];
   isSupervisor?: boolean;
@@ -43,6 +47,10 @@ export const Navbar: React.FC<NavbarProps> = ({
   teachersCount = 1,
   complexesCount = 1,
   complexName,
+  availableComplexes = [],
+  activeComplexId,
+  onSwitchComplex,
+  onOpenMultiComplexModal,
   halaqahs = [],
   assignedHalaqahs = [],
   isSupervisor = false,
@@ -75,13 +83,43 @@ export const Navbar: React.FC<NavbarProps> = ({
             <div className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-white rounded-full border-2 border-[#064e3b]" />
           </div>
           <div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <h1 className="text-lg sm:text-xl font-bold font-heading tracking-tight text-[#fbbf24] flex items-center gap-1.5">
                 مَنَصَّةُ عُمْرَان
+              </h1>
+
+              {/* Complex Switcher / Badge */}
+              {availableComplexes.length > 1 && onSwitchComplex ? (
+                <div className="flex items-center gap-1.5 bg-[#022c22] border border-amber-400/40 rounded-xl px-2 py-0.5 shadow-sm">
+                  <Building2 className="w-3.5 h-3.5 text-[#fbbf24]" />
+                  <select
+                    value={activeComplexId || availableComplexes[0]?.id || ''}
+                    onChange={e => onSwitchComplex(e.target.value)}
+                    className="text-xs text-amber-300 font-black bg-transparent border-none focus:outline-none cursor-pointer pr-1"
+                    title="التبديل بين المجمعات التي تنتمي إليها"
+                  >
+                    {availableComplexes.map(c => (
+                      <option key={c.id} value={c.id} className="bg-[#064e3b] text-white">
+                        {c.name}
+                      </option>
+                    ))}
+                  </select>
+                  {onOpenMultiComplexModal && (
+                    <button
+                      type="button"
+                      onClick={onOpenMultiComplexModal}
+                      title="عرض بطاقات المجمعات والحلقات التابعة لك"
+                      className="p-1 rounded-md hover:bg-emerald-800 text-amber-300 hover:text-white transition-colors cursor-pointer"
+                    >
+                      <Layers className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+              ) : (
                 <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#022c22] text-[#86efac] border border-[#065f46] font-sans font-medium line-clamp-1 max-w-[200px]" title={complexName || 'المنظومة القرآنية'}>
                   {complexName || 'القرآنية'}
                 </span>
-              </h1>
+              )}
             </div>
 
             {/* Halaqah selector / label */}

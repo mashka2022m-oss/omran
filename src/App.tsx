@@ -17,7 +17,8 @@ import {
   Layers,
   FileText,
   Headphones,
-  UserCog
+  UserCog,
+  Building2
 } from 'lucide-react';
 import {
   Student,
@@ -39,6 +40,9 @@ import {
   isTeacherSupervisor,
   isTeacherDeveloper,
   getTeacherComplex,
+  getTeacherAllComplexes,
+  getTeacherHalaqahsInComplex,
+  normalizeTeacherText,
   QuranComplex
 } from './types';
 import {
@@ -58,6 +62,7 @@ import { ParentPortalView } from './components/ParentPortalView';
 import { TeacherManagementModal } from './components/TeacherManagementModal';
 import { SettingsModal } from './components/SettingsModal';
 import { ComplexManagementModal } from './components/ComplexManagementModal';
+import { TeacherMultiComplexModal } from './components/TeacherMultiComplexModal';
 import { UnassignedTeacherView } from './components/UnassignedTeacherView';
 import { UnassignedStudentView } from './components/UnassignedStudentView';
 import { getSurahInfo } from './data/quranData';
@@ -114,6 +119,15 @@ export function App() {
   // Complexes State & Complex Management Modal (المجمعات القرآنية)
   const [complexes, setComplexes] = useState<QuranComplex[]>([]);
   const [isComplexModalOpen, setIsComplexModalOpen] = useState(false);
+  const [selectedComplexId, setSelectedComplexId] = useState<string>(() => {
+    try {
+      return localStorage.getItem('omran_selected_complex_id') || '';
+    } catch {
+      return '';
+    }
+  });
+  const [isMultiComplexModalOpen, setIsMultiComplexModalOpen] = useState(false);
+  const [newlyAddedComplexName, setNewlyAddedComplexName] = useState<string | null>(null);
 
   // Main Data States
   const [students, setStudents] = useState<Student[]>([]);
@@ -354,19 +368,6 @@ export function App() {
     );
   }, [currentUser, teachers]);
 
-  const isSupervisor = useMemo(() => {
-    if (!currentUser || currentUser.role !== 'admin') return false;
-    if (currentTeacher) {
-      return isTeacherSupervisor(currentTeacher);
-    }
-    const cleanUser = currentUser.username.trim().toLowerCase();
-    return (
-      cleanUser === 'admin' ||
-      cleanUser === 'developer' ||
-      cleanUser === 'المشرف العام'
-    );
-  }, [currentUser, currentTeacher]);
-
   // Check Developer / System Administrator
   const isDeveloper = useMemo(() => {
     if (!currentUser || currentUser.role !== 'admin') return false;
@@ -380,39 +381,67 @@ export function App() {
     );
   }, [currentUser, currentTeacher]);
 
-  // Complex scope resolution for teacher/supervisor:
-  // Non-developer supervisors can ONLY manage and view their own assigned QuranComplex!
-  const supervisedComplex = useMemo(() => {
-    if (!currentUser || currentUser.role !== 'admin') return null;
-    return getTeacherComplex(currentTeacher, complexes, halaqahs);
-  }, [currentUser, currentTeacher, complexes, halaqahs]);
+  // All complexes associated with current teacher (or all complexes if developer)
+  const availableTeacherComplexes = useMemo(() => {
+    if (!currentUser || currentUser.role !== 'admin') return complexes;
+    return getTeacherAllComplexes(currentTeacher, teachers, complexes, halaqahs, isDeveloper);
+  }, [currentUser, currentTeacher, teachers, complexes, halaqahs, isDeveloper]);
 
-  // Scoped complexes: Programmer sees all complexes; supervisor/teacher only sees their own complex
+  // Active Complex: either specifically selected by teacher/dev, or fallback to first available
+  const activeComplex = useMemo<QuranComplex | null>(() => {
+    if (availableTeacherComplexes.length === 0) {
+      return complexes[0] || null;
+    }
+    if (selectedComplexId) {
+      const match = availableTeacherComplexes.find(c => c.id === selectedComplexId);
+      if (match) return match;
+    }
+    return availableTeacherComplexes[0] || null;
+  }, [availableTeacherComplexes, selectedComplexId, complexes]);
+
+  // Complex scope resolution for teacher/supervisor:
+  const supervisedComplex = activeComplex;
+
+  const isSupervisor = useMemo(() => {
+    if (!currentUser || currentUser.role !== 'admin') return false;
+    if (isDeveloper) return true;
+    if (activeComplex && currentTeacher) {
+      if (activeComplex.supervisorTeacherId && activeComplex.supervisorTeacherId === currentTeacher.id) return true;
+      if (activeComplex.supervisorTeacherName && currentTeacher.name &&
+          normalizeTeacherText(activeComplex.supervisorTeacherName) === normalizeTeacherText(currentTeacher.name)) return true;
+    }
+    if (currentTeacher) {
+      return isTeacherSupervisor(currentTeacher);
+    }
+    const cleanUser = currentUser.username.trim().toLowerCase();
+    return (
+      cleanUser === 'admin' ||
+      cleanUser === 'developer' ||
+      cleanUser === 'المشرف العام'
+    );
+  }, [currentUser, isDeveloper, activeComplex, currentTeacher]);
+
+  // Scoped complexes: Programmer sees all complexes; supervisor/teacher sees their available complexes
   const scopedComplexes = useMemo(() => {
     if (isDeveloper) return complexes;
-    if (supervisedComplex) return [supervisedComplex];
-    return complexes.slice(0, 1);
-  }, [isDeveloper, supervisedComplex, complexes]);
+    return availableTeacherComplexes;
+  }, [isDeveloper, complexes, availableTeacherComplexes]);
 
-  // Scoped halaqahs: If programmer, sees all halaqahs.
-  // If complex supervisor or teacher, STRICTLY sees halaqahs of their own QuranComplex!
+  // Scoped halaqahs: Strictly sees halaqahs of their ACTIVE QuranComplex!
   const scopedHalaqahs = useMemo(() => {
-    if (isDeveloper) return halaqahs;
-    if (supervisedComplex) {
-      return halaqahs.filter(h => {
-        const cId = h.complexId || (complexes[0] ? complexes[0].id : '');
-        return cId === supervisedComplex.id;
-      });
-    }
-    return halaqahs;
-  }, [isDeveloper, supervisedComplex, halaqahs, complexes]);
+    if (!activeComplex) return halaqahs;
+    return halaqahs.filter(h => {
+      const cId = h.complexId || (complexes[0] ? complexes[0].id : '');
+      return cId === activeComplex.id;
+    });
+  }, [activeComplex, halaqahs, complexes]);
 
   const scopedHalaqahIds = useMemo(() => {
     return new Set(scopedHalaqahs.map(h => h.id));
   }, [scopedHalaqahs]);
 
   // Scoped students: If programmer, sees all students.
-  // If complex supervisor or teacher, STRICTLY sees students belonging to their complex's halaqahs!
+  // If complex supervisor or teacher, STRICTLY sees students belonging to their active complex's halaqahs!
   const scopedStudents = useMemo(() => {
     if (isDeveloper) return students;
     return students.filter(s => s.halaqahId && scopedHalaqahIds.has(s.halaqahId));
@@ -435,39 +464,74 @@ export function App() {
     });
   }, [isDeveloper, teachers, supervisedComplex, currentTeacher, scopedHalaqahIds]);
 
-  // Assigned halaqahs for current user:
-  // If supervisor, gets all halaqahs belonging to their complex (scopedHalaqahs).
-  // If teacher, gets only their assigned halaqahs within their complex.
+  // Assigned halaqahs for current user inside the active complex:
   const assignedHalaqahs = useMemo(() => {
     if (isSupervisor) {
       return scopedHalaqahs;
     }
-    if (!currentTeacher) {
+    if (!currentTeacher || !activeComplex) {
       return [];
     }
-    const idSet = new Set<string>();
-    if (Array.isArray(currentTeacher.halaqahIds)) {
-      currentTeacher.halaqahIds.forEach(id => {
-        if (id) idSet.add(id);
-      });
+    return getTeacherHalaqahsInComplex(currentTeacher, activeComplex.id, halaqahs, teachers, false);
+  }, [isSupervisor, scopedHalaqahs, currentTeacher, activeComplex, halaqahs, teachers]);
+
+  // Switch between complexes seamlessly
+  const handleSwitchComplex = (newComplexId: string) => {
+    setSelectedComplexId(newComplexId);
+    try {
+      localStorage.setItem('omran_selected_complex_id', newComplexId);
+    } catch (e) {
+      // ignore
     }
-    if (currentTeacher.halaqahId) {
-      idSet.add(currentTeacher.halaqahId);
+    const targetComplex = complexes.find(c => c.id === newComplexId);
+    if (targetComplex) {
+      const assignedInTarget = getTeacherHalaqahsInComplex(currentTeacher, targetComplex.id, halaqahs, teachers, false);
+      if (isSupervisor || assignedInTarget.length === 0) {
+        setActiveHalaqahId('all');
+      } else {
+        setActiveHalaqahId(assignedInTarget[0].id);
+      }
     }
-    scopedHalaqahs.forEach(h => {
-      if (h.teacherIds?.includes(currentTeacher.id)) {
-        idSet.add(h.id);
-      }
-      if (
-        h.primaryTeacherName &&
-        currentTeacher.name &&
-        h.primaryTeacherName.trim().toLowerCase() === currentTeacher.name.trim().toLowerCase()
-      ) {
-        idSet.add(h.id);
-      }
-    });
-    return scopedHalaqahs.filter(h => idSet.has(h.id));
-  }, [isSupervisor, scopedHalaqahs, currentTeacher]);
+  };
+
+  // Multi-complex detection & welcome alert when teacher is added to another complex or enters
+  useEffect(() => {
+    if (!currentUser || currentUser.role !== 'admin') return;
+    if (availableTeacherComplexes.length <= 1) return;
+
+    const teacherKey = currentTeacher?.id || currentTeacher?.username || currentUser.username;
+    const storageKeyKnown = `omran_known_complexes_${teacherKey}`;
+    const storageKeySkip = `omran_skip_complex_welcome_${teacherKey}`;
+
+    let knownIds: string[] = [];
+    try {
+      const stored = localStorage.getItem(storageKeyKnown);
+      if (stored) knownIds = JSON.parse(stored);
+    } catch (e) {
+      knownIds = [];
+    }
+
+    const currentIds = availableTeacherComplexes.map(c => c.id);
+    const newlyAdded = availableTeacherComplexes.find(c => !knownIds.includes(c.id));
+    const skipWelcome = localStorage.getItem(storageKeySkip) === 'true';
+
+    if (newlyAdded && knownIds.length > 0) {
+      setNewlyAddedComplexName(newlyAdded.name);
+      setIsMultiComplexModalOpen(true);
+      try {
+        localStorage.setItem(storageKeyKnown, JSON.stringify(currentIds));
+      } catch (e) {}
+    } else if (!skipWelcome && knownIds.length === 0) {
+      setIsMultiComplexModalOpen(true);
+      try {
+        localStorage.setItem(storageKeyKnown, JSON.stringify(currentIds));
+      } catch (e) {}
+    } else {
+      try {
+        localStorage.setItem(storageKeyKnown, JSON.stringify(currentIds));
+      } catch (e) {}
+    }
+  }, [currentUser, currentTeacher, availableTeacherComplexes]);
 
   // Scoped settings for the active complex:
   // If user belongs to a separate complex, ensures halaqahName and teacherName strictly
@@ -1140,6 +1204,10 @@ export function App() {
           teachersCount={scopedTeachers.length}
           complexesCount={isDeveloper ? complexes.length : 1}
           complexName={supervisedComplex?.name}
+          availableComplexes={scopedComplexes}
+          activeComplexId={activeComplex?.id}
+          onSwitchComplex={handleSwitchComplex}
+          onOpenMultiComplexModal={() => setIsMultiComplexModalOpen(true)}
           halaqahs={scopedHalaqahs}
           assignedHalaqahs={[]}
           isSupervisor={false}
@@ -1194,6 +1262,10 @@ export function App() {
         teachersCount={scopedTeachers.length}
         complexesCount={isDeveloper ? complexes.length : 1}
         complexName={supervisedComplex?.name}
+        availableComplexes={scopedComplexes}
+        activeComplexId={activeComplex?.id}
+        onSwitchComplex={handleSwitchComplex}
+        onOpenMultiComplexModal={() => setIsMultiComplexModalOpen(true)}
         halaqahs={scopedHalaqahs}
         assignedHalaqahs={assignedHalaqahs}
         isSupervisor={isSupervisor}
@@ -1240,6 +1312,19 @@ export function App() {
 
           {/* Quick Switching Buttons */}
           <div className="flex items-center gap-1.5 flex-wrap self-stretch sm:self-auto justify-end">
+            {scopedComplexes.length > 1 && (
+              <button
+                type="button"
+                onClick={() => setIsMultiComplexModalOpen(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-amber-500/20 to-amber-600/30 hover:from-amber-500/30 hover:to-amber-600/40 text-amber-300 border border-amber-400/40 text-xs font-bold transition-all cursor-pointer shadow-sm"
+                title="عرض بطاقات المجمعات والحلقات التابعة لك"
+              >
+                <Building2 className="w-3.5 h-3.5 text-[#fbbf24]" />
+                <span>مجمعاتي ({scopedComplexes.length})</span>
+                <Sparkles className="w-3 h-3 text-[#fbbf24]" />
+              </button>
+            )}
+
             {isSupervisor ? (
               <div className="flex items-center gap-1 bg-[#022c22] p-1 rounded-xl border border-[#065f46] flex-wrap">
                 <button
@@ -1499,6 +1584,25 @@ export function App() {
           onSaveTeacher={handleSaveTeacher}
         />
       )}
+
+      {/* Teacher Multi-Complex Modal (عرض المجمعات والحلقات والانتقال بينها) */}
+      <TeacherMultiComplexModal
+        isOpen={isMultiComplexModalOpen}
+        onClose={() => {
+          setIsMultiComplexModalOpen(false);
+          setNewlyAddedComplexName(null);
+        }}
+        teacher={currentTeacher}
+        teacherName={currentTeacher?.name || currentUser?.username || 'المعلم'}
+        complexes={scopedComplexes}
+        activeComplexId={activeComplex?.id || ''}
+        onSelectComplex={handleSwitchComplex}
+        halaqahs={halaqahs}
+        allTeachers={teachers}
+        students={students}
+        isNewlyAdded={Boolean(newlyAddedComplexName)}
+        newlyAddedComplexName={newlyAddedComplexName}
+      />
     </div>
   );
 }
