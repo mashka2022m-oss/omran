@@ -43,7 +43,8 @@ import {
   getTeacherAllComplexes,
   getTeacherHalaqahsInComplex,
   normalizeTeacherText,
-  QuranComplex
+  QuranComplex,
+  getThreePartNameValidation
 } from './types';
 import {
   OmranDataService,
@@ -675,6 +676,11 @@ export function App() {
 
   // Multi-Teacher Handlers
   const handleSaveTeacher = async (teacher: TeacherAccount) => {
+    const isSup = isTeacherSupervisor(teacher);
+    const val = getThreePartNameValidation(teacher.name, isSup ? 'مشرف' : 'معلم');
+    if (!val.isValid) {
+      throw new Error(val.message || 'الاسم الثلاثي إلزامي.');
+    }
     await OmranDataService.saveTeacher(teacher);
     const updated = await OmranDataService.loadTeachers();
     setTeachers(updated);
@@ -718,6 +724,11 @@ export function App() {
 
   // 1. Student Registration / Addition
   const handleAddStudent = async (studentData: Partial<Student>): Promise<boolean> => {
+    const nameVal = getThreePartNameValidation(studentData.name, 'طالب');
+    if (!nameVal.isValid) {
+      throw new Error(nameVal.message || 'الاسم الثلاثي إلزامي للطالب.');
+    }
+
     let chosenHalaqahId = studentData.halaqahId || '';
     let chosenHalaqahName = studentData.halaqahName || '';
 
@@ -786,6 +797,10 @@ export function App() {
 
   // 2. Update Student
   const handleUpdateStudent = async (student: Student): Promise<boolean> => {
+    const nameVal = getThreePartNameValidation(student.name, 'طالب');
+    if (!nameVal.isValid) {
+      throw new Error(nameVal.message || 'الاسم الثلاثي إلزامي للطالب.');
+    }
     await OmranDataService.saveStudent(student);
     const updated = await OmranDataService.loadStudents();
     setStudents(updated);

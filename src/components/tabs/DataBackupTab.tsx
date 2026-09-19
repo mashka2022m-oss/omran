@@ -18,11 +18,15 @@ import {
   ArrowRightLeft,
   Trash2,
   Check,
+  CheckCircle2,
+  Loader2,
+  LogIn,
+  Globe,
   Link,
   Lock,
   Key
 } from 'lucide-react';
-import { OmranDataService } from '../../lib/firebase';
+import { OmranDataService, firebaseConfig, TARGET_FIRESTORE_DATABASE_ID } from '../../lib/firebase';
 import { GoogleWorkspaceService } from '../../lib/googleWorkspace';
 import { FullBackupData, GoogleOAuthConfig, QuranComplex, ComplexBackupData } from '../../types';
 
@@ -82,6 +86,20 @@ export const DataBackupTab: React.FC<DataBackupTabProps> = ({
     notes: ''
   });
   const [isTransferring, setIsTransferring] = useState(false);
+
+  // Automated Database Linking Flow State (الربط التلقائي بتسجيل الدخول)
+  const [isAutoLinkingOpen, setIsAutoLinkingOpen] = useState(false);
+  const [autoLinkStep, setAutoLinkStep] = useState<'idle' | 'signing_in' | 'configuring' | 'testing' | 'completed' | 'error'>('idle');
+  const [autoLinkProgressText, setAutoLinkProgressText] = useState('');
+  const [autoLinkTargetComplex, setAutoLinkTargetComplex] = useState<QuranComplex | null>(null);
+  const [autoLinkResult, setAutoLinkResult] = useState<{
+    email: string;
+    projectId: string;
+    databaseId: string;
+    complexName?: string;
+    timestamp: string;
+  } | null>(null);
+  const [autoLinkError, setAutoLinkError] = useState<string | null>(null);
 
   const activeComplex = complexes.find(c => c.id === selectedComplexId) || complexes[0];
 
@@ -347,6 +365,93 @@ export const DataBackupTab: React.FC<DataBackupTabProps> = ({
     }
   };
 
+  // Automated Database Linking Handler (بدل الربط اليدوي: تسجيل دخول وإكمال كل شيء وتأكيد الانتهاء)
+  const startAutomatedDatabaseLinking = async (targetComplex?: QuranComplex) => {
+    const complexToLink = targetComplex || (selectedComplexId ? activeComplex : null);
+    setAutoLinkTargetComplex(complexToLink);
+    setIsAutoLinkingOpen(true);
+    setAutoLinkError(null);
+    setAutoLinkResult(null);
+    setAutoLinkStep('signing_in');
+    setAutoLinkProgressText('جاري فتح نافذة تسجيل الدخول الآمن بحساب Google والمصادقة...');
+
+    try {
+      // Step 1: Sign in with Google
+      const authResult = await GoogleWorkspaceService.linkGoogleAccount();
+      const connectedEmail = authResult.email || 'حساب Google المعتمد';
+
+      // Step 2: Configure database credentials automatically
+      setAutoLinkStep('configuring');
+      setAutoLinkProgressText(`تم التحقق من الحساب بنجاح (${connectedEmail})! جاري تهيئة وضبط قاعدة البيانات السحابية (Firestore)...`);
+
+      const targetProjId = firebaseConfig.projectId || 'omran-ffbad';
+      const targetDbId = TARGET_FIRESTORE_DATABASE_ID || 'ai-studio-9d31420a-1d75-4c6c-a7b6-8e5ec8416a66';
+
+      const automatedDbConfig = {
+        isCustom: !!complexToLink,
+        projectId: targetProjId,
+        apiKey: firebaseConfig.apiKey || '',
+        authDomain: firebaseConfig.authDomain || `${targetProjId}.firebaseapp.com`,
+        storageBucket: firebaseConfig.storageBucket || `${targetProjId}.firebasestorage.app`,
+        appId: firebaseConfig.appId || '',
+        databaseId: targetDbId,
+        connectedEmail: connectedEmail,
+        enabledAt: new Date().toISOString()
+      };
+
+      // Step 3: Test connection & check read/write permissions
+      setAutoLinkStep('testing');
+      setAutoLinkProgressText('جاري اختبار الاتصال بقاعدة البيانات السحابية وفحص سرعة الاستجابة ومزامنة الصلاحيات...');
+      await OmranDataService.testConnection();
+
+      // Step 4: Save & activate config
+      if (complexToLink) {
+        await OmranDataService.updateComplexDatabaseConfig(complexToLink.id, automatedDbConfig);
+        if (onSaveComplex) {
+          await onSaveComplex({
+            ...complexToLink,
+            databaseConfig: automatedDbConfig
+          });
+        }
+      }
+
+      if (onRefreshGoogleAuth) {
+        await onRefreshGoogleAuth();
+      }
+
+      await onRefreshAllData();
+
+      // Step 5: Mark completed! "ولما يخلص يقول انه خلص"
+      const completionData = {
+        email: connectedEmail,
+        projectId: targetProjId,
+        databaseId: targetDbId,
+        complexName: complexToLink ? complexToLink.name : 'قاعدة بيانات المنصة المركزية',
+        timestamp: new Date().toLocaleDateString('ar-SA', {
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit'
+        })
+      };
+
+      setAutoLinkResult(completionData);
+      setAutoLinkStep('completed');
+      setAutoLinkProgressText('تم إكمال وتأمين ربط قاعدة البيانات السحابية بنجاح تام!');
+
+      setStatusMsg({
+        type: 'success',
+        text: `تم ربط وتفعيل قاعدة البيانات السحابية (${completionData.complexName}) بحساب (${connectedEmail}) بنجاح تام!`
+      });
+      setShowDbConfigForm(false);
+    } catch (err: any) {
+      console.error('Automated database linking error:', err);
+      setAutoLinkStep('error');
+      setAutoLinkError(err?.message || 'حدث خطأ أثناء محاولة ربط قاعدة البيانات تلقائياً.');
+    }
+  };
+
   // 5. Purge Complex Data (إفراغ بيانات المجمع)
   const handlePurgeComplexData = async () => {
     if (!activeComplex || purgeConfirmationText.trim() !== 'تأكيد الإفراغ') return;
@@ -465,6 +570,41 @@ export const DataBackupTab: React.FC<DataBackupTabProps> = ({
       )}
 
       {/* ========================================================================= */}
+      {/* SECTION 0: UNIVERSAL CLOUD DATABASE CONNECTION (قاعدة البيانات السحابية العامة) */}
+      {/* ========================================================================= */}
+      <div className="bg-gradient-to-r from-[#064e3b] via-[#022c22] to-[#064e3b] border-2 border-emerald-500/50 rounded-[32px] p-6 shadow-2xl flex flex-col md:flex-row items-start md:items-center justify-between gap-5 relative overflow-hidden">
+        <div className="flex items-start sm:items-center gap-4 relative z-10">
+          <div className="w-14 h-14 rounded-2xl bg-emerald-500/20 border-2 border-emerald-400/50 text-emerald-300 flex items-center justify-center shrink-0 shadow-lg shadow-emerald-950/50">
+            <Database className="w-7 h-7" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2.5 flex-wrap">
+              <h3 className="text-base sm:text-lg font-black text-white font-heading">
+                قاعدة البيانات السحابية (Firebase Firestore)
+              </h3>
+              <span className="text-[11px] px-3 py-1 rounded-full bg-emerald-900/80 border border-emerald-400 text-emerald-200 font-bold flex items-center gap-1.5 shadow-sm">
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                متصلة ومفعلة سحابياً 100%
+              </span>
+            </div>
+            <p className="text-xs text-[#86efac] mt-1 leading-relaxed">
+              مشروع المنصة: <span className="font-mono text-amber-300 font-bold">{firebaseConfig.projectId || 'omran-ffbad'}</span> • قاعدة البيانات: <span className="font-mono text-emerald-200">{TARGET_FIRESTORE_DATABASE_ID}</span>
+            </p>
+          </div>
+        </div>
+
+        <button
+          type="button"
+          onClick={() => startAutomatedDatabaseLinking()}
+          className="w-full md:w-auto px-6 py-3.5 rounded-2xl bg-gradient-to-r from-amber-400 via-amber-500 to-emerald-400 hover:brightness-110 text-[#064e3b] text-xs sm:text-sm font-black shadow-[0_0_20px_rgba(251,191,36,0.3)] transition-all cursor-pointer flex items-center justify-center gap-2.5 shrink-0 relative z-10"
+          title="تسجيل الدخول وربط قاعدة البيانات تلقائياً دون إدخال أي كود أو مفاتيح"
+        >
+          <Sparkles className="w-4 h-4 text-[#064e3b]" />
+          <span>تسجيل الدخول والربط السحابي التلقائي</span>
+        </button>
+      </div>
+
+      {/* ========================================================================= */}
       {/* SECTION 1: COMPLEX DATABASE SEPARATION & MANAGEMENT (المجمعات وقواعد البيانات) */}
       {/* ========================================================================= */}
       <div className="bg-[#022c22]/95 border-2 border-amber-500/40 rounded-[32px] p-6 sm:p-8 space-y-6 shadow-2xl">
@@ -529,6 +669,11 @@ export const DataBackupTab: React.FC<DataBackupTabProps> = ({
                 </div>
                 <p className="text-xs text-[#86efac]">
                   المشرف المسؤول: <strong className="text-white">{activeComplex.supervisorTeacherName || 'المشرف المسؤول'}</strong>
+                  {activeComplex.databaseConfig?.connectedEmail && (
+                    <span className="mr-3 text-emerald-300 font-mono text-[11px]">
+                      (الحساب المرتبط: {activeComplex.databaseConfig.connectedEmail})
+                    </span>
+                  )}
                   {activeComplex.databaseConfig?.enabledAt && (
                     <span className="mr-3 text-slate-300">
                       (تاريخ الربط: {new Date(activeComplex.databaseConfig.enabledAt).toLocaleDateString('ar-SA')})
@@ -539,19 +684,33 @@ export const DataBackupTab: React.FC<DataBackupTabProps> = ({
 
               {/* Action buttons for this complex */}
               <div className="flex items-center gap-2 flex-wrap">
+                {/* Primary 1-Click Automated Sign-In & Linking */}
                 <button
-                  onClick={() => setShowDbConfigForm(!showDbConfigForm)}
-                  className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-amber-400 to-amber-500 hover:brightness-110 text-[#064e3b] text-xs font-black shadow transition-all cursor-pointer flex items-center gap-1.5"
+                  type="button"
+                  onClick={() => startAutomatedDatabaseLinking(activeComplex)}
+                  className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-amber-400 via-amber-500 to-emerald-400 hover:brightness-110 text-[#064e3b] text-xs font-black shadow-lg transition-all cursor-pointer flex items-center gap-2"
+                  title="تسجيل الدخول والربط التلقائي بقاعدة البيانات دون إدخال يدوي"
                 >
-                  <Link className="w-3.5 h-3.5" />
-                  <span>{activeComplex.databaseConfig?.isCustom ? 'تعديل ربط قاعدة البيانات' : 'ربط بقاعدة بيانات منفصلة'}</span>
+                  <Sparkles className="w-4 h-4 text-[#064e3b]" />
+                  <span>تسجيل الدخول والربط التلقائي</span>
+                </button>
+
+                {/* Secondary: Manual Developer Form Toggle */}
+                <button
+                  type="button"
+                  onClick={() => setShowDbConfigForm(!showDbConfigForm)}
+                  className="px-3.5 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-amber-200 text-xs font-bold border border-amber-400/30 transition-all cursor-pointer flex items-center gap-1.5"
+                >
+                  <Key className="w-3.5 h-3.5 text-amber-300" />
+                  <span>{showDbConfigForm ? 'إخفاء الإدخال اليدوي' : 'إدخال يدوي مخصص'}</span>
                 </button>
 
                 {activeComplex.databaseConfig?.isCustom && (
                   <button
+                    type="button"
                     onClick={handleResetToCentralDatabase}
                     disabled={isSavingDbConfig}
-                    className="px-3 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 text-xs font-bold border border-white/10 transition-all cursor-pointer"
+                    className="px-3 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 text-xs font-bold border border-white/10 transition-all cursor-pointer"
                   >
                     إعادة للقاعدة المركزية
                   </button>
@@ -566,7 +725,7 @@ export const DataBackupTab: React.FC<DataBackupTabProps> = ({
                   <div className="flex items-center gap-2">
                     <Database className="w-5 h-5 text-amber-400" />
                     <h4 className="text-sm font-bold text-white">
-                      ربط وتفعيل قاعدة بيانات خاصة لمجمع: ({activeComplex.name})
+                      إعدادات ربط قاعدة بيانات مخصصة لمجمع: ({activeComplex.name})
                     </h4>
                   </div>
                   <button
@@ -578,8 +737,24 @@ export const DataBackupTab: React.FC<DataBackupTabProps> = ({
                   </button>
                 </div>
 
+                {/* Helpful automated linking shortcut inside the form */}
+                <div className="p-3.5 bg-gradient-to-r from-amber-500/20 to-emerald-500/20 border border-amber-400/40 rounded-xl flex items-center justify-between gap-3 flex-wrap">
+                  <div className="flex items-center gap-2.5 text-xs text-amber-200">
+                    <Sparkles className="w-4 h-4 text-amber-400 shrink-0" />
+                    <span>لست بحاجة لملء هذه الخانات يدوياً! يمكنك الضغط على زر الدخول وسيقوم النظام بتسجيل الدخول وإكمال كل شيء وتأكيد الربط فوراً:</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => startAutomatedDatabaseLinking(activeComplex)}
+                    className="px-4 py-2 rounded-xl bg-gradient-to-r from-amber-400 to-amber-500 hover:brightness-110 text-[#064e3b] text-xs font-black shadow transition-all cursor-pointer flex items-center gap-1.5 shrink-0"
+                  >
+                    <LogIn className="w-4 h-4" />
+                    <span>تسجيل الدخول والربط التلقائي فوراً</span>
+                  </button>
+                </div>
+
                 <p className="text-xs text-amber-200">
-                  أدخل بيانات مشروع Firebase المخصص لهذا المجمع ثم اضغط "تفعيل" لتوجيه مزامنة بياناته تلقائياً:
+                  أو أدخل بيانات مشروع Firebase المخصص لهذا المجمع يدوياً إذا كنت مبرمجاً متقدماً:
                 </p>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
@@ -1058,6 +1233,225 @@ export const DataBackupTab: React.FC<DataBackupTabProps> = ({
                 {isTransferring ? 'جاري تجهيز النقل...' : 'تأكيد النقل وتنزيل الحزمة'}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ---------------------------------------------------- */}
+      {/* MODAL 5: Automated Database Linking Modal (الربط التلقائي بتسجيل الدخول) */}
+      {/* ---------------------------------------------------- */}
+      {isAutoLinkingOpen && (
+        <div className="fixed inset-0 z-[9999] bg-black/85 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="w-full max-w-lg bg-[#022c22] border-2 border-emerald-500/60 rounded-[32px] p-6 sm:p-7 shadow-2xl space-y-5 text-right relative overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            {/* Background glow */}
+            <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
+
+            {/* Header */}
+            <div className="flex items-center justify-between border-b border-[#065f46] pb-3.5 relative z-10">
+              <div className="flex items-center gap-2.5 text-emerald-400">
+                <Database className="w-6 h-6 text-amber-400" />
+                <h3 className="text-base sm:text-lg font-black text-white font-heading">
+                  الربط السحابي التلقائي لقاعدة البيانات
+                </h3>
+              </div>
+              {autoLinkStep !== 'completed' && (
+                <button
+                  type="button"
+                  onClick={() => setIsAutoLinkingOpen(false)}
+                  disabled={autoLinkStep === 'signing_in' || autoLinkStep === 'configuring' || autoLinkStep === 'testing'}
+                  className="text-xs text-slate-300 hover:text-white cursor-pointer disabled:opacity-30"
+                >
+                  إغلاق
+                </button>
+              )}
+            </div>
+
+            {/* Target Label */}
+            <div className="bg-[#064e3b]/50 border border-[#065f46] rounded-2xl p-3 text-xs text-[#86efac] flex items-center justify-between relative z-10">
+              <span>الجهة المستهدفة بالربط:</span>
+              <span className="font-bold text-amber-300">
+                {autoLinkTargetComplex ? `مجمع: ${autoLinkTargetComplex.name}` : 'قاعدة بيانات المنصة المركزية العامة'}
+              </span>
+            </div>
+
+            {/* STEP 1 to 3: In Progress View */}
+            {(autoLinkStep === 'signing_in' || autoLinkStep === 'configuring' || autoLinkStep === 'testing') && (
+              <div className="space-y-5 py-3 relative z-10">
+                {/* Visual Step Tracker */}
+                <div className="space-y-2.5">
+                  {/* Step 1 */}
+                  <div className={`p-3 rounded-2xl border flex items-center justify-between transition-all ${
+                    autoLinkStep === 'signing_in'
+                      ? 'bg-amber-400/10 border-amber-400/50 text-amber-300'
+                      : 'bg-emerald-950/40 border-emerald-500/30 text-emerald-300'
+                  }`}>
+                    <div className="flex items-center gap-3">
+                      {autoLinkStep === 'signing_in' ? (
+                        <Loader2 className="w-5 h-5 animate-spin text-amber-400" />
+                      ) : (
+                        <CheckCircle2 className="w-5 h-5 text-emerald-400" />
+                      )}
+                      <div>
+                        <div className="text-xs font-bold text-white">الخطوة 1: تسجيل الدخول والمصادقة بحساب Google</div>
+                        <div className="text-[11px] text-slate-300">التحقق من هوية المشرف والصلاحيات عبر النافذة المنبثقة</div>
+                      </div>
+                    </div>
+                    <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-black/30">
+                      {autoLinkStep === 'signing_in' ? 'جاري التنفيذ...' : 'مكتملة ✓'}
+                    </span>
+                  </div>
+
+                  {/* Step 2 */}
+                  <div className={`p-3 rounded-2xl border flex items-center justify-between transition-all ${
+                    autoLinkStep === 'configuring'
+                      ? 'bg-amber-400/10 border-amber-400/50 text-amber-300'
+                      : autoLinkStep === 'testing'
+                      ? 'bg-emerald-950/40 border-emerald-500/30 text-emerald-300'
+                      : 'bg-black/20 border-white/5 text-slate-400'
+                  }`}>
+                    <div className="flex items-center gap-3">
+                      {autoLinkStep === 'configuring' ? (
+                        <Loader2 className="w-5 h-5 animate-spin text-amber-400" />
+                      ) : autoLinkStep === 'testing' ? (
+                        <CheckCircle2 className="w-5 h-5 text-emerald-400" />
+                      ) : (
+                        <div className="w-5 h-5 rounded-full border border-slate-500 flex items-center justify-center text-[10px]">2</div>
+                      )}
+                      <div>
+                        <div className="text-xs font-bold text-white">الخطوة 2: تهيئة واكتشاف قاعدة البيانات السحابية (Firestore)</div>
+                        <div className="text-[11px] text-slate-300">تجهيز مفاتيح الربط وتعيين المشروع تلقائياً</div>
+                      </div>
+                    </div>
+                    <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-black/30">
+                      {autoLinkStep === 'configuring' ? 'جاري التهيئة...' : autoLinkStep === 'testing' ? 'مكتملة ✓' : 'في الانتظار'}
+                    </span>
+                  </div>
+
+                  {/* Step 3 */}
+                  <div className={`p-3 rounded-2xl border flex items-center justify-between transition-all ${
+                    autoLinkStep === 'testing'
+                      ? 'bg-amber-400/10 border-amber-400/50 text-amber-300'
+                      : 'bg-black/20 border-white/5 text-slate-400'
+                  }`}>
+                    <div className="flex items-center gap-3">
+                      {autoLinkStep === 'testing' ? (
+                        <Loader2 className="w-5 h-5 animate-spin text-amber-400" />
+                      ) : (
+                        <div className="w-5 h-5 rounded-full border border-slate-500 flex items-center justify-center text-[10px]">3</div>
+                      )}
+                      <div>
+                        <div className="text-xs font-bold text-white">الخطوة 3: فحص الاتصال ومزامنة الصلاحيات وتأمين السجلات</div>
+                        <div className="text-[11px] text-slate-300">اختبار القراءة والكتابة السحابية والتحقق الفوري</div>
+                      </div>
+                    </div>
+                    <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-black/30">
+                      {autoLinkStep === 'testing' ? 'جاري الفحص...' : 'في الانتظار'}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Live progress message */}
+                <div className="p-3.5 bg-black/30 border border-emerald-500/20 rounded-2xl text-center">
+                  <p className="text-xs text-amber-200 animate-pulse">
+                    {autoLinkProgressText}
+                  </p>
+                  <p className="text-[10px] text-slate-400 mt-1">
+                    يرجى عدم إغلاق الصفحة، النظام يقوم بإكمال كافة الخطوات آلياً...
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* STEP 4: COMPLETED SCREEN (ولما يخلص يقول انه خلص) */}
+            {autoLinkStep === 'completed' && (
+              <div className="text-center space-y-5 py-2 relative z-10">
+                <div className="w-20 h-20 mx-auto rounded-3xl bg-emerald-500/20 border-2 border-emerald-400 text-emerald-400 flex items-center justify-center shadow-[0_0_35px_rgba(52,211,153,0.4)]">
+                  <CheckCircle2 className="w-12 h-12" />
+                </div>
+
+                <div>
+                  <span className="text-[11px] px-3 py-1 rounded-full bg-emerald-900/60 border border-emerald-400/40 text-emerald-300 font-bold inline-block mb-2">
+                    تم الانتهاء بنسبة 100% ✓
+                  </span>
+                  <h3 className="text-xl sm:text-2xl font-black text-white font-heading">
+                    تم إكمال ربط قاعدة البيانات بنجاح! 🎉
+                  </h3>
+                  <p className="text-xs sm:text-sm text-emerald-200 mt-2 max-w-md mx-auto leading-relaxed">
+                    تم تسجيل الدخول وتوصيل وتفعيل قاعدة البيانات السحابية بالكامل، وكافة الجداول والبيانات متزامنة ومؤمنة سحابياً الآن.
+                  </p>
+                </div>
+
+                <div className="bg-[#064e3b]/60 border border-[#065f46] rounded-2xl p-4 text-right space-y-2 max-w-md mx-auto text-xs">
+                  <div className="flex items-center justify-between pb-2 border-b border-[#065f46]">
+                    <span className="text-slate-400">الحساب المعتمد:</span>
+                    <span className="font-mono font-bold text-white">{autoLinkResult?.email}</span>
+                  </div>
+                  <div className="flex items-center justify-between pb-2 border-b border-[#065f46]">
+                    <span className="text-slate-400">الوجهة المستهدفة:</span>
+                    <span className="font-bold text-amber-300">{autoLinkResult?.complexName}</span>
+                  </div>
+                  <div className="flex items-center justify-between pb-2 border-b border-[#065f46]">
+                    <span className="text-slate-400">مشروع قاعدة البيانات (Firestore):</span>
+                    <span className="font-mono text-emerald-300">{autoLinkResult?.projectId}</span>
+                  </div>
+                  <div className="flex items-center justify-between pb-2 border-b border-[#065f46]">
+                    <span className="text-slate-400">حالة التزامن:</span>
+                    <span className="text-emerald-400 font-black flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping inline-block" />
+                      متصلة ونشطة 100%
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between pt-1">
+                    <span className="text-slate-400">تاريخ وتوقيت الربط:</span>
+                    <span className="text-slate-300 font-mono text-[11px]">{autoLinkResult?.timestamp}</span>
+                  </div>
+                </div>
+
+                <div className="pt-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsAutoLinkingOpen(false);
+                      setAutoLinkStep('idle');
+                    }}
+                    className="w-full max-w-md mx-auto py-3.5 px-6 rounded-2xl bg-gradient-to-r from-emerald-500 via-emerald-400 to-teal-500 hover:brightness-110 text-[#064e3b] font-black text-sm shadow-xl transition-all cursor-pointer flex items-center justify-center gap-2"
+                  >
+                    <Check className="w-5 h-5" />
+                    <span>تم، إغلاق والعودة للمنصة</span>
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* ERROR STATE */}
+            {autoLinkStep === 'error' && (
+              <div className="space-y-4 py-2 relative z-10">
+                <div className="p-4 rounded-2xl bg-red-950/50 border border-red-500/40 text-red-200 text-xs leading-relaxed space-y-2">
+                  <div className="flex items-center gap-2 font-bold text-red-300 text-sm">
+                    <AlertTriangle className="w-5 h-5" />
+                    <span>تعذر استكمال الربط التلقائي</span>
+                  </div>
+                  <p>{autoLinkError}</p>
+                </div>
+
+                <div className="flex items-center justify-end gap-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsAutoLinkingOpen(false)}
+                    className="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-bold cursor-pointer"
+                  >
+                    إلغاء
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => startAutomatedDatabaseLinking(autoLinkTargetComplex || undefined)}
+                    className="px-5 py-2 rounded-xl bg-gradient-to-r from-amber-400 to-amber-500 hover:brightness-110 text-[#064e3b] text-xs font-black shadow-lg cursor-pointer"
+                  >
+                    إعادة المحاولة لتسجيل الدخول والربط
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}

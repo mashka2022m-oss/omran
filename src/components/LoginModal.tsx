@@ -12,7 +12,7 @@ import {
   CheckCircle2,
   KeyRound
 } from 'lucide-react';
-import { Student, UserRole, AppSettings, TeacherAccount } from '../types';
+import { Student, UserRole, AppSettings, TeacherAccount, getThreePartNameValidation } from '../types';
 import { GoogleWorkspaceService } from '../lib/googleWorkspace';
 
 interface LoginModalProps {
@@ -159,6 +159,12 @@ export const LoginModal: React.FC<LoginModalProps> = ({
 
     if (!regName.trim() || !regPassword.trim() || !regPhone.trim()) {
       setRegError('يرجى ملء جميع الحقول الإلزامية.');
+      return;
+    }
+
+    const nameVal = getThreePartNameValidation(regName, 'طالب');
+    if (!nameVal.isValid) {
+      setRegError(nameVal.message || 'الاسم الثلاثي للطالب إلزامي.');
       return;
     }
 
@@ -378,19 +384,43 @@ export const LoginModal: React.FC<LoginModalProps> = ({
             )}
 
             <div>
-              <label className="block text-xs font-semibold text-[#86efac] mb-1 text-right">
-                اسم الطالب الثلاثي <span className="text-red-400">*</span>
-              </label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-xs font-semibold text-[#86efac] text-right">
+                  اسم الطالب الثلاثي <span className="text-red-400">* (إلزامي)</span>
+                </label>
+                {regName.trim().length > 0 && (
+                  <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold flex items-center gap-1 ${
+                    getThreePartNameValidation(regName, 'طالب').isValid
+                      ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                      : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                  }`}>
+                    {getThreePartNameValidation(regName, 'طالب').isValid ? (
+                      <>
+                        <CheckCircle2 className="w-3 h-3" />
+                        <span>ثلاثي معتمد</span>
+                      </>
+                    ) : (
+                      <>
+                        <AlertCircle className="w-3 h-3" />
+                        <span>يلزم 3 أسماء</span>
+                      </>
+                    )}
+                  </span>
+                )}
+              </div>
               <input
                 type="text"
                 required
                 disabled={!settings.allowStudentRegistration || isSubmitting}
                 value={regName}
                 onChange={e => setRegName(e.target.value)}
-                placeholder="مثال: يوسف خالد المنصور"
+                placeholder="مثال: يوسف خالد المنصور أو عبد الله أحمد التميمي"
                 className="w-full bg-[#022c22]/90 border border-[#065f46] focus:border-[#fbbf24] rounded-2xl py-2 px-3 text-sm text-white placeholder-[#86efac]/40 outline-none"
                 dir="rtl"
               />
+              <p className="text-[10px] text-[#86efac]/70 mt-1">
+                * التسجيل يشترط الاسم الثلاثي كاملاً (الاسم، اسم الأب، واسم العائلة).
+              </p>
             </div>
 
             <div className="grid grid-cols-2 gap-2.5">

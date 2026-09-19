@@ -23,7 +23,7 @@ import {
   Square,
   RefreshCw
 } from 'lucide-react';
-import { Student, StudentLevel, AppSettings, Halaqah } from '../../types';
+import { Student, StudentLevel, AppSettings, Halaqah, getThreePartNameValidation } from '../../types';
 import { QURAN_SURAHS } from '../../data/quranData';
 
 interface StudentsTabProps {
@@ -215,6 +215,12 @@ export const StudentsTab: React.FC<StudentsTabProps> = ({
 
     if (!formName.trim()) {
       setFormError('يرجى كتابة اسم الطالب');
+      return;
+    }
+
+    const nameValidation = getThreePartNameValidation(formName, 'طالب');
+    if (!nameValidation.isValid) {
+      setFormError(nameValidation.message || 'الاسم الثلاثي للطالب إلزامي.');
       return;
     }
 
@@ -752,18 +758,42 @@ export const StudentsTab: React.FC<StudentsTabProps> = ({
                 {/* Row 1: Student Basic Info */}
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div className="sm:col-span-2">
-                    <label className="block text-xs font-semibold text-[#86efac] mb-1 text-right">
-                      اسم الطالب الثلاثي <span className="text-red-400">*</span>
-                    </label>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block text-xs font-semibold text-[#86efac] text-right">
+                        اسم الطالب الثلاثي <span className="text-red-400">* (إلزامي)</span>
+                      </label>
+                      {formName.trim().length > 0 && (
+                        <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold flex items-center gap-1 ${
+                          getThreePartNameValidation(formName, 'طالب').isValid
+                            ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                            : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                        }`}>
+                          {getThreePartNameValidation(formName, 'طالب').isValid ? (
+                            <>
+                              <CheckCircle className="w-3 h-3" />
+                              <span>ثلاثي مكتمل</span>
+                            </>
+                          ) : (
+                            <>
+                              <AlertCircle className="w-3 h-3" />
+                              <span>يلزم 3 أسماء على الأقل</span>
+                            </>
+                          )}
+                        </span>
+                      )}
+                    </div>
                     <input
                       type="text"
                       required
                       value={formName}
                       onChange={e => setFormName(e.target.value)}
-                      placeholder="مثال: عبد الله محمد القاسمي"
+                      placeholder="مثال: عبد الله محمد القاسمي أو عمر بن خالد التميمي"
                       className="w-full bg-[#022c22] border border-[#065f46] focus:border-[#fbbf24] rounded-2xl py-2.5 px-3.5 text-sm text-[#f0f9f6] outline-none transition-colors"
                       dir="rtl"
                     />
+                    <p className="text-[10px] text-[#86efac]/70 mt-1">
+                      * يشترط كتابة الاسم الثلاثي كاملاً (الاسم، اسم الأب، واسم العائلة/الجد).
+                    </p>
                   </div>
                   <div>
                     <label className="block text-xs font-semibold text-[#86efac] mb-1 text-right">

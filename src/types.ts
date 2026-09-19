@@ -16,6 +16,8 @@ export interface QuranComplex {
     storageBucket?: string;
     appId?: string;
     enabledAt?: string;
+    connectedEmail?: string;
+    databaseId?: string;
   };
   // Independent Firebase database config if separated
   customFirebaseConfig?: {
@@ -684,5 +686,109 @@ export interface StudentListeningLog {
   isFullyCompleted: boolean;
   date: string; // YYYY-MM-DD
   timestamp: string;
+}
+
+/**
+ * التحقق الصارم من الاسم الثلاثي (الاسم الأول واسم الأب واسم الجد/العائلة)
+ * إلزامي لجميع الطلاب والمعلمين والمشرفين
+ */
+export function getThreePartNameValidation(
+  rawName?: string | null,
+  roleLabel: 'طالب' | 'معلم' | 'مشرف' | 'شخص' = 'شخص'
+): { isValid: boolean; partsCount: number; message?: string } {
+  const trimmed = (rawName || '').trim();
+  if (!trimmed) {
+    return {
+      isValid: false,
+      partsCount: 0,
+      message: `اسم ال${roleLabel} إلزامي ولا يمكن تركه فارغاً.`
+    };
+  }
+
+  // Split by whitespace
+  const rawTokens = trimmed.split(/\s+/).filter(Boolean);
+
+  if (rawTokens.length < 3) {
+    return {
+      isValid: false,
+      partsCount: rawTokens.length,
+      message: `الاسم الثلاثي إلزامي: يجب كتابة اسم ال${roleLabel} كاملاً من 3 مقاطع على الأقل (الاسم الأول، اسم الأب، واسم العائلة/الجد، مثلاً: محمد أحمد علي أو عبد الله بن راشد القحطاني).`
+    };
+  }
+
+  // Check valid letters (Arabic or Latin letters, apostrophe, dash)
+  const validLettersRegex = /^[\p{L}\p{M}'-]+$/u;
+  const invalidTokens = rawTokens.filter(t => !validLettersRegex.test(t));
+  if (invalidTokens.length > 0) {
+    return {
+      isValid: false,
+      partsCount: rawTokens.length - invalidTokens.length,
+      message: `يرجى إدخال اسم ال${roleLabel} بالحروف الأبجدية فقط وتجنب الأرقام والرموز الخاصة.`
+    };
+  }
+
+  // Disallow single-character abbreviations
+  const shortTokens = rawTokens.filter(t => t.length < 2 && t !== 'و');
+  if (shortTokens.length > 0) {
+    return {
+      isValid: false,
+      partsCount: 0,
+      message: `يرجى كتابة مقاطع الاسم كاملة وتجنب الاختصارات بحرف واحد.`
+    };
+  }
+
+  // Common Arabic prefixes and connectors
+  const prefixes = new Set([
+    'عبد', 'ابو', 'أبو', 'ابي', 'أبي', 'ابا', 'أبا', 'ام', 'أم',
+    'آل', 'ذو', 'ذا', 'ذي', 'بدر', 'نور', 'شمس', 'علاء', 'سيف',
+    'تقي', 'حسام', 'بهاء', 'ضياء', 'عماد', 'كمال', 'جمال', 'صلاح', 'سراج', 'نجم', 'أمة', 'امه'
+  ]);
+  const connectors = new Set(['بن', 'ابن', 'بنت', 'ولد']);
+  const religiousSuffixes = new Set(['الله', 'الرحمن', 'الدين', 'الإسلام', 'الاسلام', 'الحق']);
+
+  const groupedParts: string[] = [];
+  for (let i = 0; i < rawTokens.length; i++) {
+    const current = rawTokens[i];
+    const next = rawTokens[i + 1];
+
+    if (connectors.has(current)) {
+      if (next) {
+        groupedParts.push(`${current} ${next}`);
+        i++;
+      }
+      continue;
+    }
+
+    if (prefixes.has(current) && next) {
+      groupedParts.push(`${current} ${next}`);
+      i++;
+      continue;
+    }
+
+    if (next && religiousSuffixes.has(next)) {
+      groupedParts.push(`${current} ${next}`);
+      i++;
+      continue;
+    }
+
+    groupedParts.push(current);
+  }
+
+  if (groupedParts.length < 3) {
+    return {
+      isValid: false,
+      partsCount: groupedParts.length,
+      message: `الاسم المدخل ثنائي فقط ("${trimmed}"). يلزم إدخال اسم ال${roleLabel} الثلاثي كاملاً بإضافة اسم الجد أو العائلة/القبيلة.`
+    };
+  }
+
+  return { isValid: true, partsCount: groupedParts.length };
+}
+
+export function isValidThreePartName(
+  rawName?: string | null,
+  roleLabel: 'طالب' | 'معلم' | 'مشرف' | 'شخص' = 'شخص'
+): boolean {
+  return getThreePartNameValidation(rawName, roleLabel).isValid;
 }
 

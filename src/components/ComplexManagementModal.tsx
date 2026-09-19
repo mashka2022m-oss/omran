@@ -17,7 +17,7 @@ import {
   Sparkles,
   UserPlus
 } from 'lucide-react';
-import { QuranComplex, Halaqah, TeacherAccount, Student } from '../types';
+import { QuranComplex, Halaqah, TeacherAccount, Student, getThreePartNameValidation } from '../types';
 
 interface ComplexManagementModalProps {
   isOpen: boolean;
@@ -124,6 +124,13 @@ export const ComplexManagementModal: React.FC<ComplexManagementModalProps> = ({
       if (isCreatingNewSupervisor) {
         if (!newSupervisorData.name.trim() || !newSupervisorData.username.trim()) {
           setStatusMsg({ type: 'error', text: 'يرجى إدخال اسم المعلم المشرف الجديد واسم المستخدم.' });
+          setIsSubmitting(false);
+          return;
+        }
+
+        const supNameVal = getThreePartNameValidation(newSupervisorData.name, 'مشرف');
+        if (!supNameVal.isValid) {
+          setStatusMsg({ type: 'error', text: supNameVal.message || 'الاسم الثلاثي للمعلم المشرف إلزامي.' });
           setIsSubmitting(false);
           return;
         }
@@ -485,15 +492,29 @@ export const ComplexManagementModal: React.FC<ComplexManagementModalProps> = ({
                     </p>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                       <div>
-                        <label className="block text-[11px] text-emerald-200 font-bold mb-1">اسم المعلم المشرف:</label>
+                        <div className="flex items-center justify-between mb-1">
+                          <label className="block text-[11px] text-emerald-200 font-bold">اسم المعلم المشرف الثلاثي * (إلزامي):</label>
+                          {newSupervisorData.name.trim().length > 0 && (
+                            <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-bold ${
+                              getThreePartNameValidation(newSupervisorData.name, 'مشرف').isValid
+                                ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                                : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                            }`}>
+                              {getThreePartNameValidation(newSupervisorData.name, 'مشرف').isValid ? 'ثلاثي معتمد' : 'يلزم 3 مقاطع'}
+                            </span>
+                          )}
+                        </div>
                         <input
                           type="text"
                           required={isCreatingNewSupervisor}
-                          placeholder="الشيخ فلان الفلاني"
+                          placeholder="مثال: إبراهيم خالد المنصوري أو عبد الله بن علي الكعبي"
                           value={newSupervisorData.name}
                           onChange={e => setNewSupervisorData(prev => ({ ...prev, name: e.target.value }))}
                           className="w-full bg-[#022c22] border border-[#065f46] rounded-lg px-2.5 py-1.5 text-xs text-white outline-none focus:border-[#fbbf24]"
                         />
+                        <p className="text-[9px] text-[#86efac]/70 mt-0.5">
+                          * يشترط إدخال الاسم الثلاثي كاملاً للمشرف.
+                        </p>
                       </div>
                       <div>
                         <label className="block text-[11px] text-emerald-200 font-bold mb-1">اسم المستخدم (للدخول):</label>

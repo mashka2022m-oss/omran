@@ -18,7 +18,7 @@ import {
   CheckCircle2,
   AlertCircle
 } from 'lucide-react';
-import { TeacherAccount, Student, Halaqah } from '../../types';
+import { TeacherAccount, Student, Halaqah, getThreePartNameValidation } from '../../types';
 import { GoogleWorkspaceService } from '../../lib/googleWorkspace';
 
 interface AccountsTabProps {
@@ -122,6 +122,13 @@ export const AccountsTab: React.FC<AccountsTabProps> = ({
     e.preventDefault();
     if (!editingTeacherData || !editingTeacherData.name?.trim() || !editingTeacherData.username?.trim()) {
       setStatusMsg({ type: 'error', text: 'يرجى إدخال اسم المعلم واسم المستخدم للدخول.' });
+      return;
+    }
+
+    const isSuper = editingTeacherData.role === 'supervisor';
+    const nameVal = getThreePartNameValidation(editingTeacherData.name, isSuper ? 'مشرف' : 'معلم');
+    if (!nameVal.isValid) {
+      setStatusMsg({ type: 'error', text: nameVal.message || 'الاسم الثلاثي إلزامي.' });
       return;
     }
 
@@ -730,15 +737,39 @@ export const AccountsTab: React.FC<AccountsTabProps> = ({
 
             <form onSubmit={handleSaveTeacherForm} className="space-y-4 text-xs">
               <div>
-                <label className="block text-emerald-200 font-bold mb-1">اسم المعلم / المشرف:</label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-emerald-200 font-bold">اسم المعلم / المشرف الثلاثي * (إلزامي):</label>
+                  {editingTeacherData.name && editingTeacherData.name.trim().length > 0 && (
+                    <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold flex items-center gap-1 ${
+                      getThreePartNameValidation(editingTeacherData.name, editingTeacherData.role === 'supervisor' ? 'مشرف' : 'معلم').isValid
+                        ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                        : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                    }`}>
+                      {getThreePartNameValidation(editingTeacherData.name, editingTeacherData.role === 'supervisor' ? 'مشرف' : 'معلم').isValid ? (
+                        <>
+                          <CheckCircle2 className="w-3 h-3" />
+                          <span>ثلاثي معتمد</span>
+                        </>
+                      ) : (
+                        <>
+                          <AlertCircle className="w-3 h-3" />
+                          <span>يلزم 3 مقاطع</span>
+                        </>
+                      )}
+                    </span>
+                  )}
+                </div>
                 <input
                   type="text"
                   required
-                  placeholder="مثال: الشيخ عبد الله بن محمد"
+                  placeholder="مثال: الشيخ عبد الله بن محمد الدوسري"
                   value={editingTeacherData.name || ''}
                   onChange={e => setEditingTeacherData(prev => ({ ...prev, name: e.target.value }))}
                   className="w-full bg-[#064e3b]/70 border border-[#065f46] rounded-xl px-3 py-2 text-white outline-none focus:border-[#fbbf24]"
                 />
+                <p className="text-[10px] text-[#86efac]/70 mt-1">
+                  * يشترط تسجيل الاسم الثلاثي كاملاً (الاسم، اسم الأب، واسم العائلة).
+                </p>
               </div>
 
               <div className="grid grid-cols-2 gap-3">

@@ -14,7 +14,7 @@ import {
   Users,
   RefreshCw
 } from 'lucide-react';
-import { TeacherAccount, AppSettings } from '../types';
+import { TeacherAccount, AppSettings, getThreePartNameValidation } from '../types';
 
 interface TeacherManagementModalProps {
   isOpen: boolean;
@@ -76,6 +76,12 @@ export const TeacherManagementModal: React.FC<TeacherManagementModalProps> = ({
     e.preventDefault();
     if (!editingTeacher || !editingTeacher.name?.trim() || !editingTeacher.username?.trim()) {
       setStatusMsg({ type: 'error', text: 'يرجى كتابة اسم المعلم واسم المستخدم للدخول.' });
+      return;
+    }
+
+    const nameVal = getThreePartNameValidation(editingTeacher.name, 'معلم');
+    if (!nameVal.isValid) {
+      setStatusMsg({ type: 'error', text: nameVal.message || 'الاسم الثلاثي للمعلم إلزامي.' });
       return;
     }
 
@@ -207,18 +213,42 @@ export const TeacherManagementModal: React.FC<TeacherManagementModalProps> = ({
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
               <div>
-                <label className="block text-xs font-bold text-[#86efac] mb-1.5 text-right">
-                  اسم المعلم الكامل <span className="text-red-400">*</span>
-                </label>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block text-xs font-bold text-[#86efac] text-right">
+                    اسم المعلم الثلاثي <span className="text-red-400">* (إلزامي)</span>
+                  </label>
+                  {editingTeacher.name && editingTeacher.name.trim().length > 0 && (
+                    <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold flex items-center gap-1 ${
+                      getThreePartNameValidation(editingTeacher.name, 'معلم').isValid
+                        ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                        : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                    }`}>
+                      {getThreePartNameValidation(editingTeacher.name, 'معلم').isValid ? (
+                        <>
+                          <CheckCircle className="w-3 h-3" />
+                          <span>ثلاثي معتمد</span>
+                        </>
+                      ) : (
+                        <>
+                          <AlertCircle className="w-3 h-3" />
+                          <span>يلزم 3 مقاطع</span>
+                        </>
+                      )}
+                    </span>
+                  )}
+                </div>
                 <input
                   type="text"
                   required
                   value={editingTeacher.name || ''}
                   onChange={e => setEditingTeacher({ ...editingTeacher, name: e.target.value })}
-                  placeholder="مثال: الشيخ عبد الله بن فهد"
+                  placeholder="مثال: أحمد عبد الرحمن البلوشي أو عبد الله بن فهد آل ثاني"
                   className="w-full bg-[#064e3b]/80 border border-[#065f46] focus:border-[#fbbf24] rounded-xl py-2.5 px-3 text-xs sm:text-sm text-white placeholder-[#86efac]/40 outline-none"
                   dir="rtl"
                 />
+                <p className="text-[10px] text-[#86efac]/70 mt-1">
+                  * يجب كتابة الاسم الثلاثي كاملاً (الاسم، اسم الأب، واسم العائلة).
+                </p>
               </div>
 
               <div>
