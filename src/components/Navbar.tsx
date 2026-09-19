@@ -23,6 +23,7 @@ interface NavbarProps {
   studentsCount: number;
   teachersCount?: number;
   complexesCount?: number;
+  complexName?: string;
   halaqahs?: Halaqah[];
   assignedHalaqahs?: Halaqah[];
   isSupervisor?: boolean;
@@ -41,6 +42,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   studentsCount,
   teachersCount = 1,
   complexesCount = 1,
+  complexName,
   halaqahs = [],
   assignedHalaqahs = [],
   isSupervisor = false,
@@ -76,8 +78,8 @@ export const Navbar: React.FC<NavbarProps> = ({
             <div className="flex items-center gap-2">
               <h1 className="text-lg sm:text-xl font-bold font-heading tracking-tight text-[#fbbf24] flex items-center gap-1.5">
                 مَنَصَّةُ عُمْرَان
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#022c22] text-[#86efac] border border-[#065f46] font-sans font-medium">
-                  القرآنية
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#022c22] text-[#86efac] border border-[#065f46] font-sans font-medium line-clamp-1 max-w-[200px]" title={complexName || 'المنظومة القرآنية'}>
+                  {complexName || 'القرآنية'}
                 </span>
               </h1>
             </div>
@@ -95,7 +97,9 @@ export const Navbar: React.FC<NavbarProps> = ({
                         onChange={e => onSwitchHalaqah(e.target.value)}
                         className="text-xs text-[#86efac] font-medium bg-[#022c22] border border-[#065f46] rounded-lg px-2 py-0.5 cursor-pointer focus:border-[#fbbf24] focus:outline-none"
                       >
-                        <option value="all">جميع الحلقات ({studentsCount} طالب)</option>
+                        <option value="all">
+                          {isDeveloper ? 'جميع الحلقات لكافة المجمعات' : `جميع حلقات ${complexName || 'المجمع'}`} ({studentsCount} طالب)
+                        </option>
                         {halaqahs.map(h => (
                           <option key={h.id} value={h.id}>
                             {h.name}

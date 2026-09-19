@@ -129,6 +129,51 @@ export const isTeacherSupervisor = (teacher?: TeacherAccount | null): boolean =>
   return Boolean(teacher.isPrimary);
 };
 
+/**
+ * Resolves the specific QuranComplex that a teacher supervises or belongs to.
+ */
+export const getTeacherComplex = (
+  teacher?: TeacherAccount | null,
+  complexes: QuranComplex[] = [],
+  halaqahs: Halaqah[] = []
+): QuranComplex | null => {
+  if (!teacher) return null;
+
+  // 1. Direct match by complexId on teacher
+  if (teacher.complexId) {
+    const match = complexes.find(c => c.id === teacher.complexId);
+    if (match) return match;
+  }
+
+  // 2. Direct match by complex.supervisorTeacherId or supervisorTeacherName
+  const supMatch = complexes.find(
+    c => c.supervisorTeacherId && (
+      c.supervisorTeacherId === teacher.id ||
+      (teacher.name && c.supervisorTeacherName && c.supervisorTeacherName.trim().toLowerCase() === teacher.name.trim().toLowerCase())
+    )
+  );
+  if (supMatch) return supMatch;
+
+  // 3. Match through teacher's assigned halaqahs
+  const teacherHalaqahIds = new Set<string>();
+  if (teacher.halaqahId) teacherHalaqahIds.add(teacher.halaqahId);
+  if (teacher.halaqahIds) teacher.halaqahIds.forEach(id => teacherHalaqahIds.add(id));
+
+  for (const h of halaqahs) {
+    if (teacherHalaqahIds.has(h.id) && h.complexId) {
+      const match = complexes.find(c => c.id === h.complexId);
+      if (match) return match;
+    }
+  }
+
+  // 4. Fallback if only 1 complex exists in system
+  if (complexes.length === 1) {
+    return complexes[0];
+  }
+
+  return null;
+};
+
 export interface UserAccount {
   id: string;
   username: string;

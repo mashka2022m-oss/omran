@@ -32,6 +32,8 @@ interface SettingsModalProps {
   students: Student[];
   settings: AppSettings;
   activeHalaqahId?: string;
+  isDeveloper?: boolean;
+  complexName?: string;
   onSaveTeacher: (teacher: TeacherAccount) => Promise<void>;
   onDeleteTeacher: (teacherId: string) => Promise<void>;
   onSaveHalaqah: (halaqah: Halaqah) => Promise<void>;
@@ -50,6 +52,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   students,
   settings,
   activeHalaqahId,
+  isDeveloper = false,
+  complexName,
   onSaveTeacher,
   onDeleteTeacher,
   onSaveHalaqah,
@@ -105,10 +109,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   // ----------------------------------------------------
   const handleStartAddHalaqah = () => {
     setIsNewHalaqah(true);
+    const defaultComplex = complexes[0];
     setEditingHalaqah({
       id: `halaqah-${Date.now()}`,
       name: '',
       description: '',
+      complexId: defaultComplex?.id,
+      complexName: defaultComplex?.name,
       primaryTeacherName: teachers[0]?.name || 'محمد منتصر',
       createdAt: new Date().toISOString()
     });
@@ -146,13 +153,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     const executeSave = async () => {
       try {
         setIsSubmitting(true);
-        const targetComplex = complexes.find(c => c.id === editingHalaqah.complexId);
+        const targetComplex = complexes.find(c => c.id === editingHalaqah.complexId) || complexes[0];
         const halaqahObj: Halaqah = {
           id: halaqahId,
           name: halaqahName,
           description: editingHalaqah.description?.trim() || '',
           primaryTeacherName: selectedTeacherName,
-          complexId: editingHalaqah.complexId || undefined,
+          complexId: targetComplex?.id || editingHalaqah.complexId || undefined,
           complexName: targetComplex?.name || editingHalaqah.complexName || undefined,
           createdAt: editingHalaqah.createdAt || new Date().toISOString(),
           isDefault: editingHalaqah.isDefault ?? false
@@ -216,6 +223,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   // ----------------------------------------------------
   const handleStartAddTeacher = () => {
     setIsNewTeacher(true);
+    const defaultComplex = complexes[0];
     setEditingTeacher({
       id: `teacher-${Date.now()}`,
       name: '',
@@ -223,10 +231,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       password: '123',
       phone: '0500000000',
       title: 'معلم ومحفظ',
-      halaqahIds: [],
-      halaqahNames: [],
-      halaqahId: '',
-      halaqahName: '',
+      role: 'teacher',
+      complexId: defaultComplex?.id,
+      complexName: defaultComplex?.name,
+      halaqahIds: halaqahs.length > 0 ? [halaqahs[0].id] : [],
+      halaqahNames: halaqahs.length > 0 ? [halaqahs[0].name] : [],
+      halaqahId: halaqahs[0]?.id || '',
+      halaqahName: halaqahs[0]?.name || '',
       isPrimary: false,
       createdAt: new Date().toISOString()
     });
@@ -283,6 +294,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         editingTeacher.id === 'teacher-1';
 
       const isSuper = isMohamed || editingTeacher.role === 'supervisor';
+      const selectedComplex = complexes.find(c => c.id === editingTeacher.complexId) || complexes[0];
 
       const fullTeacher: TeacherAccount = {
         id: editingTeacher.id || `teacher-${Date.now()}`,
@@ -293,6 +305,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         title: editingTeacher.title?.trim() || (isMohamed ? 'المشرف الأساسي والمعلم الأول' : (isSuper ? 'معلم مشرف' : 'معلم ومحفظ')),
         role: isSuper ? 'supervisor' : 'teacher',
         isPrimary: isMohamed,
+        complexId: editingTeacher.complexId || selectedComplex?.id,
+        complexName: selectedComplex?.name || editingTeacher.complexName,
         halaqahIds: selectedHalaqahIds,
         halaqahNames: selectedHalaqahNames,
         halaqahId: selectedHalaqahIds[0] || '',
@@ -615,25 +629,31 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       <label className="block text-xs font-bold text-amber-300 mb-1">
                         المجمع القرآني التابعة له الحلقة:
                       </label>
-                      <select
-                        value={editingHalaqah.complexId || ''}
-                        onChange={e => {
-                          const targetC = complexes.find(c => c.id === e.target.value);
-                          setEditingHalaqah({
-                            ...editingHalaqah,
-                            complexId: e.target.value || undefined,
-                            complexName: targetC?.name || undefined
-                          });
-                        }}
-                        className="w-full bg-[#064e3b] border border-[#065f46] rounded-xl px-3 py-2 text-white text-xs focus:border-[#fbbf24] focus:outline-none cursor-pointer"
-                      >
-                        <option value="">-- حلقة مستقلة (غير مرتبطة بمجمع حالياً) --</option>
-                        {complexes.map(c => (
-                          <option key={c.id} value={c.id}>
-                            {c.name}
-                          </option>
-                        ))}
-                      </select>
+                      {isDeveloper && complexes.length > 1 ? (
+                        <select
+                          value={editingHalaqah.complexId || complexes[0].id}
+                          onChange={e => {
+                            const targetC = complexes.find(c => c.id === e.target.value);
+                            setEditingHalaqah({
+                              ...editingHalaqah,
+                              complexId: e.target.value || undefined,
+                              complexName: targetC?.name || undefined
+                            });
+                          }}
+                          className="w-full bg-[#064e3b] border border-[#065f46] rounded-xl px-3 py-2 text-white text-xs focus:border-[#fbbf24] focus:outline-none cursor-pointer"
+                        >
+                          {complexes.map(c => (
+                            <option key={c.id} value={c.id}>
+                              {c.name}
+                            </option>
+                          ))}
+                        </select>
+                      ) : (
+                        <div className="w-full bg-[#064e3b]/80 border border-[#065f46] rounded-xl px-3 py-2 text-amber-300 font-bold text-xs flex items-center gap-2">
+                          <Building2 className="w-4 h-4 text-amber-400 shrink-0" />
+                          <span>{complexes.find(c => c.id === editingHalaqah.complexId)?.name || complexes[0]?.name || complexName || 'المجمع القرآني الحالي'}</span>
+                        </div>
+                      )}
                     </div>
                   )}
 
@@ -995,9 +1015,43 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       className="w-full bg-[#064e3b] border border-[#065f46] rounded-xl px-3 py-2 text-[#fbbf24] font-bold text-xs focus:border-[#fbbf24] focus:outline-none disabled:opacity-60"
                     >
                       <option value="teacher">معلم عادي (مخصص لحلقاته فقط)</option>
-                      <option value="supervisor">معلم مشرف (صلاحيات المشرف العام كاملة)</option>
+                      <option value="supervisor">معلم مشرف (مشرف على مجمعه القرآني فقط)</option>
                     </select>
                   </div>
+
+                  {/* Complex Selection for Teacher */}
+                  {complexes && complexes.length > 0 && (
+                    <div className="sm:col-span-2">
+                      <label className="block text-xs font-bold text-amber-300 mb-1">
+                        المجمع القرآني التابع له المعلم:
+                      </label>
+                      {isDeveloper && complexes.length > 1 ? (
+                        <select
+                          value={editingTeacher.complexId || complexes[0]?.id}
+                          onChange={e => {
+                            const targetC = complexes.find(c => c.id === e.target.value);
+                            setEditingTeacher({
+                              ...editingTeacher,
+                              complexId: e.target.value,
+                              complexName: targetC?.name
+                            });
+                          }}
+                          className="w-full bg-[#064e3b] border border-[#065f46] rounded-xl px-3 py-2 text-white text-xs focus:border-[#fbbf24] focus:outline-none cursor-pointer"
+                        >
+                          {complexes.map(c => (
+                            <option key={c.id} value={c.id}>
+                              {c.name}
+                            </option>
+                          ))}
+                        </select>
+                      ) : (
+                        <div className="w-full bg-[#064e3b]/80 border border-[#065f46] rounded-xl px-3 py-2 text-amber-300 font-bold text-xs flex items-center gap-2">
+                          <Building2 className="w-4 h-4 text-amber-400 shrink-0" />
+                          <span>{complexes.find(c => c.id === editingTeacher.complexId)?.name || complexes[0]?.name || complexName || 'المجمع القرآني'}</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                   {/* Multi-Halaqah Assignment */}
                   <div className="sm:col-span-2 space-y-2.5 bg-[#064e3b]/50 p-4 rounded-2xl border border-[#065f46]">

@@ -38,6 +38,7 @@ import {
   RecordingsConfig,
   isTeacherSupervisor,
   isTeacherDeveloper,
+  getTeacherComplex,
   QuranComplex
 } from './types';
 import {
@@ -381,9 +382,67 @@ export function App() {
     );
   }, [currentUser, currentTeacher]);
 
+  // Complex scope resolution for teacher/supervisor:
+  // Non-developer supervisors can ONLY manage and view their own assigned QuranComplex!
+  const supervisedComplex = useMemo(() => {
+    if (!currentUser || currentUser.role !== 'admin') return null;
+    return getTeacherComplex(currentTeacher, complexes, halaqahs);
+  }, [currentUser, currentTeacher, complexes, halaqahs]);
+
+  // Scoped complexes: Programmer sees all complexes; supervisor/teacher only sees their own complex
+  const scopedComplexes = useMemo(() => {
+    if (isDeveloper) return complexes;
+    if (supervisedComplex) return [supervisedComplex];
+    return complexes.slice(0, 1);
+  }, [isDeveloper, supervisedComplex, complexes]);
+
+  // Scoped halaqahs: If programmer, sees all halaqahs.
+  // If complex supervisor or teacher, STRICTLY sees halaqahs of their own QuranComplex!
+  const scopedHalaqahs = useMemo(() => {
+    if (isDeveloper) return halaqahs;
+    if (supervisedComplex) {
+      return halaqahs.filter(h => {
+        const cId = h.complexId || (complexes[0] ? complexes[0].id : '');
+        return cId === supervisedComplex.id;
+      });
+    }
+    return halaqahs;
+  }, [isDeveloper, supervisedComplex, halaqahs, complexes]);
+
+  const scopedHalaqahIds = useMemo(() => {
+    return new Set(scopedHalaqahs.map(h => h.id));
+  }, [scopedHalaqahs]);
+
+  // Scoped students: If programmer, sees all students.
+  // If complex supervisor or teacher, STRICTLY sees students belonging to their complex's halaqahs!
+  const scopedStudents = useMemo(() => {
+    if (isDeveloper) return students;
+    return students.filter(s => s.halaqahId && scopedHalaqahIds.has(s.halaqahId));
+  }, [isDeveloper, students, scopedHalaqahIds]);
+
+  const scopedStudentIds = useMemo(() => {
+    return new Set(scopedStudents.map(s => s.id));
+  }, [scopedStudents]);
+
+  // Scoped teachers: Teachers belonging to the same complex
+  const scopedTeachers = useMemo(() => {
+    if (isDeveloper) return teachers;
+    if (!supervisedComplex) return teachers;
+    return teachers.filter(t => {
+      if (currentTeacher && t.id === currentTeacher.id) return true;
+      if (t.complexId === supervisedComplex.id) return true;
+      if (t.halaqahId && scopedHalaqahIds.has(t.halaqahId)) return true;
+      if (t.halaqahIds && t.halaqahIds.some(hid => scopedHalaqahIds.has(hid))) return true;
+      return false;
+    });
+  }, [isDeveloper, teachers, supervisedComplex, currentTeacher, scopedHalaqahIds]);
+
+  // Assigned halaqahs for current user:
+  // If supervisor, gets all halaqahs belonging to their complex (scopedHalaqahs).
+  // If teacher, gets only their assigned halaqahs within their complex.
   const assignedHalaqahs = useMemo(() => {
     if (isSupervisor) {
-      return halaqahs;
+      return scopedHalaqahs;
     }
     if (!currentTeacher) {
       return [];
@@ -397,7 +456,7 @@ export function App() {
     if (currentTeacher.halaqahId) {
       idSet.add(currentTeacher.halaqahId);
     }
-    halaqahs.forEach(h => {
+    scopedHalaqahs.forEach(h => {
       if (h.teacherIds?.includes(currentTeacher.id)) {
         idSet.add(h.id);
       }
@@ -409,13 +468,17 @@ export function App() {
         idSet.add(h.id);
       }
     });
-    return halaqahs.filter(h => idSet.has(h.id));
-  }, [isSupervisor, halaqahs, currentTeacher]);
+    return scopedHalaqahs.filter(h => idSet.has(h.id));
+  }, [isSupervisor, scopedHalaqahs, currentTeacher]);
 
-  // Auto-switch to assigned halaqah for teacher if currently invalid or 'all'
+  // Auto-switch to assigned halaqah for teacher or valid complex halaqah for supervisor
   useEffect(() => {
     if (currentUser?.role === 'admin') {
-      if (!isSupervisor) {
+      if (isSupervisor) {
+        if (activeHalaqahId && activeHalaqahId !== 'all' && !scopedHalaqahIds.has(activeHalaqahId)) {
+          setActiveHalaqahId('all');
+        }
+      } else {
         if (assignedHalaqahs.length > 0) {
           if (!activeHalaqahId || activeHalaqahId === 'all' || !assignedHalaqahs.some(h => h.id === activeHalaqahId)) {
             setActiveHalaqahId(assignedHalaqahs[0].id);
@@ -423,7 +486,7 @@ export function App() {
         }
       }
     }
-  }, [currentUser, isSupervisor, assignedHalaqahs, activeHalaqahId]);
+  }, [currentUser, isSupervisor, assignedHalaqahs, activeHalaqahId, scopedHalaqahIds]);
 
   // Guard programmer-only tabs: recordings, accounts/ranks, and database backup are strictly for Programmer (Mohamed Montaser)
   useEffect(() => {
@@ -442,29 +505,29 @@ export function App() {
     );
   };
 
-  // Filter students based on active halaqah selection (or show all for supervisor)
-  // Teachers MUST only see students assigned to their specific halaqah!
+  // Filter students based on active halaqah selection (or show all for supervisor within their complex)
+  // Teachers and complex supervisors MUST only see students assigned to their complex!
   const displayedStudents = useMemo(() => {
     if (isSupervisor) {
       if (activeHalaqahId && activeHalaqahId !== 'all') {
-        return students.filter(s => s.halaqahId === activeHalaqahId);
+        return scopedStudents.filter(s => s.halaqahId === activeHalaqahId);
       }
-      return students;
+      return scopedStudents;
     }
 
     // Teacher view: only students assigned to teacher's halaqah
     if (activeHalaqahId && activeHalaqahId !== 'all') {
-      return students.filter(s => s.halaqahId === activeHalaqahId);
+      return scopedStudents.filter(s => s.halaqahId === activeHalaqahId);
     }
     if (assignedHalaqahs.length > 0) {
       const allowedIds = new Set(assignedHalaqahs.map(h => h.id));
-      return students.filter(s => s.halaqahId && allowedIds.has(s.halaqahId));
+      return scopedStudents.filter(s => s.halaqahId && allowedIds.has(s.halaqahId));
     }
     return [];
-  }, [students, isSupervisor, activeHalaqahId, assignedHalaqahs]);
+  }, [scopedStudents, isSupervisor, activeHalaqahId, assignedHalaqahs]);
 
   // Students for attendance, evaluations, behavior, reports, and WhatsApp:
-  // Must only include assigned students
+  // Must only include assigned students within displayedStudents
   const assignedDisplayedStudents = useMemo(() => {
     return displayedStudents.filter(isStudentAssigned);
   }, [displayedStudents]);
@@ -475,22 +538,41 @@ export function App() {
   }, [displayedStudents]);
 
   const displayedAttendance = useMemo(() => {
-    return activeHalaqahId === 'all' && isSupervisor
-      ? attendance
-      : attendance.filter(a => displayedStudentIds.has(a.studentId));
-  }, [activeHalaqahId, isSupervisor, attendance, displayedStudentIds]);
+    if (activeHalaqahId === 'all' && isSupervisor) {
+      return attendance.filter(a => scopedStudentIds.has(a.studentId));
+    }
+    return attendance.filter(a => displayedStudentIds.has(a.studentId));
+  }, [activeHalaqahId, isSupervisor, attendance, scopedStudentIds, displayedStudentIds]);
 
   const displayedEvaluations = useMemo(() => {
-    return activeHalaqahId === 'all' && isSupervisor
-      ? evaluations
-      : evaluations.filter(e => displayedStudentIds.has(e.studentId));
-  }, [activeHalaqahId, isSupervisor, evaluations, displayedStudentIds]);
+    if (activeHalaqahId === 'all' && isSupervisor) {
+      return evaluations.filter(e => scopedStudentIds.has(e.studentId));
+    }
+    return evaluations.filter(e => displayedStudentIds.has(e.studentId));
+  }, [activeHalaqahId, isSupervisor, evaluations, scopedStudentIds, displayedStudentIds]);
 
   const displayedViolations = useMemo(() => {
-    return activeHalaqahId === 'all' && isSupervisor
-      ? violations
-      : violations.filter(v => displayedStudentIds.has(v.studentId));
-  }, [activeHalaqahId, isSupervisor, violations, displayedStudentIds]);
+    if (activeHalaqahId === 'all' && isSupervisor) {
+      return violations.filter(v => scopedStudentIds.has(v.studentId));
+    }
+    return violations.filter(v => displayedStudentIds.has(v.studentId));
+  }, [activeHalaqahId, isSupervisor, violations, scopedStudentIds, displayedStudentIds]);
+
+  // Scoped exams & submissions strictly restricted to the complex
+  const scopedExams = useMemo(() => {
+    if (isDeveloper) return exams;
+    const teacherIdSet = new Set(scopedTeachers.map(t => t.id));
+    return exams.filter(e => {
+      if (e.createdById && teacherIdSet.has(e.createdById)) return true;
+      if (e.targetHalaqat && e.targetHalaqat.some(hid => hid === 'all' || scopedHalaqahIds.has(hid))) return true;
+      return false;
+    });
+  }, [isDeveloper, exams, scopedTeachers, scopedHalaqahIds]);
+
+  const scopedSubmissions = useMemo(() => {
+    if (isDeveloper) return submissions;
+    return submissions.filter(sub => scopedStudentIds.has(sub.studentId));
+  }, [isDeveloper, submissions, scopedStudentIds]);
 
   // Save session on login
   const handleLoginSuccess = (user: { username: string; role: UserRole; studentId?: string; teacherId?: string }) => {
@@ -554,16 +636,22 @@ export function App() {
     let chosenHalaqahName = studentData.halaqahName || '';
 
     if (chosenHalaqahId) {
-      const match = halaqahs.find(h => h.id === chosenHalaqahId);
+      const match = scopedHalaqahs.find(h => h.id === chosenHalaqahId);
       if (match) {
         chosenHalaqahName = match.name;
       }
     } else if (activeHalaqahId && activeHalaqahId !== 'all') {
-      const match = halaqahs.find(h => h.id === activeHalaqahId);
+      const match = scopedHalaqahs.find(h => h.id === activeHalaqahId);
       if (match) {
         chosenHalaqahId = match.id;
         chosenHalaqahName = match.name;
       }
+    }
+
+    // Default to first scoped halaqah if none selected or outside allowed complex scope
+    if (!chosenHalaqahId && scopedHalaqahs.length > 0) {
+      chosenHalaqahId = scopedHalaqahs[0].id;
+      chosenHalaqahName = scopedHalaqahs[0].name;
     }
 
     const newStudent: Student = {
@@ -1015,10 +1103,13 @@ export function App() {
           onLogout={handleLogout}
           settings={settings}
           studentsCount={0}
-          teachersCount={teachers.length}
-          halaqahs={halaqahs}
+          teachersCount={scopedTeachers.length}
+          complexesCount={isDeveloper ? complexes.length : 1}
+          complexName={supervisedComplex?.name}
+          halaqahs={scopedHalaqahs}
           assignedHalaqahs={[]}
           isSupervisor={false}
+          isDeveloper={isDeveloper}
           activeHalaqahId=""
           onSwitchHalaqah={() => {}}
           onOpenTeacherManagement={() => setIsSettingsModalOpen(true)}
@@ -1043,7 +1134,7 @@ export function App() {
     { id: 'students', label: 'الطلاب والتسجيل', icon: Users, badge: displayedStudents.length },
     { id: 'attendance', label: 'الحضور والغياب', icon: UserCheck },
     { id: 'evaluation', label: 'تقييم التسميع', icon: BookOpen },
-    { id: 'exams', label: 'قسم الاختبارات', icon: FileText, badge: exams.length > 0 ? exams.length : undefined },
+    { id: 'exams', label: 'قسم الاختبارات', icon: FileText, badge: scopedExams.length > 0 ? scopedExams.length : undefined },
     ...(isDeveloper ? [
       { id: 'recordings', label: 'مقاطع التلاوة والواجبات', icon: Headphones, badge: recordings.length > 0 ? recordings.length : undefined },
       { id: 'accounts', label: 'إدارة الحسابات والرتب', icon: UserCog, badge: teachers.length }
@@ -1066,9 +1157,10 @@ export function App() {
         onLogout={handleLogout}
         settings={settings}
         studentsCount={displayedStudents.length}
-        teachersCount={teachers.length}
-        complexesCount={complexes.length}
-        halaqahs={halaqahs}
+        teachersCount={scopedTeachers.length}
+        complexesCount={isDeveloper ? complexes.length : 1}
+        complexName={supervisedComplex?.name}
+        halaqahs={scopedHalaqahs}
         assignedHalaqahs={assignedHalaqahs}
         isSupervisor={isSupervisor}
         isDeveloper={isDeveloper}
@@ -1076,7 +1168,7 @@ export function App() {
         onSwitchHalaqah={setActiveHalaqahId}
         onOpenTeacherManagement={() => setIsSettingsModalOpen(true)}
         onOpenSettings={() => setIsSettingsModalOpen(true)}
-        onOpenComplexManagement={() => setIsComplexModalOpen(true)}
+        onOpenComplexManagement={isDeveloper ? () => setIsComplexModalOpen(true) : undefined}
       />
 
       <main className="max-w-7xl mx-auto px-4 lg:px-8 pt-6 relative space-y-6">
@@ -1091,8 +1183,10 @@ export function App() {
                 <span className="text-xs text-[#86efac] font-bold">الحلقة الحالية:</span>
                 <span className="text-sm sm:text-base font-extrabold text-white font-heading">
                   {activeHalaqahId === 'all'
-                    ? `جميع الحلقات (${displayedStudents.length} طالباً)`
-                    : halaqahs.find(h => h.id === activeHalaqahId)?.name || 'الحلقة المختارة'}
+                    ? (isDeveloper
+                        ? `جميع الحلقات لكافة المجمعات (${displayedStudents.length} طالباً)`
+                        : `جميع حلقات ${supervisedComplex?.name || 'المجمع'} (${displayedStudents.length} طالباً)`)
+                    : scopedHalaqahs.find(h => h.id === activeHalaqahId)?.name || 'الحلقة المختارة'}
                 </span>
                 {activeHalaqahId !== 'all' && (
                   <span className="text-[11px] px-2.5 py-0.5 rounded-full bg-[#fbbf24]/15 text-[#fbbf24] border border-[#fbbf24]/30 font-bold">
@@ -1101,8 +1195,10 @@ export function App() {
                 )}
               </div>
               <p className="text-[11px] text-slate-300 mt-0.5">
-                {isSupervisor
-                  ? 'أنت في وضع المشرف العام: يمكنك التصفح بين جميع الحلقات أو اختيار حلقة لمشاهدة طلابها فقط.'
+                {isDeveloper
+                  ? 'أنت في وضع المشرف العام والمبرمج: يمكنك الإشراف على كافة المجمعات والحلقات وإدارتها بالكامل.'
+                  : isSupervisor
+                  ? `أنت في وضع مشرف المجمع (${supervisedComplex?.name || 'المجمع'}): يمكنك التصفح بين حلقات مجمعك وإدارتها بالكامل دون الاطلاع على المجمعات الأخرى.`
                   : `أنت في وضع المعلم: يتم عرض طلاب وسجلات الحلقة المحددة فقط.`}
               </p>
             </div>
@@ -1122,7 +1218,7 @@ export function App() {
                 >
                   الكل
                 </button>
-                {halaqahs.map(h => (
+                {scopedHalaqahs.map(h => (
                   <button
                     key={h.id}
                     onClick={() => setActiveHalaqahId(h.id)}
@@ -1198,7 +1294,7 @@ export function App() {
             attendance={displayedAttendance}
             evaluations={displayedEvaluations}
             settings={settings}
-            teachers={teachers}
+            teachers={scopedTeachers}
             currentUserName={currentUser?.username}
             onNavigateTab={handleNavigateTab}
             onSelectStudentForEval={handleSelectStudentForEval}
@@ -1210,7 +1306,7 @@ export function App() {
           <StudentsTab
             students={displayedStudents}
             settings={settings}
-            halaqahs={halaqahs}
+            halaqahs={scopedHalaqahs}
             activeHalaqahId={activeHalaqahId}
             isSupervisor={isSupervisor}
             onAddStudent={handleAddStudent}
@@ -1249,10 +1345,10 @@ export function App() {
 
         {activeTab === 'exams' && (
           <ExamsTab
-            exams={exams}
-            submissions={submissions}
-            students={students}
-            halaqahs={halaqahs}
+            exams={scopedExams}
+            submissions={scopedSubmissions}
+            students={scopedStudents}
+            halaqahs={scopedHalaqahs}
             currentUserId={currentUser?.teacherId || currentUser?.studentId || 'admin'}
             currentUserName={currentUser?.username || settings.teacherName}
             isSupervisor={isSupervisor}
@@ -1337,11 +1433,13 @@ export function App() {
       <SettingsModal
         isOpen={isSettingsModalOpen}
         onClose={() => setIsSettingsModalOpen(false)}
-        teachers={teachers}
-        halaqahs={halaqahs}
-        students={students}
+        teachers={scopedTeachers}
+        halaqahs={scopedHalaqahs}
+        students={scopedStudents}
         settings={settings}
-        complexes={complexes}
+        complexes={scopedComplexes}
+        isDeveloper={isDeveloper}
+        complexName={supervisedComplex?.name}
         activeHalaqahId={activeHalaqahId}
         onSaveTeacher={handleSaveTeacher}
         onDeleteTeacher={handleDeleteTeacher}
@@ -1352,19 +1450,21 @@ export function App() {
         onSwitchActiveHalaqah={setActiveHalaqahId}
       />
 
-      {/* Programmer Complex Management Modal (إدارة المجمعات القرآنية) */}
-      <ComplexManagementModal
-        isOpen={isComplexModalOpen}
-        onClose={() => setIsComplexModalOpen(false)}
-        complexes={complexes}
-        halaqahs={halaqahs}
-        teachers={teachers}
-        students={students}
-        onSaveComplex={handleSaveComplex}
-        onDeleteComplex={handleDeleteComplex}
-        onSaveHalaqah={handleSaveHalaqah}
-        onSaveTeacher={handleSaveTeacher}
-      />
+      {/* Programmer Complex Management Modal (إدارة المجمعات القرآنية) - مقتصر على المبرمج محمد منتصر */}
+      {isDeveloper && (
+        <ComplexManagementModal
+          isOpen={isComplexModalOpen}
+          onClose={() => setIsComplexModalOpen(false)}
+          complexes={complexes}
+          halaqahs={halaqahs}
+          teachers={teachers}
+          students={students}
+          onSaveComplex={handleSaveComplex}
+          onDeleteComplex={handleDeleteComplex}
+          onSaveHalaqah={handleSaveHalaqah}
+          onSaveTeacher={handleSaveTeacher}
+        />
+      )}
     </div>
   );
 }
