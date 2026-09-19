@@ -299,7 +299,7 @@ app.post("/api/gemini/generate-violation-message", async (req, res) => {
 
     const fallbackMessage = `السلام عليكم ورحمة الله وبركاته، ولي أمر الطالب الفاضل ${studentName || 'الكريم'} حفظكم الله..\nنود إحاطة عنايتكم بأنه لوحظ على الطالب اليوم في الحلقة (${violationType || 'ملاحظة سلوكية'})، وتم توجيهه تربوياً بحكمة (${actionTaken || 'تنبيه شفهي وتذكير بآداب الحلقة'}).\nشاكرين لكم عظيم حرصكم ومتابعتكم المستمرة في البيت، ونحن شركاء في بناء جيل قرآني متميز خلقاً وعلماً.\nمع تحيات: ${teacherName || 'معلم الحلقة'} - ${halaqahName || 'حلقة تحفيظ القرآن الكريم'}`;
 
-    if (!ai) {
+    if (!process.env.GEMINI_API_KEY) {
       return res.json({ message: fallbackMessage });
     }
 

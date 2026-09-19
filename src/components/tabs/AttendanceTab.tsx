@@ -107,17 +107,19 @@ export const AttendanceTab: React.FC<AttendanceTabProps> = ({
           id: `${selectedDate}_${s.id}`,
           date: selectedDate,
           studentId: s.id,
-          status: entry.status,
-          note: entry.note,
+          status: entry.status || 'حاضر',
+          note: entry.note || '',
           savedAt: new Date().toISOString()
         };
       });
 
       await onSaveAttendance(recordsToSave);
       setSaveMessage('تم حفظ سجل الحضور والغياب بنجاح!');
-      setTimeout(() => setSaveMessage(''), 3000);
+      setTimeout(() => setSaveMessage(''), 3500);
     } catch (e: any) {
-      setSaveMessage('حدث خطأ أثناء الحفظ.');
+      console.error('Save attendance error:', e);
+      const detail = e?.message || e?.code || '';
+      setSaveMessage(`حدث خطأ أثناء الحفظ ${detail ? `(${detail})` : ''}`);
     } finally {
       setIsSaving(false);
     }

@@ -860,7 +860,7 @@ export const EvaluationTab: React.FC<EvaluationTabProps> = ({
         toAyah: todayNewToAyah,
         isFullSurah: todayNewSurah === todayNewToSurah && todayNewFromAyah === 1 && todayNewToAyah >= todayStartSurahInfo.numberOfAyahs,
         didNotRecite: todayNewDidNotRecite,
-        didNotReciteReason: todayNewDidNotRecite ? (todayNewDidNotReciteReason || 'لم يحفظ الورد المقرر') : undefined
+        didNotReciteReason: todayNewDidNotRecite ? (todayNewDidNotReciteReason || 'لم يحفظ الورد المقرر') : ''
       };
 
       const tomorrowNewItem: QuranRecitationItem = {
@@ -879,20 +879,20 @@ export const EvaluationTab: React.FC<EvaluationTabProps> = ({
         id: `eval_${selectedDate}_${activeStudent.id}`,
         date: selectedDate,
         studentId: activeStudent.id,
-        criteriaValues,
+        criteriaValues: criteriaValues || {},
         recitationDetails: {
           newMemorizationAchieved: todayNewDidNotRecite
             ? `⚠️ لم يُسمّع: ${todayNewFormatted} (${todayNewDidNotReciteReason || 'لم يحفظ الورد'})`
             : todayNewFormatted,
-          reviewAchieved: reviewAchievedSummary,
-          teacherNotes,
+          reviewAchieved: reviewAchievedSummary || '',
+          teacherNotes: teacherNotes || '',
           todayNewItem,
-          todayReviewItems: todayReviews,
+          todayReviewItems: todayReviews || [],
           tomorrowNewItem,
           tomorrowReviewItem: tomReviews[0] || null,
-          tomorrowReviewItems: tomReviews,
-          tomorrowSuggestedSheikh: selectedSheikh,
-          tomorrowDailyNote: dailyHomeNote
+          tomorrowReviewItems: tomReviews || [],
+          tomorrowSuggestedSheikh: selectedSheikh || '',
+          tomorrowDailyNote: dailyHomeNote || ''
         },
         evaluatedAt: new Date().toISOString()
       };
@@ -904,11 +904,11 @@ export const EvaluationTab: React.FC<EvaluationTabProps> = ({
       const newDailyAssignment = {
         newMemorization: tomNewFormatted,
         review: tomRevFormatted,
-        suggestedSheikh: selectedSheikh,
-        dailyNote: dailyHomeNote,
+        suggestedSheikh: selectedSheikh || '',
+        dailyNote: dailyHomeNote || '',
         newItem: tomorrowNewItem,
         reviewItem: tomReviews[0] || null,
-        reviewItems: tomReviews
+        reviewItems: tomReviews || []
       };
 
       // Update student's current position:
@@ -936,7 +936,8 @@ export const EvaluationTab: React.FC<EvaluationTabProps> = ({
       });
     } catch (e: any) {
       console.error('Save evaluation error:', e);
-      setSaveSuccessMsg('حدث خطأ أثناء حفظ التقييم.');
+      const detail = e?.message || e?.code || '';
+      setSaveSuccessMsg(`حدث خطأ أثناء حفظ التقييم ${detail ? `(${detail})` : ''}`);
     } finally {
       setIsSaving(false);
       setTimeout(() => setSaveSuccessMsg(''), 4500);
