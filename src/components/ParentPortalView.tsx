@@ -28,6 +28,8 @@ import {
   Radio,
   ListOrdered
 } from 'lucide-react';
+import { YouTubeAyahPlayer, formatTimeMMSS } from './recordings/YouTubeAyahPlayer';
+import { getAyahTextSync } from '../lib/quranTextService';
 import {
   Student,
   AttendanceRecord,
@@ -307,7 +309,8 @@ export const ParentPortalView: React.FC<ParentPortalViewProps> = ({
   // Audio Recording & Ayah Listening for Students
   const [selectedRecordingId, setSelectedRecordingId] = useState<string>('');
   const [activePortalAyah, setActivePortalAyah] = useState<SurahRecordingSegment | null>(null);
-  const [activePortalIframeUrl, setActivePortalIframeUrl] = useState<string>('');
+  const [activePortalTargetAyah, setActivePortalTargetAyah] = useState<SurahRecordingSegment | null>(null);
+  const [portalLiveTime, setPortalLiveTime] = useState<number>(0);
   const [listensCount, setListensCount] = useState<number>(0);
 
   // Initialize selected recording based on student's current Surah
@@ -319,12 +322,7 @@ export const ParentPortalView: React.FC<ParentPortalViewProps> = ({
         setSelectedRecordingId(chosen.id);
         const firstSeg = chosen.segments && chosen.segments.length > 0 ? chosen.segments[0] : null;
         setActivePortalAyah(firstSeg);
-        const clean = chosen.youtubeUrl ? chosen.youtubeUrl.trim() : '';
-        const match = clean.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))([\w-]{11})/);
-        const vId = chosen.youtubeVideoId || (match ? match[1] : '');
-        if (vId) {
-          setActivePortalIframeUrl(`https://www.youtube.com/embed/${vId}?rel=0&enablejsapi=1`);
-        }
+        setActivePortalTargetAyah(null);
       }
     }
   }, [recordings, currentStudent.currentSurah]);
@@ -696,13 +694,7 @@ export const ParentPortalView: React.FC<ParentPortalViewProps> = ({
                         setSelectedRecordingId(rec.id);
                         const firstSeg = rec.segments && rec.segments.length > 0 ? rec.segments[0] : null;
                         setActivePortalAyah(firstSeg);
-                        const clean = rec.youtubeUrl ? rec.youtubeUrl.trim() : '';
-                        const match = clean.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))([\w-]{11})/);
-                        const vId = rec.youtubeVideoId || (match ? match[1] : '');
-                        if (vId) {
-                          const startSec = firstSeg ? Math.floor(firstSeg.startTime) : 0;
-                          setActivePortalIframeUrl(`https://www.youtube.com/embed/${vId}?start=${startSec}&autoplay=1&rel=0&enablejsapi=1`);
-                        }
+                        setActivePortalTargetAyah(null);
                       }
                     }}
                     className="bg-[#022c22] text-[#fbbf24] text-xs font-bold px-3 py-2 rounded-xl border border-[#065f46] focus:outline-none focus:border-[#fbbf24]"
@@ -752,88 +744,91 @@ export const ParentPortalView: React.FC<ParentPortalViewProps> = ({
 
                 {/* Player & Ayah Segment Navigator Grid */}
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-                  {/* Video Embed Player */}
-                  <div className="lg:col-span-7 bg-[#022c22] rounded-2xl border border-[#065f46] overflow-hidden shadow-lg flex flex-col">
-                    <div className="aspect-video w-full bg-black relative">
-                      {activePortalIframeUrl ? (
-                        <iframe
-                          src={activePortalIframeUrl}
-                          title={`تلاوة سورة ${activeRecording.surahName}`}
-                          className="w-full h-full border-0"
-                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                          allowFullScreen
-                        />
-                      ) : (
-                        <div className="w-full h-full flex flex-col items-center justify-center text-center p-4 text-emerald-300/60">
-                          <Headphones className="w-10 h-10 mb-2 opacity-50" />
-                          <p className="text-xs">المقطع الصوتي قيد التحميل...</p>
-                        </div>
-                      )}
-                    </div>
-                    {activePortalAyah && (
-                      <div className="p-4 bg-[#022c22]/90 border-t border-[#065f46] flex items-center justify-between">
-                        <div className="flex items-center gap-2 text-xs">
-                          <span className="px-2 py-0.5 rounded-full bg-[#fbbf24]/20 text-[#fbbf24] font-bold">
-                            {activePortalAyah.ayahNumber === 0 ? 'البسملة' : `الآية ${activePortalAyah.ayahNumber}`}
-                          </span>
-                          <span className="text-[#86efac]">
-                            {activePortalAyah.ayahText || `الآية رقم ${activePortalAyah.ayahNumber}`}
-                          </span>
-                        </div>
-                        <span className="text-[11px] text-[#86efac]/70 font-mono">
-                          {activePortalAyah.formattedStart || `${Math.floor((activePortalAyah.startTimeSeconds || 0) / 60)}:${(Math.floor((activePortalAyah.startTimeSeconds || 0) % 60)).toString().padStart(2, '0')}`}
-                        </span>
+                  {/* YouTube Ayah Player with Strict Duration Adherence */}
+                  <div className="lg:col-span-7">
+                    {activeRecording.youtubeVideoId || activeRecording.youtubeUrl ? (
+                      <YouTubeAyahPlayer
+                        videoId={activeRecording.youtubeVideoId || (activeRecording.youtubeUrl.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))([\w-]{11})/) || ['',''])[1]}
+                        activeSegment={activePortalAyah}
+                        targetSegmentToPlay={activePortalTargetAyah}
+                        onTimeUpdate={time => setPortalLiveTime(time)}
+                        surahName={activeRecording.surahName}
+                        readOnlyControls={true}
+                        onAyahFinished={() => {
+                          // Student completed listening to this verse
+                        }}
+                      />
+                    ) : (
+                      <div className="aspect-video w-full rounded-2xl bg-black border border-[#065f46] flex flex-col items-center justify-center text-center p-4 text-emerald-300/60">
+                        <Headphones className="w-10 h-10 mb-2 opacity-50" />
+                        <p className="text-xs">المقطع الصوتي قيد التحميل...</p>
                       </div>
                     )}
                   </div>
 
-                  {/* Ayahs Quick Navigation List */}
-                  <div className="lg:col-span-5 bg-[#022c22]/70 rounded-2xl border border-[#065f46] p-4 flex flex-col max-h-[380px]">
+                  {/* Ayahs Quick Navigation List with Full Quran Text */}
+                  <div className="lg:col-span-5 bg-[#022c22]/70 rounded-2xl border border-[#065f46] p-4 flex flex-col max-h-[460px]">
                     <div className="flex items-center justify-between pb-3 border-b border-[#065f46] mb-3">
                       <div className="flex items-center gap-2">
                         <ListOrdered className="w-4 h-4 text-[#fbbf24]" />
                         <h4 className="text-xs font-bold text-white">آيات السورة ({activeRecording.segments?.length || 0})</h4>
                       </div>
-                      <span className="text-[11px] text-[#86efac]/70">اضغط للاستماع للآية</span>
+                      <span className="text-[11px] text-[#86efac]/70">انقر للاستماع للآية المحددة فقط</span>
                     </div>
 
                     <div className="overflow-y-auto space-y-2 pr-1 custom-scrollbar flex-1">
                       {activeRecording.segments && activeRecording.segments.length > 0 ? (
                         activeRecording.segments.map((seg) => {
                           const isCurrent = activePortalAyah?.ayahNumber === seg.ayahNumber;
+                          const isLiveReciting = portalLiveTime >= seg.startTimeSeconds && portalLiveTime < seg.endTimeSeconds;
+                          const duration = Math.max(0, Math.round(seg.endTimeSeconds - seg.startTimeSeconds));
+                          const verseText = seg.ayahText || getAyahTextSync(activeRecording.surahNumber, seg.ayahNumber);
+
                           return (
                             <button
                               key={seg.ayahNumber}
                               type="button"
                               onClick={() => {
                                 setActivePortalAyah(seg);
-                                const clean = activeRecording.youtubeUrl ? activeRecording.youtubeUrl.trim() : '';
-                                const match = clean.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))([\w-]{11})/);
-                                const vId = activeRecording.youtubeVideoId || (match ? match[1] : '');
-                                if (vId) {
-                                  const startSec = Math.floor(seg.startTimeSeconds || 0);
-                                  setActivePortalIframeUrl(`https://www.youtube.com/embed/${vId}?start=${startSec}&autoplay=1&rel=0&enablejsapi=1`);
-                                }
+                                setActivePortalTargetAyah({ ...seg });
                               }}
-                              className={`w-full text-right p-2.5 rounded-xl text-xs flex items-center justify-between gap-2 transition-all cursor-pointer ${
+                              className={`w-full text-right p-3 rounded-xl text-xs flex flex-col gap-1.5 transition-all cursor-pointer border ${
                                 isCurrent
-                                  ? 'bg-[#fbbf24] text-[#064e3b] font-bold shadow-md'
-                                  : 'bg-[#064e3b]/50 hover:bg-[#064e3b] text-white border border-[#065f46]/60'
+                                  ? 'bg-[#fbbf24] text-[#064e3b] font-bold shadow-md border-amber-300 ring-1 ring-amber-300'
+                                  : isLiveReciting
+                                  ? 'bg-emerald-900/60 border-emerald-400 text-white'
+                                  : 'bg-[#064e3b]/50 hover:bg-[#064e3b] text-white border-[#065f46]/60'
                               }`}
                             >
-                              <div className="flex items-center gap-2 min-w-0">
-                                <span className={`w-6 h-6 rounded-lg text-[11px] font-black flex items-center justify-center shrink-0 ${
-                                  isCurrent ? 'bg-[#064e3b] text-[#fbbf24]' : 'bg-[#022c22] text-[#86efac]'
-                                }`}>
-                                  {seg.ayahNumber === 0 ? '0' : seg.ayahNumber}
-                                </span>
-                                <span className="truncate text-[11px]">
-                                  {seg.ayahText || `الآية ${seg.ayahNumber}`}
+                              <div className="flex items-center justify-between gap-2 w-full">
+                                <div className="flex items-center gap-2">
+                                  <span className={`w-6 h-6 rounded-lg text-[11px] font-black flex items-center justify-center shrink-0 ${
+                                    isCurrent ? 'bg-[#064e3b] text-[#fbbf24]' : 'bg-[#022c22] text-[#86efac]'
+                                  }`}>
+                                    {seg.ayahNumber === 0 ? '0' : seg.ayahNumber}
+                                  </span>
+                                  <span className="font-bold text-xs">
+                                    {seg.ayahNumber === 0 ? 'الاستعاذة والبسملة' : `الآية ${seg.ayahNumber}`}
+                                  </span>
+                                  {isLiveReciting && (
+                                    <span className="px-1.5 py-0.2 rounded-full bg-red-500/20 text-red-300 text-[9px] font-bold animate-pulse">
+                                      صوت الآن
+                                    </span>
+                                  )}
+                                </div>
+                                <span className={`text-[10px] font-mono shrink-0 ${isCurrent ? 'text-[#064e3b]' : 'text-[#86efac]/70'}`}>
+                                  {formatTimeMMSS(seg.startTimeSeconds)} - {formatTimeMMSS(seg.endTimeSeconds)} ({duration}ث)
                                 </span>
                               </div>
-                              <span className={`text-[10px] font-mono shrink-0 ${isCurrent ? 'text-[#064e3b]' : 'text-[#86efac]/70'}`}>
-                                {seg.formattedStart || `${Math.floor((seg.startTimeSeconds || 0) / 60)}:${(Math.floor((seg.startTimeSeconds || 0) % 60)).toString().padStart(2, '0')}`}
-                              </span>
+
+                              <p
+                                className={`text-[11px] font-serif leading-relaxed line-clamp-2 text-right ${
+                                  isCurrent ? 'text-[#064e3b] font-bold' : 'text-amber-100/90'
+                                }`}
+                                dir="rtl"
+                              >
+                                {verseText}
+                              </p>
                             </button>
                           );
                         })

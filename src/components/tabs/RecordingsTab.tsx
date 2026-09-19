@@ -25,10 +25,17 @@ import {
   Check,
   RotateCcw,
   Headphones,
-  Loader2
+  Loader2,
+  MapPin,
+  Flag,
+  FastForward,
+  Rewind,
+  Repeat
 } from 'lucide-react';
 import { SurahRecording, RecordingsConfig, SurahRecordingSegment } from '../../types';
 import { QURAN_SURAHS, getSurahInfo } from '../../data/quranData';
+import { YouTubeAyahPlayer, formatTimeMMSS } from '../recordings/YouTubeAyahPlayer';
+import { loadAllQuranVerses, getSurahVerses, getAyahTextSync } from '../../lib/quranTextService';
 
 interface RecordingsTabProps {
   recordings: SurahRecording[];
@@ -37,18 +44,6 @@ interface RecordingsTabProps {
   onDeleteRecording: (recordingId: string) => Promise<void>;
   onSaveConfig: (config: RecordingsConfig) => Promise<void>;
 }
-
-// Helper: Format seconds into MM:SS or HH:MM:SS
-const formatSeconds = (sec: number): string => {
-  const s = Math.max(0, Math.floor(sec));
-  const hrs = Math.floor(s / 3600);
-  const mins = Math.floor((s % 3600) / 60);
-  const secs = s % 60;
-  if (hrs > 0) {
-    return `${hrs.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-  }
-  return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-};
 
 export const RecordingsTab: React.FC<RecordingsTabProps> = ({
   recordings,
@@ -62,10 +57,11 @@ export const RecordingsTab: React.FC<RecordingsTabProps> = ({
   const [recordingToDelete, setRecordingToDelete] = useState<SurahRecording | null>(null);
   const [previewingRecording, setPreviewingRecording] = useState<SurahRecording | null>(null);
 
-  // Active Ayah playback in preview or edit
+  // Active playback state
   const [activeAyahIndex, setActiveAyahIndex] = useState<number>(0);
   const [selectedAyahForPlayback, setSelectedAyahForPlayback] = useState<SurahRecordingSegment | null>(null);
-  const [activeIframeSrc, setActiveIframeSrc] = useState<string>('');
+  const [targetSegmentToPlay, setTargetSegmentToPlay] = useState<SurahRecordingSegment | null>(null);
+  const [currentLiveTime, setCurrentLiveTime] = useState<number>(0);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [statusMsg, setStatusMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
@@ -76,10 +72,15 @@ export const RecordingsTab: React.FC<RecordingsTabProps> = ({
   const [aiProgressPercent, setAiProgressPercent] = useState(0);
   const [aiProgressStep, setAiProgressStep] = useState(1);
   const [aiProgressMessage, setAiProgressMessage] = useState('');
-  const [editingSegmentsDirectly, setEditingSegmentsDirectly] = useState(false);
+  const [editingSegmentsDirectly, setEditingSegmentsDirectly] = useState(true);
   const [ayahSearchTerm, setAyahSearchTerm] = useState('');
 
-  // Lock body scroll when any modal is open to prevent background scrolling
+  // Preload full Quran verses on mount
+  useEffect(() => {
+    loadAllQuranVerses().catch(e => console.warn('Quran preloading note:', e));
+  }, []);
+
+  // Lock body scroll when any modal is open
   useEffect(() => {
     const isAnyModalOpen = isAddingRecording || previewingRecording || recordingToDelete || isAnalyzingWithAI;
     if (isAnyModalOpen) {
@@ -99,11 +100,11 @@ export const RecordingsTab: React.FC<RecordingsTabProps> = ({
     return match ? match[1] : clean.length === 11 ? clean : '';
   };
 
-  // Helper: auto-generate default segments for Ayahs if offline
+  // Helper: auto-generate default segments for Ayahs with real Quran Uthmani text
   const generateAyahSegments = (surahNumber: number): SurahRecordingSegment[] => {
     const sInfo = getSurahInfo(surahNumber);
     const ayahsCount = sInfo.numberOfAyahs;
-    const estSecPerAyah = 6;
+    const estSecPerAyah = 7;
     const segments: SurahRecordingSegment[] = [];
 
     // Basmalah / Isti'adhah segment
@@ -121,11 +122,11 @@ export const RecordingsTab: React.FC<RecordingsTabProps> = ({
       const end = 6 + i * estSecPerAyah;
       segments.push({
         ayahNumber: i,
-        ayahText: `الآية (${i}) من سورة ${sInfo.name}`,
+        ayahText: getAyahTextSync(surahNumber, i),
         startTimeSeconds: start,
         endTimeSeconds: end,
-        formattedStart: formatSeconds(start),
-        formattedEnd: formatSeconds(end)
+        formattedStart: formatTimeMMSS(start),
+        formattedEnd: formatTimeMMSS(end)
       });
     }
     return segments;
@@ -153,10 +154,11 @@ export const RecordingsTab: React.FC<RecordingsTabProps> = ({
     }
   };
 
-  const handleOpenAdd = () => {
+  const handleOpenAdd = async () => {
     const defaultSurahNum = 78;
     const sInfo = getSurahInfo(defaultSurahNum);
     const initialSegments = generateAyahSegments(defaultSurahNum);
+    
     setEditingRecording({
       id: `rec_${Date.now()}`,
       surahNumber: defaultSurahNum,
@@ -170,27 +172,68 @@ export const RecordingsTab: React.FC<RecordingsTabProps> = ({
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     });
+
     setSelectedAyahForPlayback(initialSegments[0]);
     setActiveAyahIndex(0);
-    setActiveIframeSrc(`https://www.youtube.com/embed/kYQz0k_5Rps?autoplay=0&rel=0&enablejsapi=1`);
+    setTargetSegmentToPlay(null);
     setIsAddingRecording(true);
     setStatusMsg(null);
-    setEditingSegmentsDirectly(false);
+    setEditingSegmentsDirectly(true);
+    setAyahSearchTerm('');
+
+    // Fetch and enrich full Uthmani texts
+    try {
+      const verses = await getSurahVerses(defaultSurahNum);
+      if (verses && verses.length > 0) {
+        setEditingRecording(prev => {
+          if (!prev || prev.surahNumber !== defaultSurahNum) return prev;
+          const enriched = (prev.segments || initialSegments).map(seg => {
+            if (seg.ayahNumber === 0) return seg;
+            const t = verses[seg.ayahNumber - 1];
+            return t ? { ...seg, ayahText: t } : seg;
+          });
+          return { ...prev, segments: enriched };
+        });
+      }
+    } catch (e) {
+      console.warn('Verse loading note:', e);
+    }
   };
 
-  const handleOpenEdit = (rec: SurahRecording) => {
-    setEditingRecording({ ...rec });
+  const handleOpenEdit = async (rec: SurahRecording) => {
     const segs = rec.segments && rec.segments.length > 0 ? rec.segments : generateAyahSegments(rec.surahNumber);
+    setEditingRecording({
+      ...rec,
+      segments: segs
+    });
     setSelectedAyahForPlayback(segs[0]);
     setActiveAyahIndex(0);
-    const vId = rec.youtubeVideoId || extractYouTubeId(rec.youtubeUrl);
-    setActiveIframeSrc(`https://www.youtube.com/embed/${vId}?autoplay=0&rel=0&enablejsapi=1`);
+    setTargetSegmentToPlay(null);
     setIsAddingRecording(true);
     setStatusMsg(null);
-    setEditingSegmentsDirectly(false);
+    setEditingSegmentsDirectly(true);
+    setAyahSearchTerm('');
+
+    // Ensure authentic Uthmani verses are filled in
+    try {
+      const verses = await getSurahVerses(rec.surahNumber);
+      if (verses && verses.length > 0) {
+        setEditingRecording(prev => {
+          if (!prev || prev.surahNumber !== rec.surahNumber) return prev;
+          const enriched = (prev.segments || segs).map(seg => {
+            if (seg.ayahNumber === 0) return seg;
+            const t = verses[seg.ayahNumber - 1];
+            return t ? { ...seg, ayahText: t } : seg;
+          });
+          return { ...prev, segments: enriched };
+        });
+      }
+    } catch (e) {
+      console.warn('Verse loading note:', e);
+    }
   };
 
-  const handleSurahChange = (surahNum: number) => {
+  const handleSurahChange = async (surahNum: number) => {
     const sInfo = getSurahInfo(surahNum);
     const newSegments = generateAyahSegments(surahNum);
     setEditingRecording(prev => ({
@@ -201,6 +244,25 @@ export const RecordingsTab: React.FC<RecordingsTabProps> = ({
     }));
     setSelectedAyahForPlayback(newSegments[0]);
     setActiveAyahIndex(0);
+    setTargetSegmentToPlay(null);
+
+    // Fetch and enrich verses
+    try {
+      const verses = await getSurahVerses(surahNum);
+      if (verses && verses.length > 0) {
+        setEditingRecording(prev => {
+          if (!prev || prev.surahNumber !== surahNum) return prev;
+          const enriched = (prev.segments || newSegments).map(seg => {
+            if (seg.ayahNumber === 0) return seg;
+            const t = verses[seg.ayahNumber - 1];
+            return t ? { ...seg, ayahText: t } : seg;
+          });
+          return { ...prev, segments: enriched };
+        });
+      }
+    } catch (e) {
+      console.warn('Verse loading note:', e);
+    }
   };
 
   // Perform AI Quran Audio & Verse Segmentation
@@ -220,7 +282,6 @@ export const RecordingsTab: React.FC<RecordingsTabProps> = ({
     setAiProgressPercent(15);
     setAiProgressMessage('فحص رابط المقطع القرآني واستخراج بيانات الفيديو...');
 
-    // Progress Simulation for smooth visual delight
     const timer1 = setTimeout(() => {
       setAiProgressStep(2);
       setAiProgressPercent(45);
@@ -311,7 +372,6 @@ export const RecordingsTab: React.FC<RecordingsTabProps> = ({
       setIsSubmitting(true);
       const sInfo = getSurahInfo(editingRecording.surahNumber);
 
-      // If segments aren't generated or empty, perform quick segmentation
       let currentSegments = editingRecording.segments;
       if (!currentSegments || currentSegments.length <= 1) {
         currentSegments = await runAISegmentation({
@@ -349,29 +409,71 @@ export const RecordingsTab: React.FC<RecordingsTabProps> = ({
     }
   };
 
-  // Handle Ayah click to seek YouTube video
-  const handlePlayAyah = (seg: SurahRecordingSegment, index: number, videoId: string) => {
+  // Play a specific Ayah strictly from its start to end
+  const handlePlayAyahStrict = (seg: SurahRecordingSegment, index: number) => {
     setSelectedAyahForPlayback(seg);
     setActiveAyahIndex(index);
-    const startSec = Math.max(0, Math.floor(seg.startTimeSeconds));
-    setActiveIframeSrc(`https://www.youtube.com/embed/${videoId}?autoplay=1&start=${startSec}&rel=0&enablejsapi=1`);
+    setTargetSegmentToPlay({ ...seg });
   };
 
-  // Inline update for Ayah timestamps if teacher wants to fine-tune
+  // Inline update for Ayah timestamps ("يعينها" + manual edit)
   const handleUpdateSegmentTiming = (index: number, field: 'startTimeSeconds' | 'endTimeSeconds', value: number) => {
     if (!editingRecording || !editingRecording.segments) return;
+    const safeVal = Math.max(0, value);
     const updated = [...editingRecording.segments];
-    const target = { ...updated[index], [field]: value };
+    const target = { ...updated[index], [field]: safeVal };
+    
     if (field === 'startTimeSeconds') {
-      target.formattedStart = formatSeconds(value);
+      target.formattedStart = formatTimeMMSS(safeVal);
+      // Ensure end is at least equal to start
+      if (target.endTimeSeconds < safeVal) {
+        target.endTimeSeconds = safeVal + 5;
+        target.formattedEnd = formatTimeMMSS(target.endTimeSeconds);
+      }
     } else {
-      target.formattedEnd = formatSeconds(value);
+      target.formattedEnd = formatTimeMMSS(safeVal);
+      // Ensure end is at least equal to start
+      if (safeVal < target.startTimeSeconds) {
+        target.startTimeSeconds = Math.max(0, safeVal - 5);
+        target.formattedStart = formatTimeMMSS(target.startTimeSeconds);
+      }
     }
+    
     updated[index] = target;
     setEditingRecording(prev => ({
       ...prev,
       segments: updated
     }));
+    setSelectedAyahForPlayback(target);
+  };
+
+  // Step timing by delta (e.g. +1s, -1s)
+  const handleStepTiming = (index: number, field: 'startTimeSeconds' | 'endTimeSeconds', delta: number) => {
+    if (!editingRecording || !editingRecording.segments || !editingRecording.segments[index]) return;
+    const currentVal = editingRecording.segments[index][field] || 0;
+    handleUpdateSegmentTiming(index, field, currentVal + delta);
+  };
+
+  // Teacher clicks "📍 تعيين البداية" from live audio
+  const handleSetStartForActiveAyah = (seconds: number) => {
+    handleUpdateSegmentTiming(activeAyahIndex, 'startTimeSeconds', seconds);
+  };
+
+  // Teacher clicks "🏁 تعيين النهاية" from live audio
+  const handleSetEndForActiveAyah = (seconds: number) => {
+    handleUpdateSegmentTiming(activeAyahIndex, 'endTimeSeconds', seconds);
+    // Smart auto-suggestion: if next ayah exists, set its start time to the same second!
+    if (editingRecording && editingRecording.segments && activeAyahIndex + 1 < editingRecording.segments.length) {
+      const nextIdx = activeAyahIndex + 1;
+      const updated = [...editingRecording.segments];
+      const nextTarget = { ...updated[nextIdx], startTimeSeconds: seconds, formattedStart: formatTimeMMSS(seconds) };
+      if (nextTarget.endTimeSeconds <= seconds) {
+        nextTarget.endTimeSeconds = seconds + 6;
+        nextTarget.formattedEnd = formatTimeMMSS(nextTarget.endTimeSeconds);
+      }
+      updated[nextIdx] = nextTarget;
+      setEditingRecording(prev => ({ ...prev, segments: updated }));
+    }
   };
 
   const handleConfirmDelete = async () => {
@@ -398,6 +500,11 @@ export const RecordingsTab: React.FC<RecordingsTabProps> = ({
       String(r.surahNumber).includes(searchQuery)
   );
 
+  // Determine currently active Ayah based on live playback position for real-time UI highlight
+  const liveRecitingAyahIndex = editingRecording?.segments?.findIndex(
+    s => currentLiveTime >= s.startTimeSeconds && currentLiveTime < s.endTimeSeconds
+  ) ?? -1;
+
   return (
     <div className="space-y-6">
       {/* Top Banner with Toggle & Add Button */}
@@ -412,7 +519,7 @@ export const RecordingsTab: React.FC<RecordingsTabProps> = ({
                 قسم التسجيلات القرآنية ومقاطع الاستماع
               </h2>
               <p className="text-xs text-[#86efac] mt-0.5">
-                إدارة تسجيلات السور عبر YouTube وتقسيم الآيات تلقائياً بالذكاء الاصطناعي مع تحديد عدد مرات الاستماع اليومية.
+                تلاوات جميع سور القرآن الكريم الـ 114 بالرسم العثماني، وتقسيم توقيت الآيات بدقة مع الالتزام التام بمدة كل مقطع.
               </p>
             </div>
           </div>
@@ -471,7 +578,7 @@ export const RecordingsTab: React.FC<RecordingsTabProps> = ({
             </div>
             <button
               onClick={() => setStatusMsg(null)}
-              className="text-emerald-400 hover:text-white px-2 py-0.5 text-xs font-bold"
+              className="text-emerald-400 hover:text-white px-2 py-0.5 text-xs font-bold cursor-pointer"
             >
               ✕
             </button>
@@ -544,7 +651,7 @@ export const RecordingsTab: React.FC<RecordingsTabProps> = ({
                           const segs = rec.segments || generateAyahSegments(rec.surahNumber);
                           setSelectedAyahForPlayback(segs[0]);
                           setActiveAyahIndex(0);
-                          setActiveIframeSrc(`https://www.youtube.com/embed/${videoId}?autoplay=1&rel=0&enablejsapi=1`);
+                          setTargetSegmentToPlay(null);
                         }}
                         className="w-12 h-12 rounded-full bg-[#fbbf24] text-[#064e3b] flex items-center justify-center shadow-lg hover:scale-110 transition-transform cursor-pointer"
                         title="معاينة وتشغيل التسجيل والآيات"
@@ -619,7 +726,7 @@ export const RecordingsTab: React.FC<RecordingsTabProps> = ({
       )}
 
       {/* ------------------------------------------------------------- */}
-      {/* MODAL: ADD / EDIT RECORDING (FIXED Z-INDEX & IN-MODAL SCROLL)  */}
+      {/* MODAL: ADD / EDIT RECORDING (FULL QURAN, ACCURATE TIMING & LIVE SYNC) */}
       {/* ------------------------------------------------------------- */}
       {isAddingRecording && editingRecording && (
         <div
@@ -632,12 +739,12 @@ export const RecordingsTab: React.FC<RecordingsTabProps> = ({
             }
           }}
         >
-          <div className="relative my-auto w-full max-w-2xl bg-[#022c22] border border-[#fbbf24]/50 rounded-3xl shadow-2xl max-h-[88vh] flex flex-col overflow-hidden animate-fadeIn">
+          <div className="relative my-auto w-full max-w-3xl bg-[#022c22] border border-[#fbbf24]/50 rounded-3xl shadow-2xl max-h-[92vh] flex flex-col overflow-hidden animate-fadeIn">
             {/* Sticky Modal Header */}
             <div className="shrink-0 p-4 sm:p-5 border-b border-[#065f46] bg-[#022c22] flex items-center justify-between z-10">
               <div className="flex items-center gap-2 text-base sm:text-lg font-bold text-[#fbbf24] font-heading">
                 <Volume2 className="w-5 h-5" />
-                <span>إضافة أو ضبط تسجيل قرآني وتقسيم الآيات</span>
+                <span>ضبط تسجيل سورة {editingRecording.surahName || ''} وتقسيم الآيات</span>
               </div>
               <button
                 type="button"
@@ -651,11 +758,12 @@ export const RecordingsTab: React.FC<RecordingsTabProps> = ({
               </button>
             </div>
 
-            {/* Scrollable Form Body (Scrolls smoothly inside modal without affecting background) */}
+            {/* Scrollable Form Body */}
             <form onSubmit={handleSaveRecordingForm} className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 overscroll-contain text-xs">
+              {/* Surah Selection & Listening Goal */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-emerald-200 font-bold mb-1">السورة القرآنية:</label>
+                  <label className="block text-emerald-200 font-bold mb-1">السورة القرآنية (من بين 114 سورة):</label>
                   <select
                     value={editingRecording.surahNumber || 78}
                     onChange={e => handleSurahChange(Number(e.target.value))}
@@ -663,7 +771,7 @@ export const RecordingsTab: React.FC<RecordingsTabProps> = ({
                   >
                     {QURAN_SURAHS.map(s => (
                       <option key={s.number} value={s.number}>
-                        {s.number}. سورة {s.name} ({s.numberOfAyahs} آية)
+                        {s.number}. سورة {s.name} ({s.numberOfAyahs} آية - {s.revelationType})
                       </option>
                     ))}
                   </select>
@@ -685,6 +793,7 @@ export const RecordingsTab: React.FC<RecordingsTabProps> = ({
                 </div>
               </div>
 
+              {/* Reciter Name */}
               <div>
                 <label className="block text-emerald-200 font-bold mb-1">اسم القارئ / الشيخ:</label>
                 <input
@@ -697,6 +806,7 @@ export const RecordingsTab: React.FC<RecordingsTabProps> = ({
                 />
               </div>
 
+              {/* YouTube Link */}
               <div>
                 <label className="block text-emerald-200 font-bold mb-1">رابط مقطع YouTube للتلاوة:</label>
                 <div className="flex gap-2">
@@ -713,9 +823,6 @@ export const RecordingsTab: React.FC<RecordingsTabProps> = ({
                         youtubeUrl: url,
                         youtubeVideoId: vId
                       }));
-                      if (vId) {
-                        setActiveIframeSrc(`https://www.youtube.com/embed/${vId}?autoplay=0&rel=0&enablejsapi=1`);
-                      }
                     }}
                     className="flex-1 bg-[#064e3b]/80 border border-[#065f46] rounded-xl px-3 py-2.5 text-white font-mono outline-none focus:border-[#fbbf24]"
                     dir="ltr"
@@ -732,124 +839,238 @@ export const RecordingsTab: React.FC<RecordingsTabProps> = ({
                   </button>
                 </div>
                 <span className="text-[11px] text-[#86efac]/80 mt-1 block">
-                  يقوم الذكاء الاصطناعي بالاستماع لمقطع التلاوة واستخراج التوقيتات الدقيقة لكل آية بالدقيقة والثانية تلقائياً.
+                  يمكنك الاستماع للمقطع مباشرة وتعيين بداية ونهاية كل آية بضغطة زر واحدة أثناء الاستماع.
                 </span>
               </div>
 
-              {/* Video Player & Ayah Interactive Preview */}
+              {/* Enhanced YouTube Player with Ayah Segment Controller */}
               {editingRecording.youtubeVideoId && (
-                <div className="space-y-3 pt-2">
-                  <div className="flex items-center justify-between text-xs font-bold text-[#86efac]">
-                    <span className="flex items-center gap-1.5">
-                      <Radio className="w-3.5 h-3.5 text-red-400 animate-pulse" />
-                      معاينة واستماع الآيات التفاعلي:
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => setEditingSegmentsDirectly(!editingSegmentsDirectly)}
-                      className="text-amber-300 hover:text-white flex items-center gap-1 cursor-pointer"
-                    >
-                      <Sliders className="w-3.5 h-3.5" />
-                      <span>{editingSegmentsDirectly ? 'إخفاء التعديل اليدوي' : 'تعديل التوقيتات يدوياً'}</span>
-                    </button>
-                  </div>
+                <div className="space-y-4 pt-1">
+                  <YouTubeAyahPlayer
+                    videoId={editingRecording.youtubeVideoId}
+                    activeSegment={editingRecording.segments?.[activeAyahIndex] || null}
+                    targetSegmentToPlay={targetSegmentToPlay}
+                    onTimeUpdate={time => setCurrentLiveTime(time)}
+                    onSetStartTime={sec => handleSetStartForActiveAyah(sec)}
+                    onSetEndTime={sec => handleSetEndForActiveAyah(sec)}
+                    surahName={editingRecording.surahName}
+                    readOnlyControls={false}
+                  />
 
-                  <div className="aspect-video rounded-2xl overflow-hidden border border-[#065f46] shadow-md bg-black">
-                    <iframe
-                      src={activeIframeSrc || `https://www.youtube.com/embed/${editingRecording.youtubeVideoId}?rel=0`}
-                      title="معاينة المقطع"
-                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                      allowFullScreen
-                      className="w-full h-full"
-                    />
-                  </div>
-
-                  {/* Interactive Ayah Selector Chips */}
-                  {editingRecording.segments && editingRecording.segments.length > 0 && (
-                    <div className="space-y-2 bg-[#064e3b]/40 p-3 rounded-2xl border border-[#065f46]">
-                      <div className="flex items-center justify-between text-[11px] font-bold text-emerald-200">
-                        <span>انقر على أي آية للاستماع المباشر إليها ({editingRecording.segments.length} مقطع):</span>
-                        {selectedAyahForPlayback && (
-                          <span className="text-[#fbbf24]">
-                            المقطع الحالي: {selectedAyahForPlayback.ayahNumber === 0 ? 'الاستعاذة والبسملة' : `الآية ${selectedAyahForPlayback.ayahNumber}`} ({selectedAyahForPlayback.formattedStart || formatSeconds(selectedAyahForPlayback.startTimeSeconds)})
-                          </span>
-                        )}
+                  {/* -------------------------------------------------------- */}
+                  {/* REAL-TIME SYNCHRONIZED AYAH LIST ("ويحدث اللي تحت")        */}
+                  {/* -------------------------------------------------------- */}
+                  <div className="bg-[#064e3b]/30 rounded-2xl border border-[#065f46] p-4 space-y-3">
+                    {/* Header & Filter Search */}
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-[#065f46]">
+                      <div className="flex items-center gap-2">
+                        <ListOrdered className="w-4 h-4 text-[#fbbf24]" />
+                        <h4 className="text-xs font-bold text-white">
+                          آيات سورة {editingRecording.surahName} ({editingRecording.segments?.length || 0} مقطعاً)
+                        </h4>
                       </div>
 
-                      <div className="flex flex-wrap gap-1.5 max-h-36 overflow-y-auto p-1 scrollbar-thin">
-                        {editingRecording.segments.map((seg, idx) => {
-                          const isSelected = activeAyahIndex === idx;
+                      <div className="relative w-full sm:w-60">
+                        <Search className="w-3.5 h-3.5 text-emerald-300 absolute right-2.5 top-2" />
+                        <input
+                          type="text"
+                          placeholder="ابحث برقم الآية أو كلمة من نصها..."
+                          value={ayahSearchTerm}
+                          onChange={e => setAyahSearchTerm(e.target.value)}
+                          className="w-full pr-8 pl-2 py-1 bg-[#022c22] border border-[#065f46] rounded-lg text-[11px] text-white focus:outline-none focus:border-[#fbbf24]"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Quick Selection Chips */}
+                    <div className="flex flex-wrap gap-1 max-h-24 overflow-y-auto p-1 scrollbar-thin">
+                      {editingRecording.segments?.map((seg, idx) => {
+                        const isSelected = activeAyahIndex === idx;
+                        const isLiveReciting = liveRecitingAyahIndex === idx;
+
+                        return (
+                          <button
+                            key={idx}
+                            type="button"
+                            onClick={() => {
+                              setActiveAyahIndex(idx);
+                              setSelectedAyahForPlayback(seg);
+                            }}
+                            className={`px-2 py-1 rounded-lg text-[11px] font-bold transition-all flex items-center gap-1 cursor-pointer ${
+                              isSelected
+                                ? 'bg-[#fbbf24] text-[#064e3b] shadow-md font-black scale-105'
+                                : isLiveReciting
+                                ? 'bg-amber-400/30 border border-amber-400 text-[#fbbf24]'
+                                : 'bg-[#022c22] text-[#86efac] hover:bg-[#064e3b] border border-[#065f46]'
+                            }`}
+                          >
+                            <span>{seg.ayahNumber === 0 ? 'البسملة' : `آية ${seg.ayahNumber}`}</span>
+                            <span className="text-[9px] opacity-75 font-mono">
+                              ({formatTimeMMSS(seg.startTimeSeconds)})
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {/* Synchronized Ayah Cards with Full Quran Text & Duration Controls */}
+                    <div className="max-h-72 overflow-y-auto space-y-2 pr-1 custom-scrollbar">
+                      {editingRecording.segments
+                        ?.map((seg, originalIndex) => ({ seg, originalIndex }))
+                        .filter(({ seg }) => {
+                          if (!ayahSearchTerm) return true;
+                          const query = ayahSearchTerm.trim();
                           return (
-                            <button
-                              key={idx}
-                              type="button"
-                              onClick={() => handlePlayAyah(seg, idx, editingRecording.youtubeVideoId!)}
-                              className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all flex items-center gap-1 cursor-pointer ${
+                            String(seg.ayahNumber).includes(query) ||
+                            (seg.ayahText && seg.ayahText.includes(query))
+                          );
+                        })
+                        .map(({ seg, originalIndex }) => {
+                          const isSelected = activeAyahIndex === originalIndex;
+                          const isLiveReciting = liveRecitingAyahIndex === originalIndex;
+                          const duration = Math.max(0, Math.round(seg.endTimeSeconds - seg.startTimeSeconds));
+
+                          return (
+                            <div
+                              key={originalIndex}
+                              className={`p-3 rounded-2xl border transition-all space-y-2 ${
                                 isSelected
-                                  ? 'bg-[#fbbf24] text-[#064e3b] shadow-md font-black scale-105'
-                                  : 'bg-[#022c22] text-[#86efac] hover:bg-[#064e3b] border border-[#065f46]'
+                                  ? 'bg-[#022c22] border-[#fbbf24] shadow-md ring-1 ring-[#fbbf24]/50'
+                                  : isLiveReciting
+                                  ? 'bg-[#022c22] border-emerald-400/80 shadow-md'
+                                  : 'bg-[#022c22]/70 border-[#065f46] hover:border-emerald-500/50'
                               }`}
                             >
-                              <Play className={`w-2.5 h-2.5 ${isSelected ? 'fill-[#064e3b]' : 'fill-current'}`} />
-                              <span>{seg.ayahNumber === 0 ? 'البسملة' : `آية ${seg.ayahNumber}`}</span>
-                              <span className="text-[9px] opacity-75">
-                                ({seg.formattedStart || formatSeconds(seg.startTimeSeconds)})
-                              </span>
-                            </button>
-                          );
-                        })}
-                      </div>
+                              {/* Header: Ayah Number & Duration */}
+                              <div className="flex items-center justify-between gap-2">
+                                <div className="flex items-center gap-2">
+                                  <span
+                                    className={`w-7 h-7 rounded-xl text-xs font-black flex items-center justify-center shrink-0 ${
+                                      isSelected
+                                        ? 'bg-[#fbbf24] text-[#064e3b]'
+                                        : 'bg-[#064e3b] text-[#86efac]'
+                                    }`}
+                                  >
+                                    {seg.ayahNumber === 0 ? '0' : seg.ayahNumber}
+                                  </span>
+                                  <span className="font-bold text-xs text-white">
+                                    {seg.ayahNumber === 0 ? 'الاستعاذة والبسملة' : `الآية رقم ${seg.ayahNumber}`}
+                                  </span>
+                                  {isLiveReciting && (
+                                    <span className="px-2 py-0.5 rounded-full bg-red-500/20 text-red-400 text-[10px] font-bold flex items-center gap-1 animate-pulse">
+                                      <span className="w-1.5 h-1.5 rounded-full bg-red-400" />
+                                      صوت التلاوة الآن
+                                    </span>
+                                  )}
+                                </div>
 
-                      {/* Optional: Detailed manual timing editor for fine-tuning */}
-                      {editingSegmentsDirectly && (
-                        <div className="mt-3 pt-3 border-t border-[#065f46] space-y-2">
-                          <span className="text-[11px] font-bold text-amber-300 block">
-                            ضبط توقيتات الآيات بالثواني بدقة (اختياري):
-                          </span>
-                          <div className="max-h-48 overflow-y-auto space-y-1.5 pr-1">
-                            {editingRecording.segments.map((seg, idx) => (
-                              <div
-                                key={idx}
-                                className="flex items-center justify-between gap-2 p-1.5 rounded-lg bg-[#022c22] border border-[#065f46] text-[11px]"
-                              >
-                                <span className="font-bold text-white w-24 truncate">
-                                  {seg.ayahNumber === 0 ? 'الاستعاذة والبسملة' : `الآية ${seg.ayahNumber}`}
-                                </span>
-                                <div className="flex items-center gap-1">
-                                  <label className="text-emerald-300 text-[10px]">البداية (ث):</label>
+                                {/* Strict Segment Playback Button */}
+                                <button
+                                  type="button"
+                                  onClick={() => handlePlayAyahStrict(seg, originalIndex)}
+                                  className="px-2.5 py-1 rounded-lg bg-[#fbbf24] hover:bg-amber-400 text-[#064e3b] font-black text-[11px] flex items-center gap-1.5 shadow cursor-pointer transition-all"
+                                  title="تشغيل هذه الآية فقط من بدايتها إلى نهايتها والتوقف تلقائياً"
+                                >
+                                  <Play className="w-3 h-3 fill-current" />
+                                  <span>استماع للآية ({duration}ث)</span>
+                                </button>
+                              </div>
+
+                              {/* Authentic Quranic Text in Uthmani Script */}
+                              <div className="p-2.5 rounded-xl bg-[#064e3b]/30 border border-[#065f46]/60">
+                                <p
+                                  className="text-amber-100 font-serif text-sm sm:text-base leading-relaxed text-right select-text"
+                                  dir="rtl"
+                                >
+                                  {seg.ayahText || getAyahTextSync(editingRecording.surahNumber || 78, seg.ayahNumber)}
+                                </p>
+                              </div>
+
+                              {/* Timing Controls & Quick Timestamp Alignment ("يعينها") */}
+                              <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+                                {/* Start Time Controller */}
+                                <div className="flex items-center gap-1 text-[11px]">
+                                  <span className="text-emerald-300 font-bold">البداية:</span>
                                   <input
                                     type="number"
                                     min={0}
                                     value={seg.startTimeSeconds}
-                                    onChange={e => handleUpdateSegmentTiming(idx, 'startTimeSeconds', Number(e.target.value))}
-                                    className="w-16 bg-[#064e3b] text-white px-1.5 py-0.5 rounded border border-[#065f46] text-center"
+                                    onChange={e => handleUpdateSegmentTiming(originalIndex, 'startTimeSeconds', Number(e.target.value))}
+                                    className="w-14 bg-[#064e3b] text-white px-1.5 py-0.5 rounded border border-[#065f46] text-center font-mono font-bold"
                                   />
+                                  <span className="text-emerald-400 font-mono text-[10px]">
+                                    ({formatTimeMMSS(seg.startTimeSeconds)})
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleStepTiming(originalIndex, 'startTimeSeconds', -1)}
+                                    className="px-1 py-0.5 rounded bg-[#064e3b] hover:bg-emerald-700 text-white text-[10px] font-mono cursor-pointer"
+                                    title="تأخير ثانية"
+                                  >
+                                    -1
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleStepTiming(originalIndex, 'startTimeSeconds', 1)}
+                                    className="px-1 py-0.5 rounded bg-[#064e3b] hover:bg-emerald-700 text-white text-[10px] font-mono cursor-pointer"
+                                    title="تقديم ثانية"
+                                  >
+                                    +1
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleUpdateSegmentTiming(originalIndex, 'startTimeSeconds', Math.round(currentLiveTime))}
+                                    className="px-1.5 py-0.5 rounded bg-emerald-800/80 hover:bg-emerald-700 text-emerald-200 text-[10px] font-bold border border-emerald-600/50 cursor-pointer"
+                                    title="أخذ وقت المشغل الحالي كبداية لهذه الآية"
+                                  >
+                                    📍 وقت المشغل ({formatTimeMMSS(currentLiveTime)})
+                                  </button>
                                 </div>
-                                <div className="flex items-center gap-1">
-                                  <label className="text-emerald-300 text-[10px]">النهاية (ث):</label>
+
+                                {/* End Time Controller */}
+                                <div className="flex items-center gap-1 text-[11px]">
+                                  <span className="text-amber-300 font-bold">النهاية:</span>
                                   <input
                                     type="number"
                                     min={0}
                                     value={seg.endTimeSeconds}
-                                    onChange={e => handleUpdateSegmentTiming(idx, 'endTimeSeconds', Number(e.target.value))}
-                                    className="w-16 bg-[#064e3b] text-white px-1.5 py-0.5 rounded border border-[#065f46] text-center"
+                                    onChange={e => handleUpdateSegmentTiming(originalIndex, 'endTimeSeconds', Number(e.target.value))}
+                                    className="w-14 bg-[#064e3b] text-white px-1.5 py-0.5 rounded border border-[#065f46] text-center font-mono font-bold"
                                   />
+                                  <span className="text-amber-400 font-mono text-[10px]">
+                                    ({formatTimeMMSS(seg.endTimeSeconds)})
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleStepTiming(originalIndex, 'endTimeSeconds', -1)}
+                                    className="px-1 py-0.5 rounded bg-[#064e3b] hover:bg-emerald-700 text-white text-[10px] font-mono cursor-pointer"
+                                    title="تأخير ثانية"
+                                  >
+                                    -1
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleStepTiming(originalIndex, 'endTimeSeconds', 1)}
+                                    className="px-1 py-0.5 rounded bg-[#064e3b] hover:bg-emerald-700 text-white text-[10px] font-mono cursor-pointer"
+                                    title="تقديم ثانية"
+                                  >
+                                    +1
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleUpdateSegmentTiming(originalIndex, 'endTimeSeconds', Math.round(currentLiveTime))}
+                                    className="px-1.5 py-0.5 rounded bg-amber-800/80 hover:bg-amber-700 text-amber-200 text-[10px] font-bold border border-amber-600/50 cursor-pointer"
+                                    title="أخذ وقت المشغل الحالي كنهاية لهذه الآية"
+                                  >
+                                    🏁 وقت المشغل ({formatTimeMMSS(currentLiveTime)})
+                                  </button>
                                 </div>
-                                <button
-                                  type="button"
-                                  onClick={() => handlePlayAyah(seg, idx, editingRecording.youtubeVideoId!)}
-                                  className="p-1 rounded bg-[#fbbf24] text-[#064e3b] hover:bg-amber-400 cursor-pointer"
-                                  title="تجربة الاستماع"
-                                >
-                                  <Play className="w-3 h-3 fill-current" />
-                                </button>
                               </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
+                            </div>
+                          );
+                        })}
                     </div>
-                  )}
+                  </div>
                 </div>
               )}
 
@@ -918,29 +1139,28 @@ export const RecordingsTab: React.FC<RecordingsTabProps> = ({
 
             {/* Content Body */}
             <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 overscroll-contain text-xs">
-              {/* YouTube Player */}
-              <div className="aspect-video rounded-2xl overflow-hidden border border-[#065f46] shadow-xl bg-black">
-                <iframe
-                  src={activeIframeSrc || `https://www.youtube.com/embed/${previewingRecording.youtubeVideoId}?autoplay=1&rel=0&enablejsapi=1`}
-                  title={previewingRecording.surahName}
-                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                  allowFullScreen
-                  className="w-full h-full"
-                />
-              </div>
+              {/* YouTube Ayah Player with Segment Limit */}
+              <YouTubeAyahPlayer
+                videoId={previewingRecording.youtubeVideoId || extractYouTubeId(previewingRecording.youtubeUrl)}
+                activeSegment={selectedAyahForPlayback}
+                targetSegmentToPlay={targetSegmentToPlay}
+                onTimeUpdate={time => setCurrentLiveTime(time)}
+                surahName={previewingRecording.surahName}
+                readOnlyControls={true}
+              />
 
-              {/* Interactive Ayahs Grid */}
-              <div className="space-y-2 bg-[#064e3b]/30 p-4 rounded-2xl border border-[#065f46]">
+              {/* Interactive Ayahs Grid with Uthmani Quran text */}
+              <div className="space-y-3 bg-[#064e3b]/30 p-4 rounded-2xl border border-[#065f46]">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2 text-[#fbbf24] font-bold">
                     <ListOrdered className="w-4 h-4" />
-                    <span>اختر الآية للاستماع إليها مباشرة:</span>
+                    <span>اختر الآية للاستماع المباشر إليها والتوقف عند نهايتها:</span>
                   </div>
-                  <div className="relative w-44">
+                  <div className="relative w-48">
                     <Search className="w-3.5 h-3.5 text-emerald-300 absolute right-2.5 top-2" />
                     <input
                       type="text"
-                      placeholder="بحث عن آية..."
+                      placeholder="بحث عن آية أو كلمة..."
                       value={ayahSearchTerm}
                       onChange={e => setAyahSearchTerm(e.target.value)}
                       className="w-full pr-8 pl-2 py-1 bg-[#022c22] border border-[#065f46] rounded-lg text-[11px] text-white focus:outline-none focus:border-[#fbbf24]"
@@ -948,30 +1168,55 @@ export const RecordingsTab: React.FC<RecordingsTabProps> = ({
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 max-h-56 overflow-y-auto p-1">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-60 overflow-y-auto p-1 custom-scrollbar">
                   {(previewingRecording.segments || generateAyahSegments(previewingRecording.surahNumber))
-                    .filter(seg => !ayahSearchTerm || String(seg.ayahNumber).includes(ayahSearchTerm) || (seg.ayahText && seg.ayahText.includes(ayahSearchTerm)))
+                    .filter(seg => {
+                      if (!ayahSearchTerm) return true;
+                      const q = ayahSearchTerm.trim();
+                      return (
+                        String(seg.ayahNumber).includes(q) ||
+                        (seg.ayahText && seg.ayahText.includes(q))
+                      );
+                    })
                     .map((seg, idx) => {
                       const isPlaying = activeAyahIndex === idx;
+                      const isLiveReciting = currentLiveTime >= seg.startTimeSeconds && currentLiveTime < seg.endTimeSeconds;
+                      const duration = Math.max(0, Math.round(seg.endTimeSeconds - seg.startTimeSeconds));
+
                       return (
                         <button
                           key={idx}
-                          onClick={() => handlePlayAyah(seg, idx, previewingRecording.youtubeVideoId)}
-                          className={`p-2 rounded-xl text-right transition-all flex items-center justify-between gap-1.5 cursor-pointer ${
+                          onClick={() => {
+                            setSelectedAyahForPlayback(seg);
+                            setActiveAyahIndex(idx);
+                            setTargetSegmentToPlay({ ...seg });
+                          }}
+                          className={`p-3 rounded-xl text-right transition-all flex items-start justify-between gap-2 cursor-pointer border ${
                             isPlaying
-                              ? 'bg-[#fbbf24] text-[#064e3b] font-black shadow-lg scale-102 ring-2 ring-amber-300'
-                              : 'bg-[#022c22] text-[#86efac] hover:bg-[#064e3b] border border-[#065f46]'
+                              ? 'bg-[#fbbf24] text-[#064e3b] font-black shadow-lg scale-102 border-amber-300 ring-2 ring-amber-300'
+                              : isLiveReciting
+                              ? 'bg-emerald-900/60 border-emerald-400 text-white'
+                              : 'bg-[#022c22] text-[#86efac] hover:bg-[#064e3b] border-[#065f46]'
                           }`}
                         >
-                          <div className="truncate">
-                            <span className="font-bold block text-xs truncate">
-                              {seg.ayahNumber === 0 ? 'الاستعاذة والبسملة' : `الآية ${seg.ayahNumber}`}
-                            </span>
-                            <span className="text-[10px] opacity-80 block">
-                              {seg.formattedStart || formatSeconds(seg.startTimeSeconds)} - {seg.formattedEnd || formatSeconds(seg.endTimeSeconds)}
-                            </span>
+                          <div className="min-w-0 flex-1 space-y-1">
+                            <div className="flex items-center justify-between">
+                              <span className="font-bold block text-xs">
+                                {seg.ayahNumber === 0 ? 'الاستعاذة والبسملة' : `الآية ${seg.ayahNumber}`}
+                              </span>
+                              <span className="text-[10px] opacity-80 font-mono">
+                                {formatTimeMMSS(seg.startTimeSeconds)} - {formatTimeMMSS(seg.endTimeSeconds)} ({duration}ث)
+                              </span>
+                            </div>
+                            <p
+                              className={`text-[11px] leading-relaxed line-clamp-2 font-serif ${
+                                isPlaying ? 'text-[#064e3b] font-bold' : 'text-amber-100/90'
+                              }`}
+                            >
+                              {seg.ayahText || getAyahTextSync(previewingRecording.surahNumber, seg.ayahNumber)}
+                            </p>
                           </div>
-                          <Play className={`w-3.5 h-3.5 shrink-0 ${isPlaying ? 'fill-[#064e3b]' : 'fill-current'}`} />
+                          <Play className={`w-4 h-4 shrink-0 mt-1 ${isPlaying ? 'fill-[#064e3b]' : 'fill-current'}`} />
                         </button>
                       );
                     })}
@@ -981,7 +1226,7 @@ export const RecordingsTab: React.FC<RecordingsTabProps> = ({
 
             {/* Footer */}
             <div className="shrink-0 p-4 border-t border-[#065f46] bg-[#022c22] flex items-center justify-between text-xs text-[#86efac]">
-              <span>الاستماع المقرر للطلاب: {previewingRecording.defaultListeningCount || 3} مرات</span>
+              <span>الاستماع المقرر للطلاب: {previewingRecording.defaultListeningCount || 3} مرات يومياً</span>
               <button
                 onClick={() => setPreviewingRecording(null)}
                 className="px-4 py-2 rounded-xl bg-[#064e3b] text-white hover:bg-emerald-800 cursor-pointer font-bold"
@@ -1056,7 +1301,7 @@ export const RecordingsTab: React.FC<RecordingsTabProps> = ({
               </div>
               <div className={`flex items-center gap-2 ${aiProgressStep >= 3 ? 'text-[#86efac] font-bold' : 'text-emerald-300/40'}`}>
                 {aiProgressStep >= 3 ? <CheckCircle2 className="w-4 h-4 text-[#fbbf24]" /> : <Clock className="w-4 h-4" />}
-                <span>استخراج التوقيتات الدقيقة بالدقيقة والثانية (س:د:ث)</span>
+                <span>استخراج التوقيتات الدقيقة لكل آية وربطها بالرسم العثماني</span>
               </div>
               <div className={`flex items-center gap-2 ${aiProgressStep >= 4 ? 'text-[#86efac] font-bold' : 'text-emerald-300/40'}`}>
                 {aiProgressStep >= 4 ? <CheckCircle2 className="w-4 h-4 text-[#fbbf24]" /> : <Clock className="w-4 h-4" />}

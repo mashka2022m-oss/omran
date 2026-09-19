@@ -1,5 +1,6 @@
 import express from "express";
 import path from "path";
+import fs from "fs";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
 import dotenv from "dotenv";
@@ -220,8 +221,55 @@ function formatSeconds(sec: number): string {
   return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
 }
 
-// Fetch authentic Quranic text for a Surah from open Uthmani API
+// Local Quran Cache helper
+let localQuranCache: Record<number, string[]> | null = null;
+function getLocalQuranCache(): Record<number, string[]> | null {
+  if (localQuranCache && Object.keys(localQuranCache).length >= 114) {
+    return localQuranCache;
+  }
+  try {
+    const p = path.join(process.cwd(), 'public', 'quran-verses.json');
+    if (fs.existsSync(p)) {
+      localQuranCache = JSON.parse(fs.readFileSync(p, 'utf-8'));
+      return localQuranCache;
+    }
+  } catch (e) {
+    console.error("Error reading local quran-verses.json:", e);
+  }
+  return null;
+}
+
+// Endpoint: Return all Quran verses
+app.get("/api/quran/all", (req, res) => {
+  const cache = getLocalQuranCache();
+  if (cache) {
+    return res.json(cache);
+  }
+  res.status(404).json({ error: "Quran data not yet ready" });
+});
+
+// Endpoint: Return verses of a specific Surah
+app.get("/api/quran/surah/:num", async (req, res) => {
+  const num = Number(req.params.num);
+  const cache = getLocalQuranCache();
+  if (cache && cache[num]) {
+    return res.json({ surahNumber: num, ayahs: cache[num] });
+  }
+  const ayahs = await fetchAuthenticSurahVerses(num);
+  return res.json({ surahNumber: num, ayahs: ayahs.map(a => a.text) });
+});
+
+// Fetch authentic Quranic text for a Surah
 async function fetchAuthenticSurahVerses(surahNumber: number): Promise<Array<{ ayahNumber: number; text: string }>> {
+  // 1. Check local cache first (instant & reliable)
+  const localCache = getLocalQuranCache();
+  if (localCache && localCache[surahNumber] && localCache[surahNumber].length > 0) {
+    return localCache[surahNumber].map((text, idx) => ({
+      ayahNumber: idx + 1,
+      text: text.trim()
+    }));
+  }
+
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 6000);
