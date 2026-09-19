@@ -35,7 +35,8 @@ import {
   LeaderboardSettings,
   GoogleOAuthConfig,
   SurahRecording,
-  RecordingsConfig
+  RecordingsConfig,
+  isTeacherSupervisor
 } from './types';
 import {
   OmranDataService,
@@ -330,12 +331,9 @@ export function App() {
 
   const isSupervisor = useMemo(() => {
     if (!currentUser || currentUser.role !== 'admin') return false;
-    // 1. Persistent role field on teacher account
-    if (currentTeacher?.role === 'supervisor') return true;
-    if (currentTeacher?.role === 'teacher') return false;
-    // 2. Primary teacher flag
-    if (currentTeacher?.isPrimary) return true;
-    // 3. Fallback for initial system administrators
+    if (currentTeacher) {
+      return isTeacherSupervisor(currentTeacher);
+    }
     const cleanUser = currentUser.username.trim().toLowerCase();
     return (
       cleanUser === 'محمد منتصر' ||
@@ -388,6 +386,13 @@ export function App() {
       }
     }
   }, [currentUser, isSupervisor, assignedHalaqahs, activeHalaqahId]);
+
+  // Guard supervisor-only tabs: recordings, accounts, backup are strictly for supervisor (Mohamed Montaser)
+  useEffect(() => {
+    if (!isSupervisor && (activeTab === 'recordings' || activeTab === 'accounts' || activeTab === 'backup')) {
+      setActiveTab('home');
+    }
+  }, [isSupervisor, activeTab]);
 
   // Helper to check whether a student has an assigned halaqah
   const isStudentAssigned = (s: Student) => {
@@ -979,18 +984,23 @@ export function App() {
   }
 
   // Navigation Items for Admin/Teacher
+  // Recordings, Accounts/Ranks Management, and Backup are strictly restricted to Supervisor (Mohamed Montaser)
   const navItems = [
     { id: 'home', label: 'الرئيسية', icon: Home },
     { id: 'students', label: 'الطلاب والتسجيل', icon: Users, badge: displayedStudents.length },
     { id: 'attendance', label: 'الحضور والغياب', icon: UserCheck },
     { id: 'evaluation', label: 'تقييم التسميع', icon: BookOpen },
     { id: 'exams', label: 'قسم الاختبارات', icon: FileText, badge: exams.length > 0 ? exams.length : undefined },
-    { id: 'recordings', label: 'مقاطع التلاوة والواجبات', icon: Headphones, badge: recordings.length > 0 ? recordings.length : undefined },
-    { id: 'accounts', label: 'إدارة الحسابات والرتب', icon: UserCog, badge: teachers.length },
+    ...(isSupervisor ? [
+      { id: 'recordings', label: 'مقاطع التلاوة والواجبات', icon: Headphones, badge: recordings.length > 0 ? recordings.length : undefined },
+      { id: 'accounts', label: 'إدارة الحسابات والرتب', icon: UserCog, badge: teachers.length }
+    ] : []),
     { id: 'behavior', label: 'المخالفات السلوكية', icon: ShieldAlert, badge: displayedViolations.length > 0 ? displayedViolations.length : undefined },
     { id: 'parents', label: 'رسائل الواتساب', icon: MessageCircle },
     { id: 'reports', label: 'التقارير الدورية', icon: Award },
-    { id: 'backup', label: 'النسخ الاحتياطي', icon: Database }
+    ...(isSupervisor ? [
+      { id: 'backup', label: 'النسخ الاحتياطي', icon: Database }
+    ] : [])
   ];
 
   return (
@@ -1201,7 +1211,7 @@ export function App() {
           />
         )}
 
-        {activeTab === 'recordings' && (
+        {activeTab === 'recordings' && isSupervisor && (
           <RecordingsTab
             recordings={recordings}
             recordingsConfig={recordingsConfig}
@@ -1211,7 +1221,7 @@ export function App() {
           />
         )}
 
-        {activeTab === 'accounts' && (
+        {activeTab === 'accounts' && isSupervisor && (
           <AccountsTab
             teachers={teachers}
             students={students}
@@ -1254,7 +1264,7 @@ export function App() {
           />
         )}
 
-        {activeTab === 'backup' && (
+        {activeTab === 'backup' && isSupervisor && (
           <DataBackupTab
             onRefreshAllData={loadAllData}
             googleAuthConfig={googleAuthConfig}

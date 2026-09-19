@@ -32,6 +32,35 @@ export interface TeacherAccount {
   createdAt: string;
 }
 
+/**
+ * Standard utility to determine if a teacher account has supervisor rank and permissions.
+ * Mohamed Montaser is always supervisor.
+ * If explicitly marked as 'teacher', they are strictly a regular teacher (not supervisor).
+ */
+export const isTeacherSupervisor = (teacher?: TeacherAccount | null): boolean => {
+  if (!teacher) return false;
+  const cleanName = (teacher.name || '').trim().toLowerCase();
+  const cleanUser = (teacher.username || '').trim().toLowerCase();
+
+  // Mohamed Montaser is always the primary supervisor
+  if (cleanUser === 'محمد منتصر' || cleanUser === 'admin' || cleanName.includes('محمد منتصر')) {
+    return true;
+  }
+
+  // Explicit teacher role = regular teacher (NOT supervisor)
+  if (teacher.role === 'teacher') {
+    return false;
+  }
+
+  // Explicit supervisor role
+  if (teacher.role === 'supervisor') {
+    return true;
+  }
+
+  // Fallback: only if isPrimary is true and not explicitly 'teacher'
+  return Boolean(teacher.isPrimary);
+};
+
 export interface UserAccount {
   id: string;
   username: string;

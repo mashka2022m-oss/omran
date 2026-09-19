@@ -159,8 +159,8 @@ export const Navbar: React.FC<NavbarProps> = ({
 
         {/* Right User & Actions */}
         <div className="flex items-center gap-2.5">
-          {/* Top Settings Button (Requested: زر إعدادات في الأعلى لإدارة المعلمين والحلقات ونقل الطلاب) */}
-          {currentUser?.role === 'admin' && onOpenSettings && (
+          {/* Top Settings Button (Exclusively for Supervisor: إدارة المعلمين والحلقات ونقل الطلاب) */}
+          {currentUser?.role === 'admin' && isSupervisor && onOpenSettings && (
             <button
               onClick={onOpenSettings}
               title="إعدادات الحلقات والمعلمين ونقل الطلاب"
@@ -171,7 +171,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             </button>
           )}
 
-          {currentUser?.role === 'admin' && !onOpenSettings && onOpenTeacherManagement && (
+          {currentUser?.role === 'admin' && isSupervisor && !onOpenSettings && onOpenTeacherManagement && (
             <button
               onClick={onOpenTeacherManagement}
               title="إدارة حسابات المعلمين"
@@ -195,7 +195,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                   {currentUser.username}
                 </div>
                 <div className="text-[10px] text-[#86efac]">
-                  {currentUser.role === 'admin' ? 'معلم / مشرف' : 'حساب طالب'}
+                  {currentUser.role === 'admin' ? (isSupervisor ? 'المعلم المشرف' : 'معلم عادي') : 'حساب طالب'}
                 </div>
               </div>
 

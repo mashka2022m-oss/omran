@@ -163,6 +163,7 @@ export const INITIAL_TEACHERS: TeacherAccount[] = [
     password: '123',
     phone: '0500000000',
     title: 'المشرف الأساسي والمعلم الأول',
+    role: 'supervisor',
     isPrimary: true,
     halaqahId: 'halaqah-zubeir',
     halaqahName: 'حلقة الزبير بن العوام رضي الله عنه',
@@ -538,7 +539,24 @@ export class OmranDataService {
     try {
       const snap = await getDocs(collection(db, 'teachers'));
       const list: TeacherAccount[] = [];
-      snap.forEach(d => list.push(d.data() as TeacherAccount));
+      snap.forEach(d => {
+        const raw = d.data() as TeacherAccount;
+        const cleanUser = (raw.username || '').trim().toLowerCase();
+        const cleanName = (raw.name || '').trim().toLowerCase();
+        const isMohamed =
+          cleanUser === 'محمد منتصر' ||
+          cleanUser === 'admin' ||
+          cleanName.includes('محمد منتصر') ||
+          raw.id === 'teacher-1';
+
+        const normalized: TeacherAccount = {
+          ...raw,
+          role: isMohamed ? 'supervisor' : (raw.role === 'supervisor' ? 'supervisor' : 'teacher'),
+          isPrimary: isMohamed,
+          title: raw.title || (isMohamed ? 'المشرف الأساسي والمعلم الأول' : (raw.role === 'supervisor' ? 'معلم مشرف' : 'معلم حلقة ومحفظ'))
+        };
+        list.push(normalized);
+      });
       if (list.length === 0) {
         for (const t of INITIAL_TEACHERS) {
           await setDoc(doc(db, 'teachers', t.id), t);

@@ -21,7 +21,7 @@ import {
   CheckSquare,
   Square
 } from 'lucide-react';
-import { TeacherAccount, Halaqah, Student, AppSettings } from '../types';
+import { TeacherAccount, Halaqah, Student, AppSettings, isTeacherSupervisor } from '../types';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -269,18 +269,29 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       const selectedHalaqahs = halaqahs.filter(h => selectedHalaqahIds.includes(h.id));
       const selectedHalaqahNames = selectedHalaqahs.map(h => h.name);
 
+      const cleanUser = (editingTeacher.username || '').trim().toLowerCase();
+      const cleanName = (editingTeacher.name || '').trim().toLowerCase();
+      const isMohamed =
+        cleanUser === 'محمد منتصر' ||
+        cleanUser === 'admin' ||
+        cleanName.includes('محمد منتصر') ||
+        editingTeacher.id === 'teacher-1';
+
+      const isSuper = isMohamed || editingTeacher.role === 'supervisor';
+
       const fullTeacher: TeacherAccount = {
         id: editingTeacher.id || `teacher-${Date.now()}`,
         name: editingTeacher.name.trim(),
         username: editingTeacher.username.trim(),
         password: editingTeacher.password?.trim() || '123',
         phone: editingTeacher.phone?.trim() || '0500000000',
-        title: editingTeacher.title?.trim() || 'معلم ومحفظ',
+        title: editingTeacher.title?.trim() || (isMohamed ? 'المشرف الأساسي والمعلم الأول' : (isSuper ? 'معلم مشرف' : 'معلم ومحفظ')),
+        role: isSuper ? 'supervisor' : 'teacher',
+        isPrimary: isMohamed,
         halaqahIds: selectedHalaqahIds,
         halaqahNames: selectedHalaqahNames,
         halaqahId: selectedHalaqahIds[0] || '',
         halaqahName: selectedHalaqahNames[0] || '',
-        isPrimary: editingTeacher.isPrimary ?? false,
         createdAt: editingTeacher.createdAt || new Date().toISOString()
       };
 
@@ -930,6 +941,31 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     />
                   </div>
 
+                  {/* Role / Rank */}
+                  <div>
+                    <label className="block text-xs font-bold text-[#86efac] mb-1">
+                      الرتبة والصلاحية السحابية
+                    </label>
+                    <select
+                      value={editingTeacher.role || (editingTeacher.isPrimary ? 'supervisor' : 'teacher')}
+                      disabled={
+                        editingTeacher.username?.trim().toLowerCase() === 'محمد منتصر' ||
+                        editingTeacher.name?.includes('محمد منتصر') ||
+                        editingTeacher.id === 'teacher-1'
+                      }
+                      onChange={e =>
+                        setEditingTeacher({
+                          ...editingTeacher,
+                          role: e.target.value as 'supervisor' | 'teacher'
+                        })
+                      }
+                      className="w-full bg-[#064e3b] border border-[#065f46] rounded-xl px-3 py-2 text-[#fbbf24] font-bold text-xs focus:border-[#fbbf24] focus:outline-none disabled:opacity-60"
+                    >
+                      <option value="teacher">معلم عادي (مخصص لحلقاته فقط)</option>
+                      <option value="supervisor">معلم مشرف (صلاحيات المشرف العام كاملة)</option>
+                    </select>
+                  </div>
+
                   {/* Multi-Halaqah Assignment */}
                   <div className="sm:col-span-2 space-y-2.5 bg-[#064e3b]/50 p-4 rounded-2xl border border-[#065f46]">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
@@ -1071,13 +1107,19 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       <div className="space-y-1">
                         <div className="flex items-center gap-2 flex-wrap">
                           <h4 className="text-sm font-bold text-white">{t.name}</h4>
-                          {t.isPrimary && (
+                          {isTeacherSupervisor(t) ? (
                             <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#fbbf24]/20 text-[#fbbf24] border border-[#fbbf24]/30 font-bold">
-                              المشرف الأول
+                              {t.username?.trim().toLowerCase() === 'محمد منتصر' || t.name?.includes('محمد منتصر') || t.id === 'teacher-1'
+                                ? 'المشرف الأول الأساسي'
+                                : 'معلم مشرف'}
+                            </span>
+                          ) : (
+                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-[#86efac] border border-emerald-500/30 font-bold">
+                              معلم عادي
                             </span>
                           )}
                           <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#064e3b] text-slate-300 border border-[#065f46]">
-                            {t.title || 'معلم ومحفظ'}
+                            {t.title || (isTeacherSupervisor(t) ? 'معلم مشرف' : 'معلم ومحفظ')}
                           </span>
                         </div>
 
