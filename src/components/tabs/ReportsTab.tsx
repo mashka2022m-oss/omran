@@ -232,7 +232,7 @@ export const ReportsTab: React.FC<ReportsTabProps> = ({
       achievementsText: `أتم الطالب حفظ وتسميع السور المقررة بمستوى ${selectedStudent.level}، وسجل حضوراً لـ ${presents} يوماً بحلقة القرآن الكريم مع الالتزام بالمراجعة المستمرة.`,
       tajweedAssessment: 'أداء صوتي طيب مع إتقان المدود الأساسية وأحكام النون والميم الساكنتين ومخارج الحروف.',
       recommendations: 'الاستمرار في الاستماع اليومي للمصحف المعلم بمعدل 15 دقيقة والتكرار المنزلي مع المتابعة الأسرية.',
-      whatsappText: `السلام عليكم ورحمة الله وبركاته 🌿\nيسرنا في *${settings.halaqahName || 'حلقة القرآن الكريم'}* مشاركتكم التقرير ${periodLabel} للطالب النجيب / *${selectedStudent.name}*.\n📊 نسبة الحضور: *${attendancePercentage}%* (${presents} يوم حضور)\n✨ المحفوظ الحالي: سورة ${selectedStudent.currentSurahName}\n🔗 للاطلاع على التقرير التفصيلي وملف الطالب الحي عبر الرابط:\n${portalUrl}\nمع تحيات المعلم المشرف: *${settings.teacherName || 'الشيخ محمد منتصر'}*`,
+      whatsappText: `السلام عليكم ورحمة الله وبركاته 🌿\nيسرنا في *${selectedStudent.halaqahName || settings.halaqahName || 'حلقة القرآن الكريم'}* مشاركتكم التقرير ${periodLabel} للطالب النجيب / *${selectedStudent.name}*.\n📊 نسبة الحضور: *${attendancePercentage}%* (${presents} يوم حضور)\n✨ المحفوظ الحالي: سورة ${selectedStudent.currentSurahName}\n🔗 للاطلاع على التقرير التفصيلي وملف الطالب الحي عبر الرابط:\n${portalUrl}\nمع تحيات المعلم المشرف: *${settings.teacherName || 'إدارة الحلقة'}*`,
       attendanceSummary
     };
 

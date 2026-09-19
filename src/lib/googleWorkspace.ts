@@ -1,5 +1,5 @@
 import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
-import { auth, db, OmranDataService } from './firebase';
+import { auth, db, OmranDataService, DEFAULT_HALAQAHS } from './firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
 import { Exam, ExamQuestion, ExamSubmission, ExamSubmissionAnswer, GoogleOAuthConfig, FullBackupData, Student, TeacherAccount, AttendanceRecord, StudentEvaluation, Halaqah } from '../types';
@@ -349,8 +349,8 @@ export class GoogleWorkspaceService {
       dailyNewTarget: 'نصف وجه',
       dailyReviewTarget: 'وجه واحد',
       level: 'متوسط',
-      halaqahId: 'halaqah-zubeir',
-      halaqahName: 'حلقة الزبير بن العوام رضي الله عنه',
+      halaqahId: DEFAULT_HALAQAHS[0]?.id || '',
+      halaqahName: DEFAULT_HALAQAHS[0]?.name || '',
       googleEmail: cleanEmail,
       googleUid: googleUser.uid,
       googleName: cleanName || newStudentName,
@@ -580,8 +580,8 @@ export class GoogleWorkspaceService {
       dailyNewTarget: 'نصف وجه',
       dailyReviewTarget: 'وجه واحد',
       level: 'متوسط',
-      halaqahId: 'halaqah-zubeir',
-      halaqahName: 'حلقة الزبير بن العوام رضي الله عنه',
+      halaqahId: DEFAULT_HALAQAHS[0]?.id || '',
+      halaqahName: DEFAULT_HALAQAHS[0]?.name || '',
       googleEmail: cleanEmail,
       googleUid: `direct_${Date.now()}`,
       googleName: newStudentName,
@@ -794,9 +794,9 @@ export class GoogleWorkspaceService {
       });
     }
 
-    // Also check if matches known supervisor keywords (e.g. الشيخ محمد منتصر)
-    if (!matchedTeacher && (cleanName.includes('منتصر') || cleanEmail.includes('montaser') || cleanEmail.includes('admin'))) {
-      matchedTeacher = existingTeachers.find(t => t.role === 'supervisor' || t.isPrimary || t.name.includes('منتصر'));
+    // Also check if matches known supervisor keywords
+    if (!matchedTeacher && (cleanEmail.includes('admin') || cleanEmail.includes('supervisor'))) {
+      matchedTeacher = existingTeachers.find(t => t.role === 'developer' || t.role === 'supervisor' || t.isPrimary);
     }
 
     if (matchedTeacher) {
@@ -874,8 +874,8 @@ export class GoogleWorkspaceService {
       dailyNewTarget: 'نصف وجه',
       dailyReviewTarget: 'وجه واحد',
       level: 'متوسط',
-      halaqahId: 'halaqah-zubeir',
-      halaqahName: 'حلقة الزبير بن العوام رضي الله عنه',
+      halaqahId: DEFAULT_HALAQAHS[0]?.id || '',
+      halaqahName: DEFAULT_HALAQAHS[0]?.name || '',
       googleEmail: cleanEmail,
       googleUid: googleUser.uid,
       googleName: cleanName || newStudentName,

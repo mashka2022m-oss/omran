@@ -116,7 +116,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       description: '',
       complexId: defaultComplex?.id,
       complexName: defaultComplex?.name,
-      primaryTeacherName: teachers[0]?.name || 'محمد منتصر',
+      primaryTeacherName: teachers[0]?.name || 'المعلم المشرف',
       createdAt: new Date().toISOString()
     });
     setStatusMsg(null);
@@ -287,13 +287,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
       const cleanUser = (editingTeacher.username || '').trim().toLowerCase();
       const cleanName = (editingTeacher.name || '').trim().toLowerCase();
-      const isMohamed =
-        cleanUser === 'محمد منتصر' ||
+      const isDevOrAdmin =
         cleanUser === 'admin' ||
-        cleanName.includes('محمد منتصر') ||
-        editingTeacher.id === 'teacher-1';
+        cleanUser === 'developer' ||
+        editingTeacher.id === 'teacher-1' ||
+        editingTeacher.role === 'developer';
 
-      const isSuper = isMohamed || editingTeacher.role === 'supervisor';
+      const isSuper = isDevOrAdmin || editingTeacher.role === 'supervisor';
       const selectedComplex = complexes.find(c => c.id === editingTeacher.complexId) || complexes[0];
 
       const fullTeacher: TeacherAccount = {
@@ -302,9 +302,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         username: editingTeacher.username.trim(),
         password: editingTeacher.password?.trim() || '123',
         phone: editingTeacher.phone?.trim() || '0500000000',
-        title: editingTeacher.title?.trim() || (isMohamed ? 'المشرف الأساسي والمعلم الأول' : (isSuper ? 'معلم مشرف' : 'معلم ومحفظ')),
+        title: editingTeacher.title?.trim() || (isDevOrAdmin ? 'المشرف والمطور العام' : (isSuper ? 'معلم مشرف' : 'معلم ومحفظ')),
         role: isSuper ? 'supervisor' : 'teacher',
-        isPrimary: isMohamed,
+        isPrimary: isDevOrAdmin,
         complexId: editingTeacher.complexId || selectedComplex?.id,
         complexName: selectedComplex?.name || editingTeacher.complexName,
         halaqahIds: selectedHalaqahIds,
@@ -548,7 +548,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   <span>قائمة الحلقات المقامة في المنظومة</span>
                 </h3>
                 <p className="text-[11px] text-[#86efac] mt-0.5">
-                  الحلقة الحالية: {settings.halaqahName} (معلمها محمد منتصر والمعلمون الشركاء)
+                  الحلقة الحالية: {settings.halaqahName || 'الحلقة القرآنية'}
                 </p>
               </div>
               <button
@@ -758,7 +758,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                             </h4>
                           </div>
                           <p className="text-[11px] text-[#86efac] mt-1">
-                            المعلم المسؤول: <strong className="text-white">{h.primaryTeacherName || 'الشيخ محمد منتصر'}</strong>
+                            المعلم المسؤول: <strong className="text-white">{h.primaryTeacherName || 'المعلم المشرف'}</strong>
                           </p>
                           {h.description && (
                             <p className="text-[10px] text-slate-300 mt-0.5 line-clamp-1">
@@ -1002,9 +1002,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     <select
                       value={editingTeacher.role || (editingTeacher.isPrimary ? 'supervisor' : 'teacher')}
                       disabled={
-                        editingTeacher.username?.trim().toLowerCase() === 'محمد منتصر' ||
-                        editingTeacher.name?.includes('محمد منتصر') ||
-                        editingTeacher.id === 'teacher-1'
+                        editingTeacher.id === 'teacher-1' ||
+                        editingTeacher.role === 'developer'
                       }
                       onChange={e =>
                         setEditingTeacher({
@@ -1130,7 +1129,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                               <div className="text-right">
                                 <span className="text-xs font-bold block">{h.name}</span>
                                 <span className="text-[10px] text-slate-300">
-                                  المشرف: {h.primaryTeacherName || 'الشيخ محمد منتصر'}
+                                  المشرف: {h.primaryTeacherName || 'المعلم المشرف'}
                                 </span>
                               </div>
                             </div>
@@ -1196,9 +1195,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                           <h4 className="text-sm font-bold text-white">{t.name}</h4>
                           {isTeacherSupervisor(t) ? (
                             <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#fbbf24]/20 text-[#fbbf24] border border-[#fbbf24]/30 font-bold">
-                              {t.username?.trim().toLowerCase() === 'محمد منتصر' || t.name?.includes('محمد منتصر') || t.id === 'teacher-1'
-                                ? 'المشرف الأول الأساسي'
-                                : 'معلم مشرف'}
+                              {t.role === 'developer' || t.id === 'teacher-1'
+                                ? 'مشرف المنصة'
+                                : 'مشرف المجمع'}
                             </span>
                           ) : (
                             <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-[#86efac] border border-emerald-500/30 font-bold">
@@ -1498,7 +1497,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   >
                     <option value="">-- اختر الطالب --</option>
                     {students.map(s => {
-                      const currentH = s.halaqahName || (s.halaqahId ? halaqahs.find(h => h.id === s.halaqahId)?.name : 'حلقة الزبير بن العوام');
+                      const currentH = s.halaqahName || (s.halaqahId ? halaqahs.find(h => h.id === s.halaqahId)?.name : 'حلقة عامة');
                       return (
                         <option key={s.id} value={s.id}>
                           {s.name} (حالياً في: {currentH})

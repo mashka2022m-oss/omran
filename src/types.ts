@@ -2,7 +2,7 @@ export type UserRole = 'admin' | 'student';
 
 export interface QuranComplex {
   id: string;
-  name: string; // e.g. "مجمع حلقات الصحابي الزبير بن العوام"
+  name: string; // e.g. "مجمع النور القرآني"
   description?: string;
   supervisorTeacherId?: string; // ID of the supervisor teacher assigned to this complex
   supervisorTeacherName?: string; // Display name of supervisor teacher
@@ -31,7 +31,7 @@ export interface QuranComplex {
 
 export interface Halaqah {
   id: string;
-  name: string; // e.g. "حلقة الصحابي الزبير بن العوام رضي الله عنه"
+  name: string; // e.g. "حلقة القرآن الكريم"
   description?: string;
   complexId?: string; // ID of the complex this halaqah belongs to
   complexName?: string; // Cached display name of the complex
@@ -44,13 +44,13 @@ export interface Halaqah {
 
 export interface TeacherAccount {
   id: string;
-  name: string; // e.g. "الشيخ محمد منتصر", "الشيخ عبد الله بن فهد"
+  name: string; // e.g. "المشرف العام", "الشيخ عبد الله بن فهد"
   username: string; // username used to log in
   password?: string; // password used to log in
   phone: string; // teacher's phone number
-  title?: string; // e.g. "معلم ومشرف ومبرمج", "المعلم الأساسي", "معلم شريك / ثانٍ"
+  title?: string; // e.g. "مشرف ومطور المنظومة", "المعلم المشرف", "معلم ومحفظ"
   isPrimary?: boolean;
-  role?: 'teacher' | 'supervisor' | 'developer'; // رتبة المعلم: معلم عادي، مشرف، أو مبرمج (معلم ومشرف ومبرمج)
+  role?: 'teacher' | 'supervisor' | 'developer'; // رتبة المعلم: معلم عادي، مشرف، أو مبرمج ومطور
   complexId?: string; // Complex supervised by this teacher if applicable
   complexName?: string;
   halaqahId?: string; // Legacy single halaqah id
@@ -66,8 +66,7 @@ export interface TeacherAccount {
 }
 
 /**
- * Check if user or teacher has developer privileges (معلم ومشرف ومبرمج).
- * Mohamed Montaser is always granted developer status.
+ * Check if user or teacher has developer / system administrator privileges.
  */
 export const isTeacherDeveloper = (
   teacher?: TeacherAccount | null,
@@ -75,19 +74,17 @@ export const isTeacherDeveloper = (
 ): boolean => {
   if (teacher) {
     if (teacher.role === 'developer') return true;
-    const cleanName = (teacher.name || '').trim().toLowerCase();
     const cleanUser = (teacher.username || '').trim().toLowerCase();
     if (
-      cleanUser === 'محمد منتصر' ||
       cleanUser === 'admin' ||
-      cleanName.includes('محمد منتصر')
+      cleanUser === 'developer'
     ) {
       return true;
     }
   }
   if (userObj) {
     const cleanUser = (userObj.username || '').trim().toLowerCase();
-    if (cleanUser === 'محمد منتصر' || cleanUser === 'admin') {
+    if (cleanUser === 'admin' || cleanUser === 'developer') {
       return true;
     }
   }
@@ -96,13 +93,12 @@ export const isTeacherDeveloper = (
 
 /**
  * Standard utility to determine if a teacher account has supervisor rank and permissions.
- * Mohamed Montaser is always supervisor (and developer).
  * If explicitly marked as 'developer', they have all supervisor permissions + developer features.
+ * If explicitly marked as 'supervisor', they supervise their assigned complex and halaqahs.
  * If explicitly marked as 'teacher', they are strictly a regular teacher (not supervisor).
  */
 export const isTeacherSupervisor = (teacher?: TeacherAccount | null): boolean => {
   if (!teacher) return false;
-  const cleanName = (teacher.name || '').trim().toLowerCase();
   const cleanUser = (teacher.username || '').trim().toLowerCase();
 
   // Developer has full supervisor permissions
@@ -110,8 +106,8 @@ export const isTeacherSupervisor = (teacher?: TeacherAccount | null): boolean =>
     return true;
   }
 
-  // Mohamed Montaser is always the primary supervisor and developer
-  if (cleanUser === 'محمد منتصر' || cleanUser === 'admin' || cleanName.includes('محمد منتصر')) {
+  // Admin user is supervisor and developer
+  if (cleanUser === 'admin' || cleanUser === 'developer') {
     return true;
   }
 
@@ -125,7 +121,7 @@ export const isTeacherSupervisor = (teacher?: TeacherAccount | null): boolean =>
     return true;
   }
 
-  // Fallback: only if isPrimary is true and not explicitly 'teacher'
+  // Legacy isPrimary fallback
   return Boolean(teacher.isPrimary);
 };
 

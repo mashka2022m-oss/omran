@@ -406,7 +406,7 @@ export const DataBackupTab: React.FC<DataBackupTabProps> = ({
             <div className="flex items-center gap-2.5 flex-wrap">
               <span className="text-xs px-3 py-1 rounded-full bg-amber-400/20 text-amber-300 font-bold border border-amber-400/30 flex items-center gap-1.5">
                 <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-                رتبة مبرمج المنصة (خاص بالشيخ محمد منتصر)
+                رتبة الإدارة المركزية وتطوير المنصة
               </span>
               <span className="text-xs px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-300 font-bold border border-emerald-400/30">
                 قواعد البيانات الموزعة والمجمعات
@@ -528,7 +528,7 @@ export const DataBackupTab: React.FC<DataBackupTabProps> = ({
                   )}
                 </div>
                 <p className="text-xs text-[#86efac]">
-                  المشرف المسؤول: <strong className="text-white">{activeComplex.supervisorTeacherName || 'محمد منتصر'}</strong>
+                  المشرف المسؤول: <strong className="text-white">{activeComplex.supervisorTeacherName || 'المشرف المسؤول'}</strong>
                   {activeComplex.databaseConfig?.enabledAt && (
                     <span className="mr-3 text-slate-300">
                       (تاريخ الربط: {new Date(activeComplex.databaseConfig.enabledAt).toLocaleDateString('ar-SA')})
@@ -871,7 +871,7 @@ export const DataBackupTab: React.FC<DataBackupTabProps> = ({
         </div>
         <div className="flex items-center gap-1.5 text-[#fbbf24] font-bold">
           <ShieldCheck className="w-4 h-4" />
-          <span>المزامنة السحابية النشطة مفعلة للمبرمج محمد منتصر</span>
+          <span>المزامنة السحابية المركزية الموزعة مفعلة</span>
         </div>
       </div>
 

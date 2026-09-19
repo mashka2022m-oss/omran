@@ -71,7 +71,7 @@ export const HomeTab: React.FC<HomeTabProps> = ({
   const mediumCount = students.filter(s => s.level === 'متوسط').length;
   const weakCount = students.filter(s => s.level === 'ضعيف').length;
 
-  const displayTeacherName = currentUserName || settings.teacherName || 'الشيخ محمد منتصر';
+  const displayTeacherName = currentUserName || settings.teacherName || 'معلم ومحفظ الحلقة';
 
   return (
     <div className="space-y-6">

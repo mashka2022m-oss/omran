@@ -84,7 +84,7 @@ export const UnassignedStudentView: React.FC<UnassignedStudentViewProps> = ({
             <Info className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
             <div className="text-xs sm:text-sm text-emerald-100/95 leading-relaxed space-y-2.5">
               <p>
-                تم تسجيل وتوثيق بياناتك في المنظومة بنجاح، ولكن لم يتم إرفاق حسابك حتى الآن بإحدى الحلقات القرآنية من قِبل إدارة الحلقات والمشرف العام <span className="text-[#fbbf24] font-bold">({settings?.teacherName || 'الشيخ محمد منتصر'})</span>.
+                تم تسجيل وتوثيق بياناتك في المنظومة بنجاح، ولكن لم يتم إرفاق حسابك حتى الآن بإحدى الحلقات القرآنية من قِبل إدارة الحلقات والمشرف المسؤول <span className="text-[#fbbf24] font-bold">({settings?.teacherName || 'المعلم المشرف'})</span>.
               </p>
               <div className="bg-[#064e3b]/60 p-3 rounded-xl border border-[#065f46] text-xs text-[#86efac] flex items-start gap-2">
                 <Info className="w-4 h-4 text-[#fbbf24] shrink-0 mt-0.5" />

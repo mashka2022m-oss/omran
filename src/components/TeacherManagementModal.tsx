@@ -149,7 +149,7 @@ export const TeacherManagementModal: React.FC<TeacherManagementModalProps> = ({
                 </span>
               </h2>
               <p className="text-xs text-[#86efac]/90 mt-0.5">
-                مشاركة نفس الحلقة والطلاب مع المزامنة السحابية الفورية في {settings.halaqahName}
+                مشاركة نفس الحلقة والطلاب مع المزامنة السحابية الفورية في {settings.halaqahName || 'الحلقة القرآنية'}
               </p>
             </div>
           </div>

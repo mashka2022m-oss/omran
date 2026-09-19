@@ -430,7 +430,7 @@ export const ParentPortalView: React.FC<ParentPortalViewProps> = ({
                 بوابة المتابعة الحية لطلاب القرآن الكريم
               </h1>
               <p className="text-xs text-[#fbbf24] font-bold">
-                {settings.halaqahName} • إشراف المعلم: {settings.teacherName}
+                {currentStudent.halaqahName || settings.halaqahName || 'الحلقة القرآنية'} • إشراف المعلم: {settings.teacherName || 'معلم ومحفظ الحلقة'}
               </p>
             </div>
           </div>

@@ -170,7 +170,7 @@ export const ParentsWhatsAppTab: React.FC<ParentsWhatsAppTabProps> = ({
     // Construct clean, formatted WhatsApp message
     let msg = `السلام عليكم ورحمة الله وبركاته 🌿\n`;
     msg += `المكرم ولي أمر الطالب العزيز / *${student.name}* حفظه الله ورعاه\n`;
-    msg += `نحيطكم علماً بتقرير متابعة الطالب في *${settings.halaqahName || 'حلقة القرآن الكريم'}* ليوم ${new Date().toLocaleDateString('ar-SA')}:\n\n`;
+    msg += `نحيطكم علماً بتقرير متابعة الطالب في *${student.halaqahName || settings.halaqahName || 'حلقة القرآن الكريم'}* ليوم ${new Date().toLocaleDateString('ar-SA')}:\n\n`;
 
     msg += `📌 *حالة الحضور اليوم:* ${status}\n\n`;
 
@@ -192,7 +192,7 @@ export const ParentsWhatsAppTab: React.FC<ParentsWhatsAppTabProps> = ({
     msg += `🔗 *لمتابعة ملف الطالب وخطة حفظه وسجل درجاته مباشرة عبر البوابة الحية، اضغط على الرابط:* \n`;
     msg += `${portalUrl}\n\n`;
     msg += `جزاكم الله خيراً ونفع بكم وبأبنائنا الكرام 🤲\n`;
-    msg += `معلم الحلقة: *${settings.teacherName || 'الشيخ محمد منتصر'}*`;
+    msg += `معلم ومحفظ الحلقة: *${settings.teacherName || 'معلم الحلقة'}*`;
 
     return msg;
   };

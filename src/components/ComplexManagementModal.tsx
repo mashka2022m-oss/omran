@@ -294,7 +294,7 @@ export const ComplexManagementModal: React.FC<ComplexManagementModalProps> = ({
                 </h2>
                 <span className="text-[11px] px-2.5 py-0.5 rounded-full bg-gradient-to-r from-amber-500/20 to-amber-400/30 text-amber-300 border border-amber-400/40 font-bold flex items-center gap-1">
                   <Sparkles className="w-3 h-3 text-amber-400" />
-                  رتبة مبرمج المنصة (خاص بالشيخ محمد منتصر)
+                  الإدارة المركزية وتطوير المنصة
                 </span>
               </div>
               <p className="text-xs text-[#86efac] mt-0.5">
@@ -418,7 +418,7 @@ export const ComplexManagementModal: React.FC<ComplexManagementModalProps> = ({
                 <input
                   type="text"
                   required
-                  placeholder="مثال: مجمع حلقات الصحابي الزبير بن العوام رضي الله عنه"
+                  placeholder="مثال: مجمع الفرقان القرآني"
                   value={editingComplex.name || ''}
                   onChange={e => setEditingComplex(prev => ({ ...prev, name: e.target.value }))}
                   className="w-full bg-[#022c22] border border-[#065f46] rounded-xl px-3.5 py-2.5 text-sm text-white font-semibold outline-none focus:border-[#fbbf24]"

@@ -181,23 +181,23 @@ export const DEFAULT_CRITERIA: EvaluationCriteria[] = [
 
 export const DEFAULT_COMPLEXES: QuranComplex[] = [
   {
-    id: 'complex-zubeir',
-    name: 'مجمع حلقات الصحابي الزبير بن العوام رضي الله عنه',
-    description: 'المجمع القرآني النموذجي الرئيسي التابع لمنظومة عمران',
+    id: 'complex-main',
+    name: 'المجمع القرآني النموذجي',
+    description: 'المجمع القرآني النموذجي التابع لمنظومة عمران',
     supervisorTeacherId: 'teacher-1',
-    supervisorTeacherName: 'الشيخ محمد منتصر',
+    supervisorTeacherName: 'المشرف العام',
     createdAt: new Date().toISOString()
   }
 ];
 
 export const DEFAULT_HALAQAHS: Halaqah[] = [
   {
-    id: 'halaqah-zubeir',
-    name: 'حلقة الزبير بن العوام رضي الله عنه',
-    description: 'الحلقة الأساسية التابعة لمنظومة عمران',
-    complexId: 'complex-zubeir',
-    complexName: 'مجمع حلقات الصحابي الزبير بن العوام رضي الله عنه',
-    primaryTeacherName: 'الشيخ محمد منتصر',
+    id: 'halaqah-main',
+    name: 'حلقة القرآن الكريم',
+    description: 'الحلقة القرآنية النموذجية',
+    complexId: 'complex-main',
+    complexName: 'المجمع القرآني النموذجي',
+    primaryTeacherName: 'معلم ومحفظ الحلقة',
     createdAt: new Date().toISOString(),
     isDefault: true
   }
@@ -207,25 +207,25 @@ export const DEFAULT_SETTINGS: AppSettings = {
   allowStudentRegistration: true,
   workDaysPerWeek: 5,
   workDaysNames: ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس'],
-  halaqahName: 'حلقة الزبير بن العوام رضي الله عنه',
-  teacherName: 'الشيخ محمد منتصر'
+  halaqahName: 'حلقة القرآن الكريم',
+  teacherName: 'معلم ومحفظ الحلقة'
 };
 
 // Initial Registered Teachers (Default Teacher Accounts)
 export const INITIAL_TEACHERS: TeacherAccount[] = [
   {
     id: 'teacher-1',
-    name: 'الشيخ محمد منتصر',
-    username: 'محمد منتصر',
+    name: 'المشرف العام',
+    username: 'admin',
     password: '123',
     phone: '0500000000',
-    title: 'المعلم والمشرف والمبرمج',
+    title: 'المشرف والمطور العام',
     role: 'developer',
     isPrimary: true,
-    complexId: 'complex-zubeir',
-    complexName: 'مجمع حلقات الصحابي الزبير بن العوام رضي الله عنه',
-    halaqahId: 'halaqah-zubeir',
-    halaqahName: 'حلقة الزبير بن العوام رضي الله عنه',
+    complexId: 'complex-main',
+    complexName: 'المجمع القرآني النموذجي',
+    halaqahId: 'halaqah-main',
+    halaqahName: 'حلقة القرآن الكريم',
     createdAt: new Date().toISOString()
   }
 ];
@@ -246,8 +246,8 @@ export const INITIAL_STUDENTS: Student[] = [
     dailyNewTarget: 'وجه كامل',
     dailyReviewTarget: 'نصف جزء',
     level: 'قوي',
-    halaqahId: 'halaqah-zubeir',
-    halaqahName: 'حلقة الزبير بن العوام رضي الله عنه',
+    halaqahId: 'halaqah-main',
+    halaqahName: 'حلقة القرآن الكريم',
     aiPlan: {
       roadmapSummary: 'خطة حفظ سورة البقرة بمعدل وجه يومياً مع مراجعة نصف جزء من جزء عم وتبارك.',
       currentDailyAssignment: {
@@ -278,8 +278,8 @@ export const INITIAL_STUDENTS: Student[] = [
     dailyNewTarget: 'نصف وجه',
     dailyReviewTarget: 'سورة واحدة',
     level: 'متوسط',
-    halaqahId: 'halaqah-zubeir',
-    halaqahName: 'حلقة الزبير بن العوام رضي الله عنه',
+    halaqahId: 'halaqah-main',
+    halaqahName: 'حلقة القرآن الكريم',
     aiPlan: {
       roadmapSummary: 'إتمام جزء عم خلال 3 أسابيع بمعدل 6 إلى 8 آيات يومياً مع تكرار الاستماع.',
       currentDailyAssignment: {
@@ -310,8 +310,8 @@ export const INITIAL_STUDENTS: Student[] = [
     dailyNewTarget: '3 آيات',
     dailyReviewTarget: 'سورة قصيرة',
     level: 'ضعيف',
-    halaqahId: 'halaqah-zubeir',
-    halaqahName: 'حلقة الزبير بن العوام رضي الله عنه',
+    halaqahId: 'halaqah-main',
+    halaqahName: 'حلقة القرآن الكريم',
     aiPlan: {
       roadmapSummary: 'خطة تشجيعية وتيسيرية لقصار السور بمعدل 3 آيات يومياً مع تقنية التكرار المرحلي.',
       currentDailyAssignment: {
@@ -348,7 +348,7 @@ export const INITIAL_VIOLATIONS: BehaviorViolation[] = [
     parentNotificationDate: new Date().toISOString().split('T')[0],
     parentNotificationPhone: '0503344556',
     messageText: 'السلام عليكم ورحمة الله وبركاته.. ولي أمر الطالب الفاضل عبدالرحمن حفظه الله، نحيطكم علماً بأنه تم توجيه الطالب اليوم برفق حول التحدث الجانبي أثناء التسميع، ونشكر كريم تعاونكم في حثه على أدب مجالس القرآن الكريم، بارك الله فيكم ونفع به.',
-    teacherName: 'محمد منتصر',
+    teacherName: 'معلم ومحفظ الحلقة',
     showInPortal: true,
     createdAt: new Date().toISOString()
   }
@@ -420,7 +420,7 @@ export const INITIAL_EXAMS: Exam[] = [
       }
     ],
     createdById: 'teacher-1',
-    createdByName: 'الشيخ محمد منتصر',
+    createdByName: 'المشرف العام',
     createdAt: new Date().toISOString()
   },
   {
@@ -477,7 +477,7 @@ export const INITIAL_EXAMS: Exam[] = [
       }
     ],
     createdById: 'teacher-1',
-    createdByName: 'الشيخ محمد منتصر',
+    createdByName: 'المشرف العام',
     createdAt: new Date().toISOString()
   }
 ];
@@ -580,11 +580,14 @@ export class OmranDataService {
         await setDoc(doc(db, 'settings', 'main'), DEFAULT_SETTINGS);
       } else {
         const currentSet = setSnap.data() as AppSettings;
-        if (!currentSet.halaqahName || currentSet.halaqahName.includes('الشاطبي')) {
+        if (!currentSet.halaqahName || currentSet.halaqahName.includes('الشاطبي') || currentSet.halaqahName.includes('الزبير')) {
           const updatedSet: AppSettings = {
             ...currentSet,
-            halaqahName: 'حلقات الصحابي الزبير بن العوام رضي الله عنه'
+            halaqahName: 'حلقة القرآن الكريم'
           };
+          if (!currentSet.teacherName || currentSet.teacherName.includes('محمد منتصر')) {
+            updatedSet.teacherName = 'معلم ومحفظ الحلقة';
+          }
           await setDoc(doc(db, 'settings', 'main'), updatedSet);
         }
       }
@@ -609,20 +612,19 @@ export class OmranDataService {
       snap.forEach(d => {
         const raw = d.data() as TeacherAccount;
         const cleanUser = (raw.username || '').trim().toLowerCase();
-        const cleanName = (raw.name || '').trim().toLowerCase();
-        const isMohamed =
-          cleanUser === 'محمد منتصر' ||
+        const isDev =
           cleanUser === 'admin' ||
-          cleanName.includes('محمد منتصر') ||
-          raw.id === 'teacher-1';
+          cleanUser === 'developer' ||
+          raw.id === 'teacher-1' ||
+          raw.role === 'developer';
 
-        const role = (isMohamed || raw.role === 'developer')
+        const role = isDev
           ? 'developer'
           : (raw.role === 'supervisor' ? 'supervisor' : 'teacher');
 
         const title = raw.title || (
           role === 'developer'
-            ? 'المعلم والمشرف والمبرمج'
+            ? 'المشرف والمطور العام'
             : (role === 'supervisor' ? 'معلم مشرف' : 'معلم حلقة ومحفظ')
         );
 
@@ -1876,7 +1878,7 @@ export class OmranDataService {
       userAccounts: [
         {
           id: 'admin-1',
-          username: settings.teacherName || 'محمد منتصر',
+          username: settings.teacherName || 'admin',
           role: 'admin',
           phone: '0500000000',
           createdAt: new Date().toISOString()

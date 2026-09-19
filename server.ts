@@ -651,7 +651,7 @@ app.post("/api/gemini/generate-whatsapp-message", async (req, res) => {
 مكان البطل في الحلقة محفوظ ومكانه بيننا غالٍ، ونحن بشوق كبير لرؤيته وإشراقة وجهه وسماع تلاوته العذبة في الجلسة القادمة بإذن الله لمواصلة تميزه وإنجازه المبارك.
 
 نسأل الله العظيم أن يحفظه ويبارك فيه ويجعله قرة عين لكم 🤲
-معلم الحلقة: *${teacherName || "الشيخ محمد منتصر"}* - *${halaqahName || "حلقة القرآن الكريم"}*`;
+معلم الحلقة: *${teacherName || "معلم ومحفظ الحلقة"}* - *${halaqahName || "حلقة القرآن الكريم"}*`;
         return res.json({ message: absentMsg });
       }
 
@@ -662,7 +662,7 @@ app.post("/api/gemini/generate-whatsapp-message", async (req, res) => {
 وصلنا عذركم المقبول لعدم تمكن البطل من حضور حلقة اليوم، شكر الله لكم حرصكم وتواصلكم، ونسأل الله له تمام العافية والتوفيق 🌸
 نحن في انتظار لقائه وسماع تلاوته الطيبة في الجلسة القادمة بإذن الله تعالى.
 
-مع تحيات معلم الحلقة: *${teacherName || "الشيخ محمد منتصر"}* - *${halaqahName || "حلقة القرآن الكريم"}*`;
+مع تحيات معلم الحلقة: *${teacherName || "معلم ومحفظ الحلقة"}* - *${halaqahName || "حلقة القرآن الكريم"}*`;
         return res.json({ message: excuseMsg });
       }
 
@@ -688,7 +688,7 @@ app.post("/api/gemini/generate-whatsapp-message", async (req, res) => {
       defaultMsg += `🔗 *للاطلاع على تفاصيل بيانات الطالب ومتابعة تقدمه اليومي مباشرة، اضغط على الرابط التالي:*\n`;
       defaultMsg += `${portalUrl}\n\n`;
       defaultMsg += `نسأل الله أن يبارك في حفظه ويجعله قرة عين لكم 🤲\n`;
-      defaultMsg += `معلم الحلقة: *${teacherName || "الشيخ محمد منتصر"}*`;
+      defaultMsg += `معلم الحلقة: *${teacherName || "معلم ومحفظ الحلقة"}*`;
       return res.json({ message: defaultMsg });
     }
 
@@ -698,7 +698,7 @@ app.post("/api/gemini/generate-whatsapp-message", async (req, res) => {
 اسم الطالب: ${student.name}
 اسم ولي الأمر: ${student.parentName || "ولي أمر الطالب"}
 اسم الحلقة: ${halaqahName || "حلقة القرآن الكريم"}
-اسم المعلم: ${teacherName || "الشيخ محمد منتصر"}
+اسم المعلم: ${teacherName || "معلم ومحفظ الحلقة"}
 
 شروط وإرشادات الصياغة الصارمة:
 1. الرسالة يجب ألا تكون إشعاراً إدارياً جافاً (ممنوع تماماً صياغة مثل: "إعلام لولي الأمر أن ابنه غائب" أو جداول ومصطلحات إدارية).
@@ -723,7 +723,7 @@ app.post("/api/gemini/generate-whatsapp-message", async (req, res) => {
 - اسم الطالب: ${student.name}
 - اسم ولي الأمر: ${student.parentName || "ولي أمر الطالب"}
 - اسم الحلقة: ${halaqahName || "حلقة القرآن الكريم"}
-- اسم المعلم: ${teacherName || "الشيخ محمد منتصر"}
+- اسم المعلم: ${teacherName || "معلم ومحفظ الحلقة"}
 - حالة الحضور اليوم: ${attendanceStatus} (حاضر / متأخر)
 - تفاصيل ما سمعه الطالب اليوم بالتفصيل:
   * في الحفظ الجديد اليوم: ${todayNewRecited}
@@ -776,7 +776,7 @@ app.post("/api/gemini/generate-report", async (req, res) => {
         achievementsText: `أتم الطالب حفظ وتسميع السور المقررة بنسبة التزام عالية ومستوى ${student?.level || "ممتاز"}. إجمالي أيام الحضور المسجلة: ${attendanceSummary?.presents || 0} يوم.`,
         tajweedAssessment: "مخارج الحروف طيبة مع ضبط المدود وأحكام النون الساكنة والتنوين.",
         recommendations: "الاستمرار في الاستماع اليومي للمصحف المعلم بمعدل 15 دقيقة والتكرار مع الأسرة.",
-        whatsappText: `السلام عليكم ورحمة الله وبركاته 🌿\nيسرنا في *${halaqahName || "حلقة القرآن الكريم"}* مشاركتكم التقرير ${periodLabel} للطالب النجيب / *${student?.name || ""}*.\n📊 نسبة الحضور: *${attendanceSummary?.attendancePercentage || "100%"}*\n✨ إنجاز الحفظ: سورة ${student?.currentSurahName || ""}\n🔗 يمكنكم الاطلاع على كامل تفاصيل التقرير وملف الطالب عبر الرابط:\n${portalUrl}\nمع تحيات المشرف: *${teacherName || "الشيخ محمد منتصر"}*`,
+        whatsappText: `السلام عليكم ورحمة الله وبركاته 🌿\nيسرنا في *${halaqahName || "حلقة القرآن الكريم"}* مشاركتكم التقرير ${periodLabel} للطالب النجيب / *${student?.name || ""}*.\n📊 نسبة الحضور: *${attendanceSummary?.attendancePercentage || "100%"}*\n✨ إنجاز الحفظ: سورة ${student?.currentSurahName || ""}\n🔗 يمكنكم الاطلاع على كامل تفاصيل التقرير وملف الطالب عبر الرابط:\n${portalUrl}\nمع تحيات المشرف: *${teacherName || "معلم ومحفظ الحلقة"}*`,
       });
     }
 
@@ -787,7 +787,7 @@ app.post("/api/gemini/generate-report", async (req, res) => {
 - سجل التقييمات والتسميع: ${JSON.stringify(evaluationList || [])}
 - الحفظ الحالي: سورة ${student?.currentSurahName}
 - اسم الحلقة: ${halaqahName || "حلقة القرآن الكريم"}
-- اسم المعلم: ${teacherName || "الشيخ محمد منتصر"}
+- اسم المعلم: ${teacherName || "معلم ومحفظ الحلقة"}
 - رابط ملف الطالب: ${portalUrl}
 
 أخرج تقريراً قيماً وملهماً بصيغة JSON حصراً:
@@ -821,7 +821,7 @@ app.post("/api/gemini/generate-report", async (req, res) => {
       achievementsText: `أتم الطالب حفظ وتسميع السور المقررة بنسبة التزام طيبة ومستوى ${student?.level || "جيد"}. إجمالي أيام الحضور: ${attendanceSummary?.presents || 0} يوم.`,
       tajweedAssessment: "مخارج الحروف طيبة مع ضبط المدود وأحكام التجويد الأساسية.",
       recommendations: "الاستماع اليومي للمصحف المعلم بمعدل 15 دقيقة والتكرار المستمر.",
-      whatsappText: `السلام عليكم ورحمة الله وبركاته 🌿\nيسرنا في *${halaqahName || "حلقة القرآن الكريم"}* مشاركتكم التقرير ${periodLabel} للطالب النجيب / *${student?.name || ""}*.\n📊 نسبة الحضور: *${attendanceSummary?.attendancePercentage || "100%"}*\n✨ إنجاز الحفظ: سورة ${student?.currentSurahName || ""}\n🔗 يمكنكم الاطلاع على كامل تفاصيل التقرير وملف الطالب عبر الرابط:\n${portalUrl}\nمع تحيات المعلم: *${teacherName || "الشيخ محمد منتصر"}*`,
+      whatsappText: `السلام عليكم ورحمة الله وبركاته 🌿\nيسرنا في *${halaqahName || "حلقة القرآن الكريم"}* مشاركتكم التقرير ${periodLabel} للطالب النجيب / *${student?.name || ""}*.\n📊 نسبة الحضور: *${attendanceSummary?.attendancePercentage || "100%"}*\n✨ إنجاز الحفظ: سورة ${student?.currentSurahName || ""}\n🔗 يمكنكم الاطلاع على كامل تفاصيل التقرير وملف الطالب عبر الرابط:\n${portalUrl}\nمع تحيات المعلم: *${teacherName || "معلم ومحفظ الحلقة"}*`,
     });
   }
 });

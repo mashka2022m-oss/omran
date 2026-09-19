@@ -440,8 +440,8 @@ export const AccountsTab: React.FC<AccountsTabProps> = ({
               {filteredTeachers.map(teacher => {
                 const isSuper =
                   teacher.role === 'supervisor' ||
+                  teacher.role === 'developer' ||
                   teacher.isPrimary ||
-                  teacher.username.trim().toLowerCase() === 'محمد منتصر' ||
                   teacher.username.trim().toLowerCase() === 'admin';
 
                 const teacherLoginUrl = `${getOrigin()}?u=${encodeURIComponent(teacher.username)}`;

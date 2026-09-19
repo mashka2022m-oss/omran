@@ -361,14 +361,13 @@ export function App() {
     }
     const cleanUser = currentUser.username.trim().toLowerCase();
     return (
-      cleanUser === 'محمد منتصر' ||
-      cleanUser === 'الشيخ محمد منتصر' ||
       cleanUser === 'admin' ||
+      cleanUser === 'developer' ||
       cleanUser === 'المشرف العام'
     );
   }, [currentUser, currentTeacher]);
 
-  // Check Programmer (معلم ومشرف ومبرمج - خاص بالشيخ محمد منتصر)
+  // Check Developer / System Administrator
   const isDeveloper = useMemo(() => {
     if (!currentUser || currentUser.role !== 'admin') return false;
     if (currentTeacher) {
@@ -376,9 +375,8 @@ export function App() {
     }
     const cleanUser = currentUser.username.trim().toLowerCase();
     return (
-      cleanUser === 'محمد منتصر' ||
-      cleanUser === 'الشيخ محمد منتصر' ||
-      cleanUser === 'admin'
+      cleanUser === 'admin' ||
+      cleanUser === 'developer'
     );
   }, [currentUser, currentTeacher]);
 
@@ -470,6 +468,30 @@ export function App() {
     });
     return scopedHalaqahs.filter(h => idSet.has(h.id));
   }, [isSupervisor, scopedHalaqahs, currentTeacher]);
+
+  // Scoped settings for the active complex:
+  // If user belongs to a separate complex, ensures halaqahName and teacherName strictly
+  // reflect their complex and active halaqah/teacher — with ZERO mention of Zubair or Mohamed Montaser.
+  const scopedSettings = useMemo<AppSettings>(() => {
+    if (isDeveloper) {
+      return settings;
+    }
+    if (supervisedComplex) {
+      const activeHalaqah = activeHalaqahId && activeHalaqahId !== 'all'
+        ? scopedHalaqahs.find(h => h.id === activeHalaqahId)
+        : (assignedHalaqahs[0] || scopedHalaqahs[0]);
+
+      const currentTeacherName = currentTeacher?.name || supervisedComplex.supervisorTeacherName || currentUser?.username || 'المعلم المشرف';
+      const resolvedHalaqahName = activeHalaqah?.name || supervisedComplex.name || 'الحلقة القرآنية';
+
+      return {
+        ...settings,
+        halaqahName: resolvedHalaqahName,
+        teacherName: currentTeacherName
+      };
+    }
+    return settings;
+  }, [settings, isDeveloper, supervisedComplex, scopedHalaqahs, activeHalaqahId, assignedHalaqahs, currentTeacher, currentUser]);
 
   // Auto-switch to assigned halaqah for teacher or valid complex halaqah for supervisor
   useEffect(() => {
@@ -989,6 +1011,18 @@ export function App() {
     ? students.find(s => s.id === currentUser.studentId || s.name === currentUser.username)
     : null;
 
+  // Scoped settings for students / parent portal
+  const portalSettings = useMemo<AppSettings>(() => {
+    if (!activePortalStudent) return scopedSettings;
+    const sHalaqah = halaqahs.find(h => h.id === activePortalStudent.halaqahId);
+    const sComplex = sHalaqah?.complexId ? complexes.find(c => c.id === sHalaqah.complexId) : null;
+    return {
+      ...settings,
+      halaqahName: activePortalStudent.halaqahName || sHalaqah?.name || 'الحلقة القرآنية',
+      teacherName: sHalaqah?.primaryTeacherName || sComplex?.supervisorTeacherName || 'معلم ومحفظ الحلقة'
+    };
+  }, [settings, scopedSettings, activePortalStudent, halaqahs, complexes]);
+
   // 1. Universal Blocking Cloud Loading & Verification Screen (Load-Before-Render)
   if (isLoadingData) {
     return (
@@ -1010,7 +1044,7 @@ export function App() {
             studentPhone={activePortalStudent.phone}
             onRefresh={loadAllData}
             onLogout={handleLogout}
-            settings={settings}
+            settings={portalSettings}
           />
         </div>
       );
@@ -1023,7 +1057,7 @@ export function App() {
           student={activePortalStudent}
           attendance={attendance}
           evaluations={evaluations}
-          settings={settings}
+          settings={portalSettings}
           violations={violations}
           exams={exams}
           submissions={submissions}
@@ -1101,7 +1135,7 @@ export function App() {
         <Navbar
           currentUser={currentUser}
           onLogout={handleLogout}
-          settings={settings}
+          settings={scopedSettings}
           studentsCount={0}
           teachersCount={scopedTeachers.length}
           complexesCount={isDeveloper ? complexes.length : 1}
@@ -1120,7 +1154,7 @@ export function App() {
             teacherName={currentTeacher?.name || currentUser.username}
             onRefresh={loadAllData}
             onLogout={handleLogout}
-            settings={settings}
+            settings={scopedSettings}
           />
         </main>
       </div>
@@ -1155,7 +1189,7 @@ export function App() {
       <Navbar
         currentUser={currentUser}
         onLogout={handleLogout}
-        settings={settings}
+        settings={scopedSettings}
         studentsCount={displayedStudents.length}
         teachersCount={scopedTeachers.length}
         complexesCount={isDeveloper ? complexes.length : 1}
@@ -1293,9 +1327,9 @@ export function App() {
             students={displayedStudents}
             attendance={displayedAttendance}
             evaluations={displayedEvaluations}
-            settings={settings}
+            settings={scopedSettings}
             teachers={scopedTeachers}
-            currentUserName={currentUser?.username}
+            currentUserName={currentUser?.username || scopedSettings.teacherName}
             onNavigateTab={handleNavigateTab}
             onSelectStudentForEval={handleSelectStudentForEval}
             onOpenTeacherManagement={() => setIsSettingsModalOpen(true)}
@@ -1305,7 +1339,7 @@ export function App() {
         {activeTab === 'students' && (
           <StudentsTab
             students={displayedStudents}
-            settings={settings}
+            settings={scopedSettings}
             halaqahs={scopedHalaqahs}
             activeHalaqahId={activeHalaqahId}
             isSupervisor={isSupervisor}
@@ -1350,7 +1384,7 @@ export function App() {
             students={scopedStudents}
             halaqahs={scopedHalaqahs}
             currentUserId={currentUser?.teacherId || currentUser?.studentId || 'admin'}
-            currentUserName={currentUser?.username || settings.teacherName}
+            currentUserName={currentUser?.username || scopedSettings.teacherName}
             isSupervisor={isSupervisor}
             googleAuthConfig={googleAuthConfig}
             leaderboardSettings={leaderboardSettings || undefined}
@@ -1388,8 +1422,8 @@ export function App() {
           <BehaviorTab
             students={assignedDisplayedStudents}
             violations={displayedViolations}
-            settings={settings}
-            teacherName={currentUser?.username || settings.teacherName}
+            settings={scopedSettings}
+            teacherName={currentUser?.username || scopedSettings.teacherName}
             onSaveViolation={handleSaveViolation}
             onDeleteViolation={handleDeleteViolation}
             preselectedStudentId={targetStudentForBehavior}
@@ -1401,7 +1435,7 @@ export function App() {
             students={assignedDisplayedStudents}
             attendance={displayedAttendance}
             evaluations={displayedEvaluations}
-            settings={settings}
+            settings={scopedSettings}
             preselectedStudentId={targetStudentForWhatsApp}
           />
         )}
@@ -1411,7 +1445,7 @@ export function App() {
             students={assignedDisplayedStudents}
             attendance={displayedAttendance}
             evaluations={displayedEvaluations}
-            settings={settings}
+            settings={scopedSettings}
             onUpdateSettings={handleUpdateSettings}
           />
         )}
@@ -1436,7 +1470,7 @@ export function App() {
         teachers={scopedTeachers}
         halaqahs={scopedHalaqahs}
         students={scopedStudents}
-        settings={settings}
+        settings={scopedSettings}
         complexes={scopedComplexes}
         isDeveloper={isDeveloper}
         complexName={supervisedComplex?.name}
@@ -1450,7 +1484,7 @@ export function App() {
         onSwitchActiveHalaqah={setActiveHalaqahId}
       />
 
-      {/* Programmer Complex Management Modal (إدارة المجمعات القرآنية) - مقتصر على المبرمج محمد منتصر */}
+      {/* Complex Management Modal (إدارة المجمعات القرآنية) - مقتصر على المطور والمشرف العام */}
       {isDeveloper && (
         <ComplexManagementModal
           isOpen={isComplexModalOpen}

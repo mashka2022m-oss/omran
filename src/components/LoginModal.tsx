@@ -120,11 +120,11 @@ export const LoginModal: React.FC<LoginModalProps> = ({
 
     // 2. Check Supervisor Default Fallback Login
     if (
-      (cleanUser === 'محمد منتصر' || cleanUser.toLowerCase() === 'admin') &&
-      (cleanPass === 'moh2022M' || cleanPass === '123')
+      (cleanUser.toLowerCase() === 'admin' || cleanUser.toLowerCase() === 'developer' || cleanUser === 'المشرف العام') &&
+      (cleanPass === '123' || cleanPass === 'admin')
     ) {
       onLoginSuccess({
-        username: 'الشيخ محمد منتصر',
+        username: 'المشرف العام',
         role: 'admin'
       });
       return;
@@ -216,7 +216,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
             <BookOpen className="w-8 h-8" />
           </div>
           <h2 className="text-2xl font-bold font-heading text-[#fbbf24] tracking-wide">
-            {settings.halaqahName || 'حلقات الصحابي الزبير بن العوام'}
+            {settings.complexName || 'مَنَصَّة عُمْرَان للقرآن الكريم'}
           </h2>
           <p className="text-xs text-[#86efac] font-medium mt-1">
             منظومة المتابعة الحية والتقييم المشترك للمعلمين والطلاب

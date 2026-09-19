@@ -980,7 +980,7 @@ export const StudentsTab: React.FC<StudentsTabProps> = ({
                       </option>
                       {halaqahs.map(h => (
                         <option key={h.id} value={h.id} className="bg-[#064e3b] text-white">
-                          {h.name} (المعلم: {h.primaryTeacherName || 'محمد منتصر'})
+                          {h.name} {h.primaryTeacherName ? `(المعلم: ${h.primaryTeacherName})` : ''}
                         </option>
                       ))}
                     </select>
@@ -1182,7 +1182,7 @@ export const StudentsTab: React.FC<StudentsTabProps> = ({
               >
                 {halaqahs.map(h => (
                   <option key={h.id} value={h.id} className="bg-[#064e3b] text-white">
-                    {h.name} — المعلم: {h.primaryTeacherName || 'محمد منتصر'}
+                    {h.name} — المعلم: {h.primaryTeacherName || 'المعلم المسؤول'}
                   </option>
                 ))}
               </select>
