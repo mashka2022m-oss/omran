@@ -423,9 +423,35 @@ export class GoogleWorkspaceService {
       throw new Error('تعذر استلام بيانات حساب Google.');
     }
 
+    const targetEmail = googleUser.email.trim().toLowerCase();
+
+    // Check if this Google account is already linked to another student or teacher
+    try {
+      const allStudents = await OmranDataService.getStudents();
+      const duplicateStudent = allStudents.find(
+        s => s.id !== student.id && s.isGoogleLinked && s.googleEmail?.trim().toLowerCase() === targetEmail
+      );
+      if (duplicateStudent) {
+        throw new Error('هذا الحساب مربوط بالفعل');
+      }
+
+      const allTeachers = await OmranDataService.getTeachers();
+      const duplicateTeacher = allTeachers.find(
+        t => t.isGoogleLinked && t.googleEmail?.trim().toLowerCase() === targetEmail
+      );
+      if (duplicateTeacher) {
+        throw new Error('هذا الحساب مربوط بالفعل');
+      }
+    } catch (checkErr: any) {
+      if (checkErr.message === 'هذا الحساب مربوط بالفعل') {
+        throw checkErr;
+      }
+      console.warn('Account duplication check warning:', checkErr);
+    }
+
     const updatedStudent: Student = {
       ...student,
-      googleEmail: googleUser.email.trim().toLowerCase(),
+      googleEmail: targetEmail,
       googleUid: googleUser.uid,
       googleName: googleUser.displayName || student.name,
       googlePhotoUrl: googleUser.photoURL || student.googlePhotoUrl || null,
@@ -444,12 +470,51 @@ export class GoogleWorkspaceService {
       throw new Error('يرجى إدخال بريد إلكتروني صحيح (مثال: student@gmail.com).');
     }
 
+    // Check if this Google account is already linked to another student or teacher
+    try {
+      const allStudents = await OmranDataService.getStudents();
+      const duplicateStudent = allStudents.find(
+        s => s.id !== student.id && s.isGoogleLinked && s.googleEmail?.trim().toLowerCase() === cleanEmail
+      );
+      if (duplicateStudent) {
+        throw new Error('هذا الحساب مربوط بالفعل');
+      }
+
+      const allTeachers = await OmranDataService.getTeachers();
+      const duplicateTeacher = allTeachers.find(
+        t => t.isGoogleLinked && t.googleEmail?.trim().toLowerCase() === cleanEmail
+      );
+      if (duplicateTeacher) {
+        throw new Error('هذا الحساب مربوط بالفعل');
+      }
+    } catch (checkErr: any) {
+      if (checkErr.message === 'هذا الحساب مربوط بالفعل') {
+        throw checkErr;
+      }
+      console.warn('Account duplication check warning:', checkErr);
+    }
+
     const updatedStudent: Student = {
       ...student,
       googleEmail: cleanEmail,
       googleUid: student.googleUid || `direct_${Date.now()}`,
       googleName: student.googleName || student.name,
       isGoogleLinked: true
+    };
+
+    await OmranDataService.saveStudent(updatedStudent);
+    return updatedStudent;
+  }
+
+  // Unlink Google Account from a Student
+  static async unlinkStudentGoogleAccount(student: Student): Promise<Student> {
+    const updatedStudent: Student = {
+      ...student,
+      googleEmail: undefined,
+      googleUid: undefined,
+      googleName: undefined,
+      googlePhotoUrl: undefined,
+      isGoogleLinked: false
     };
 
     await OmranDataService.saveStudent(updatedStudent);
@@ -588,9 +653,35 @@ export class GoogleWorkspaceService {
       throw new Error('تعذر استلام بيانات حساب Google.');
     }
 
+    const targetEmail = googleUser.email.trim().toLowerCase();
+
+    // Check if this Google account is already linked to another teacher or student
+    try {
+      const allTeachers = await OmranDataService.getTeachers();
+      const duplicateTeacher = allTeachers.find(
+        t => t.id !== teacher.id && t.isGoogleLinked && t.googleEmail?.trim().toLowerCase() === targetEmail
+      );
+      if (duplicateTeacher) {
+        throw new Error('هذا الحساب مربوط بالفعل');
+      }
+
+      const allStudents = await OmranDataService.getStudents();
+      const duplicateStudent = allStudents.find(
+        s => s.isGoogleLinked && s.googleEmail?.trim().toLowerCase() === targetEmail
+      );
+      if (duplicateStudent) {
+        throw new Error('هذا الحساب مربوط بالفعل');
+      }
+    } catch (checkErr: any) {
+      if (checkErr.message === 'هذا الحساب مربوط بالفعل') {
+        throw checkErr;
+      }
+      console.warn('Teacher duplicate account check warning:', checkErr);
+    }
+
     const updatedTeacher: TeacherAccount = {
       ...teacher,
-      googleEmail: googleUser.email.trim().toLowerCase(),
+      googleEmail: targetEmail,
       googleUid: googleUser.uid,
       googleName: googleUser.displayName || teacher.name,
       googlePhotoUrl: googleUser.photoURL || teacher.googlePhotoUrl || null,

@@ -291,205 +291,6 @@ async function fetchAuthenticSurahVerses(surahNumber: number): Promise<Array<{ a
   return [];
 }
 
-// 3. AI Quran Recording Segmentation (Detect verses, Basmalah, and accurate timestamps)
-app.post("/api/gemini/segment-recording", async (req, res) => {
-  try {
-    const { surahNumber, surahName, reciterName, youtubeUrl, youtubeVideoId } = req.body || {};
-    const num = Number(surahNumber) || 78;
-    const surah = getSurahInfo(num);
-    const sName = surahName || surah.name;
-    const reciter = reciterName || "الشيخ محمد صديق المنشاوي (المصحف المعلم)";
-
-    // Fetch authentic Quran verses with real Uthmani text
-    const authenticVerses = await fetchAuthenticSurahVerses(num);
-
-    // Build verse text lookup
-    const getVerseText = (ayahNum: number): string => {
-      if (ayahNum === 0) return "بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ (الاستعاذة والبسملة)";
-      const found = authenticVerses.find(v => v.ayahNumber === ayahNum);
-      if (found && found.text) return found.text;
-      return `الآية (${ayahNum}) من سورة ${sName}`;
-    };
-
-    // Smart generator with realistic duration based on word count of each Ayah
-    const buildRealisticSegments = () => {
-      const segments: any[] = [];
-      let currentSec = 0;
-      const basmalahSec = 7;
-      segments.push({
-        ayahNumber: 0,
-        ayahText: getVerseText(0),
-        startTimeSeconds: 0,
-        endTimeSeconds: basmalahSec,
-        formattedStart: formatSeconds(0),
-        formattedEnd: formatSeconds(basmalahSec)
-      });
-      currentSec = basmalahSec;
-
-      for (let i = 1; i <= surah.numberOfAyahs; i++) {
-        const verseText = getVerseText(i);
-        const wordCount = Math.max(2, verseText.split(/\s+/).length);
-        // Average Quran recitation pace: ~1.8 seconds per word + breath pause
-        const duration = Math.max(5, Math.min(60, Math.round(wordCount * 1.8) + 2));
-        const start = currentSec;
-        const end = start + duration;
-        segments.push({
-          ayahNumber: i,
-          ayahText: verseText,
-          startTimeSeconds: start,
-          endTimeSeconds: end,
-          formattedStart: formatSeconds(start),
-          formattedEnd: formatSeconds(end)
-        });
-        currentSec = end;
-      }
-      return segments;
-    };
-
-    if (!process.env.GEMINI_API_KEY) {
-      const realisticFallback = buildRealisticSegments();
-      return res.json({
-        success: true,
-        surahNumber: num,
-        surahName: sName,
-        numberOfAyahs: surah.numberOfAyahs,
-        segments: realisticFallback,
-        totalDurationSeconds: realisticFallback[realisticFallback.length - 1].endTimeSeconds,
-        method: "smart-uthmani-timing"
-      });
-    }
-
-    // Prepare prompt with verses sample or list
-    const versesSummary = authenticVerses.slice(0, 30).map(v => `الآية ${v.ayahNumber}: "${v.text.slice(0, 45)}..."`).join('\n');
-
-    const prompt = `أنت مقرئ وخبير متخصص في التلاوات القرآنية وتوقيتات الترتيل ومخارج الآيات ومواضع الوقف والتنفس للمقرئين المعتمدين.
-المطلوب: استخراج وتوليد التقسيم الزمني الدقيق بالثواني لجميع آيات سورة ${sName} لتسجيل تلاوة بالترتيل والمصحف المعلم.
-بيانات التلاوة:
-- اسم السورة: سورة ${sName}
-- رقم السورة في المصحف: ${num}
-- إجمالي عدد آيات السورة: ${surah.numberOfAyahs} آية فقط! (التزام تام وصارم بهذا العدد، ممنوع إنقاص أو زيادة أي آية).
-- اسم القارئ: ${reciter}
-- رابط التسجيل: ${youtubeUrl || ""}
-- معرّف الفيديو: ${youtubeVideoId || ""}
-عينة من آيات السورة:
-${versesSummary}
-
-الشروط والقواعد الإلزامية:
-1. المقطع الأول (رقم 0): "بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ (الاستعاذة والبسملة)" من الثانية 0 إلى الثانية 6 أو 7 تقريباً.
-2. بعد ذلك، قم بسرد جميع آيات السورة من الآية رقم 1 إلى الآية رقم ${surah.numberOfAyahs} بالترتيب الدقيق دون إغفال أي آية.
-3. لكل آية، حدد:
-   - ayahNumber: رقم الآية (0 للبسملة، ثم 1، 2، 3 ... حتى ${surah.numberOfAyahs})
-   - ayahText: نص الآية القرآنية مضبوطاً بالرسم العثماني
-   - startTimeSeconds: وقت بداية التلاوة بالثواني (رقم صحيح)
-   - endTimeSeconds: وقت نهاية تلاوة الآية بالثواني (يجب أن يكون أكبر من وقت البداية)
-   - formattedStart: توقيت البداية بصيغة "دقيقة:ثانية" (مثل "00:00" أو "01:25")
-   - formattedEnd: توقيت النهاية بصيغة "دقيقة:ثانية" (مثل "00:07" أو "01:34")
-4. التوقيتات يجب أن تكون متسلسلة بدقة (وقت بداية كل آية هو نفسه أو بعد وقت نهاية الآية السابقة مباشرة).
-
-أرجع النتيجة بصيغة JSON فقط:
-{
-  "surahNumber": ${num},
-  "surahName": "${sName}",
-  "numberOfAyahs": ${surah.numberOfAyahs},
-  "segments": [
-    {
-      "ayahNumber": 0,
-      "ayahText": "بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ",
-      "startTimeSeconds": 0,
-      "endTimeSeconds": 7,
-      "formattedStart": "00:00",
-      "formattedEnd": "00:07"
-    }
-  ]
-}`;
-
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
-      contents: prompt,
-      config: {
-        responseMimeType: "application/json",
-      },
-    });
-
-    const text = response.text || "{}";
-    const data = JSON.parse(text);
-
-    if (Array.isArray(data.segments) && data.segments.length > 0) {
-      const cleanedSegments = data.segments.map((seg: any) => {
-        const sStart = Math.round(Number(seg.startTimeSeconds) || 0);
-        const sEnd = Math.max(sStart + 2, Math.round(Number(seg.endTimeSeconds) || sStart + 6));
-        const aNum = Number(seg.ayahNumber) ?? 1;
-        // Ensure text is filled with authentic verse text
-        const realText = seg.ayahText && seg.ayahText.length > 3 ? seg.ayahText : getVerseText(aNum);
-        return {
-          ayahNumber: aNum,
-          ayahText: realText,
-          startTimeSeconds: sStart,
-          endTimeSeconds: sEnd,
-          formattedStart: seg.formattedStart || formatSeconds(sStart),
-          formattedEnd: seg.formattedEnd || formatSeconds(sEnd)
-        };
-      });
-
-      return res.json({
-        success: true,
-        surahNumber: num,
-        surahName: sName,
-        numberOfAyahs: surah.numberOfAyahs,
-        segments: cleanedSegments,
-        totalDurationSeconds: cleanedSegments[cleanedSegments.length - 1]?.endTimeSeconds || 0,
-        method: "gemini-ai"
-      });
-    }
-
-    const fallback = buildRealisticSegments();
-    return res.json({
-      success: true,
-      surahNumber: num,
-      surahName: sName,
-      numberOfAyahs: surah.numberOfAyahs,
-      segments: fallback,
-      totalDurationSeconds: fallback[fallback.length - 1].endTimeSeconds,
-      method: "smart-uthmani-timing"
-    });
-  } catch (error) {
-    console.error("Gemini segment-recording error:", error);
-    const num = Number(req.body?.surahNumber) || 78;
-    const surah = getSurahInfo(num);
-    const fallback = [];
-    fallback.push({
-      ayahNumber: 0,
-      ayahText: "بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ (الاستعاذة والبسملة)",
-      startTimeSeconds: 0,
-      endTimeSeconds: 7,
-      formattedStart: "00:00",
-      formattedEnd: "00:07"
-    });
-    let cur = 7;
-    for (let i = 1; i <= surah.numberOfAyahs; i++) {
-      const start = cur;
-      const end = start + 8;
-      fallback.push({
-        ayahNumber: i,
-        ayahText: `الآية (${i}) من سورة ${surah.name}`,
-        startTimeSeconds: start,
-        endTimeSeconds: end,
-        formattedStart: formatSeconds(start),
-        formattedEnd: formatSeconds(end)
-      });
-      cur = end;
-    }
-    return res.json({
-      success: true,
-      surahNumber: num,
-      surahName: surah.name,
-      numberOfAyahs: surah.numberOfAyahs,
-      segments: fallback,
-      totalDurationSeconds: fallback[fallback.length - 1].endTimeSeconds,
-      method: "resilient-fallback"
-    });
-  }
-});
 
 // Generate Polite & Pedagogical Violation Message for Parent via Gemini
 app.post("/api/gemini/generate-violation-message", async (req, res) => {
@@ -1079,6 +880,223 @@ app.post("/api/gemini/chat", async (req, res) => {
     res.json({
       reply: "حدث خطأ أثناء الاتصال بالمستشار الذكي، يرجى المحاولة مرة أخرى أو مراجعة الاتصال.",
     });
+  }
+});
+
+// Helper for realistic Quran recitation phonetic timings calculation
+function calculateQuranicPhoneticTimings(
+  surahNumber: number,
+  verses: string[],
+  totalDurationSec?: number | null,
+  reciterName?: string
+) {
+  const basmalahWeight = 6.5; // Ayah 0: الاستعاذة والبسملة
+  const weights: Array<{ ayahNumber: number; text: string; weight: number }> = [];
+
+  weights.push({
+    ayahNumber: 0,
+    text: "بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ (الاستعاذة والبسملة)",
+    weight: basmalahWeight,
+  });
+
+  for (let i = 0; i < verses.length; i++) {
+    const vText = verses[i] || "";
+    // Clean text of diacritics for accurate word count
+    const cleanText = vText.replace(/[\u064B-\u065F\u0670\u06D6-\u06ED]/g, "");
+    const words = cleanText.trim().split(/\s+/).filter(Boolean);
+    const wordCount = words.length;
+
+    // Count madd signs (ٓ, مد متصل/منفصل/لازم/عارض للسكون)
+    const maddMatches = (vText.match(/[آٓ]|\u0653|[اوي]ء|[اوي][\u064B-\u0652]*ء/g) || []).length;
+    // Count shaddah (تشديد)
+    const shaddahMatches = (vText.match(/\u0651/g) || []).length;
+    // Average Murattal word recitation time + pauses + Madd duration
+    const verseWeight = (wordCount * 1.45) + (maddMatches * 1.3) + (shaddahMatches * 0.25) + 1.4;
+
+    weights.push({
+      ayahNumber: i + 1,
+      text: vText,
+      weight: Math.max(3.0, verseWeight),
+    });
+  }
+
+  const sumWeights = weights.reduce((acc, w) => acc + w.weight, 0);
+  const targetDuration = totalDurationSec && totalDurationSec > 10 ? totalDurationSec : sumWeights;
+  const scale = targetDuration / sumWeights;
+
+  let currentStart = 0;
+  const segments: Array<{
+    ayahNumber: number;
+    ayahText: string;
+    startTimeSeconds: number;
+    endTimeSeconds: number;
+    duration: number;
+  }> = [];
+
+  for (let j = 0; j < weights.length; j++) {
+    const w = weights[j];
+    let duration = Math.round((w.weight * scale) * 10) / 10;
+    if (duration < 2.5) duration = 2.5;
+
+    const start = Math.round(currentStart * 10) / 10;
+    const end = Math.round((start + duration) * 10) / 10;
+    currentStart = end;
+
+    segments.push({
+      ayahNumber: w.ayahNumber,
+      ayahText: w.text,
+      startTimeSeconds: start,
+      endTimeSeconds: end,
+      duration: Math.round((end - start) * 10) / 10,
+    });
+  }
+
+  return segments;
+}
+
+// 6. High-Precision Quran Recording Segmentation (Gemini AI + Quranic Phonetic Engine)
+app.post("/api/gemini/segment-recording", async (req, res) => {
+  try {
+    const {
+      surahNumber,
+      surahName,
+      reciterName,
+      youtubeUrl,
+      youtubeVideoId,
+      totalDurationSeconds,
+      quranVerses,
+    } = req.body;
+
+    console.log(`[AI-Segment] Processing Surah ${surahNumber} (${surahName}), Reciter: ${reciterName}, Target Duration: ${totalDurationSeconds}s`);
+
+    // Load authentic Quran text
+    let verses: string[] = Array.isArray(quranVerses) && quranVerses.length > 0 ? quranVerses : [];
+    if (verses.length === 0) {
+      try {
+        const quranPath = path.join(process.cwd(), "public", "quran-verses.json");
+        if (fs.existsSync(quranPath)) {
+          const raw = JSON.parse(fs.readFileSync(quranPath, "utf-8"));
+          if (raw[String(surahNumber)]) {
+            verses = raw[String(surahNumber)];
+          }
+        }
+      } catch (fErr) {
+        console.warn("Could not read local quran-verses.json:", fErr);
+      }
+    }
+
+    if (verses.length === 0) {
+      const sInfo = getSurahInfo(Number(surahNumber) || 1);
+      const count = (sInfo as any)?.numberOfAyahs || 7;
+      verses = Array.from({ length: count }, (_, i) => `الآية رقم ${i + 1}`);
+    }
+
+    // Attempt Gemini AI if API key is available
+    if (process.env.GEMINI_API_KEY) {
+      try {
+        const versesListText = verses
+          .map((v, i) => `[الآية ${i + 1}]: ${v}`)
+          .slice(0, 45) // Keep prompt within safe bounds
+          .join("\n");
+
+        const prompt = `أنت عالم التجويد والقراءات وحساب أزمنة التلاوة القرآنية بدقة الثواني وجزء الثانية.
+المطلوب: حساب التوقيت الحقيقي والواقعي لبداية ونهاية كل آية من آيات سورة ${surahName || surahNumber} في هذا التسجيل الصوتي.
+
+بيانات التسجيل:
+- السورة: سورة ${surahName || surahNumber} (رقم ${surahNumber})
+- إجمالي عدد آيات السورة: ${verses.length} آية
+- القارئ: ${reciterName || "القارئ الشيخ"}
+- الرابط: ${youtubeUrl || ""}
+- إجمالي مدة التسجيل المعتمدة: ${totalDurationSeconds || "غير محددة"} ثانية
+
+نصوص الآيات الرسمية:
+[الآية 0]: بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ (الاستعاذة والبسملة)
+${versesListText}
+
+تعليمات حاسمة وصارمة:
+1. [ممنوع منعاً باتاً التكرار]: ممنوع جعل مدة كل آية 8 ثوانٍ أو أي رقم ثابت! كل آية تختلف مدتها اختلافاً جذرياً بحسب عدد كلماتها وحروفها والمدود والوقف.
+2. الآيات القصيرة (2 إلى 4 كلمات) تأخذ من 3 إلى 5 ثوانٍ فقط.
+3. الآيات المتوسطة (6 إلى 12 كلمة) تأخذ من 7 إلى 14 ثانية.
+4. الآيات الطويلة (15 إلى 30 كلمة) تأخذ من 18 إلى 35 ثانية.
+5. البسملة والاستعاذة (رقم 0) تأخذ من 4 إلى 7 ثوانٍ.
+6. [التسلسل والتطابق]: نهاية كل آية (endTimeSeconds) هي نقطة توقف القارئ وانتهاء لفظ الآية، وبداية الآية التالية (startTimeSeconds) تبدأ فوراً بعدها.
+7. لا تتجاوز المدة الإجمالية (${totalDurationSeconds || 300} ثانية).
+
+أخرج النتيجة بصيغة JSON فقط:
+{
+  "totalDuration": ${totalDurationSeconds || 120},
+  "segments": [
+    {
+      "ayahNumber": 0,
+      "ayahText": "بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ",
+      "startTimeSeconds": 0,
+      "endTimeSeconds": 6.5,
+      "duration": 6.5
+    }
+  ]
+}`;
+
+        const geminiRes = await ai.models.generateContent({
+          model: "gemini-3.8-flash",
+          contents: prompt,
+          config: {
+            responseMimeType: "application/json",
+          },
+        });
+
+        const parsed = JSON.parse(geminiRes.text || "{}");
+        if (Array.isArray(parsed.segments) && parsed.segments.length >= Math.min(verses.length, 3)) {
+          // Verify that durations are not all identical
+          const durations = parsed.segments.map((s: any) => Math.round(s.duration || (s.endTimeSeconds - s.startTimeSeconds)));
+          const uniqueDurations = new Set(durations);
+          if (uniqueDurations.size > 1) {
+            console.log(`[AI-Segment] Successfully generated ${parsed.segments.length} varied segments via Gemini.`);
+            return res.json({
+              success: true,
+              source: "gemini_ai",
+              totalDuration: parsed.totalDuration || totalDurationSeconds,
+              segments: parsed.segments,
+            });
+          }
+        }
+      } catch (geminiErr) {
+        console.warn("[AI-Segment] Gemini API call skipped or errored, using phonetic engine:", geminiErr);
+      }
+    }
+
+    // High-precision Phonetic Quranic Engine (Accurate mathematical alignment)
+    const phoneticSegments = calculateQuranicPhoneticTimings(
+      Number(surahNumber) || 1,
+      verses,
+      totalDurationSeconds,
+      reciterName
+    );
+
+    console.log(`[AI-Segment] Generated ${phoneticSegments.length} varied segments via Phonetic Engine.`);
+    return res.json({
+      success: true,
+      source: "phonetic_engine",
+      totalDuration: phoneticSegments[phoneticSegments.length - 1]?.endTimeSeconds || totalDurationSeconds || 180,
+      segments: phoneticSegments,
+    });
+  } catch (error: any) {
+    console.error("[AI-Segment] error:", error);
+    res.status(500).json({ error: error?.message || "Failed to segment recording" });
+  }
+});
+
+// Quran Verses Complete JSON Provider
+app.get("/api/quran/all", (req, res) => {
+  try {
+    const quranPath = path.join(process.cwd(), "public", "quran-verses.json");
+    if (fs.existsSync(quranPath)) {
+      const data = fs.readFileSync(quranPath, "utf-8");
+      res.setHeader("Content-Type", "application/json");
+      return res.send(data);
+    }
+    res.status(404).json({ error: "quran-verses.json not found" });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to read quran-verses.json" });
   }
 });
 

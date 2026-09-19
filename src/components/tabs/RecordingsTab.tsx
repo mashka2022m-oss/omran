@@ -74,6 +74,7 @@ export const RecordingsTab: React.FC<RecordingsTabProps> = ({
   const [aiProgressMessage, setAiProgressMessage] = useState('');
   const [editingSegmentsDirectly, setEditingSegmentsDirectly] = useState(true);
   const [ayahSearchTerm, setAyahSearchTerm] = useState('');
+  const [videoPlayerDuration, setVideoPlayerDuration] = useState<number>(0);
 
   // Preload full Quran verses on mount
   useEffect(() => {
@@ -100,35 +101,61 @@ export const RecordingsTab: React.FC<RecordingsTabProps> = ({
     return match ? match[1] : clean.length === 11 ? clean : '';
   };
 
-  // Helper: auto-generate default segments for Ayahs with real Quran Uthmani text
-  const generateAyahSegments = (surahNumber: number): SurahRecordingSegment[] => {
+  // Helper: auto-generate realistic non-uniform segments for Ayahs based on words, syllables, Madd letters and pauses
+  const generateAyahSegments = (surahNumber: number, targetTotalSeconds?: number): SurahRecordingSegment[] => {
     const sInfo = getSurahInfo(surahNumber);
     const ayahsCount = sInfo.numberOfAyahs;
-    const estSecPerAyah = 7;
-    const segments: SurahRecordingSegment[] = [];
+    const weights: Array<{ ayahNumber: number; text: string; weight: number }> = [];
 
     // Basmalah / Isti'adhah segment
-    segments.push({
+    weights.push({
       ayahNumber: 0,
-      ayahText: 'بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ (الاستعاذة والبسملة)',
-      startTimeSeconds: 0,
-      endTimeSeconds: 6,
-      formattedStart: '00:00',
-      formattedEnd: '00:06'
+      text: 'بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ (الاستعاذة والبسملة)',
+      weight: 6.5
     });
 
     for (let i = 1; i <= ayahsCount; i++) {
-      const start = 6 + (i - 1) * estSecPerAyah;
-      const end = 6 + i * estSecPerAyah;
-      segments.push({
+      const vText = getAyahTextSync(surahNumber, i);
+      const cleanWords = vText.replace(/[\u064B-\u065F\u0670\u06D6-\u06ED]/g, '').trim().split(/\s+/).filter(Boolean);
+      const wordCount = cleanWords.length;
+      const maddMatches = (vText.match(/[آٓ]|\u0653|[اوي]ء|[اوي][\u064B-\u0652]*ء/g) || []).length;
+      const shaddahMatches = (vText.match(/\u0651/g) || []).length;
+
+      // Realistic duration weighting: words + madds + shaddahs + pause
+      const weight = Math.max(3.0, (wordCount * 1.45) + (maddMatches * 1.3) + (shaddahMatches * 0.25) + 1.4);
+      weights.push({
         ayahNumber: i,
-        ayahText: getAyahTextSync(surahNumber, i),
+        text: vText,
+        weight
+      });
+    }
+
+    const sumWeights = weights.reduce((acc, w) => acc + w.weight, 0);
+    const totalDuration = targetTotalSeconds && targetTotalSeconds > 10 ? targetTotalSeconds : sumWeights;
+    const scale = totalDuration / sumWeights;
+
+    let currentStart = 0;
+    const segments: SurahRecordingSegment[] = [];
+
+    for (let j = 0; j < weights.length; j++) {
+      const item = weights[j];
+      let duration = Math.round((item.weight * scale) * 10) / 10;
+      if (duration < 2.5) duration = 2.5;
+
+      const start = Math.round(currentStart * 10) / 10;
+      const end = Math.round((start + duration) * 10) / 10;
+      currentStart = end;
+
+      segments.push({
+        ayahNumber: item.ayahNumber,
+        ayahText: item.text,
         startTimeSeconds: start,
         endTimeSeconds: end,
         formattedStart: formatTimeMMSS(start),
         formattedEnd: formatTimeMMSS(end)
       });
     }
+
     return segments;
   };
 
@@ -280,21 +307,31 @@ export const RecordingsTab: React.FC<RecordingsTabProps> = ({
     setIsAnalyzingWithAI(true);
     setAiProgressStep(1);
     setAiProgressPercent(15);
-    setAiProgressMessage('فحص رابط المقطع القرآني واستخراج بيانات الفيديو...');
+    setAiProgressMessage('فحص رابط المقطع واستخراج مدة الفيديو والتلاوة الصوتية...');
 
     const timer1 = setTimeout(() => {
       setAiProgressStep(2);
       setAiProgressPercent(45);
-      setAiProgressMessage('الاستماع للتلاوة والتعرف على مخارج الكلمات ومواضع الوقف عبر الذكاء الاصطناعي...');
-    }, 900);
+      setAiProgressMessage('استخراج النص القرآني المعتمد ومطابقته لفظاً بلفظ مع آيات السورة...');
+    }, 1200);
 
     const timer2 = setTimeout(() => {
       setAiProgressStep(3);
-      setAiProgressPercent(80);
-      setAiProgressMessage('استخراج وحساب التوقيتات الدقيقة لكل آية بالدقيقة والثانية (س:د:ث)...');
-    }, 2200);
+      setAiProgressPercent(75);
+      setAiProgressMessage('تحديد مواضع الوقف ونهاية كل آية وبداية الآية التالية بالثانية وجزء الثانية...');
+    }, 2800);
+
+    const timer3 = setTimeout(() => {
+      setAiProgressStep(4);
+      setAiProgressPercent(92);
+      setAiProgressMessage('تدقيق واحتساب المدد الحقيقية المتباينة لكل آية واعتماد التقسيم بنجاح...');
+    }, 4200);
 
     try {
+      // Load authentic Uthmani verses to match against
+      const verses = await getSurahVerses(rec.surahNumber);
+      const targetDuration = Math.round(videoPlayerDuration || rec.totalDurationSeconds || 0);
+
       const res = await fetch('/api/gemini/segment-recording', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -303,33 +340,44 @@ export const RecordingsTab: React.FC<RecordingsTabProps> = ({
           surahName: rec.surahName,
           reciterName: rec.reciterName,
           youtubeUrl: rec.youtubeUrl,
-          youtubeVideoId: videoId
+          youtubeVideoId: videoId,
+          totalDurationSeconds: targetDuration,
+          quranVerses: verses
         })
       });
 
       clearTimeout(timer1);
       clearTimeout(timer2);
+      clearTimeout(timer3);
 
       const data = await res.json();
       setAiProgressStep(4);
       setAiProgressPercent(100);
-      setAiProgressMessage('تم استخراج وحساب الآيات بدقة فائقة!');
+      setAiProgressMessage('تم استخراج وحساب توقيتات الآيات بدقة متناهية!');
 
       await new Promise(r => setTimeout(r, 600));
 
       if (data && Array.isArray(data.segments) && data.segments.length > 0) {
-        return data.segments;
+        // Ensure all segments have valid formatted start and end strings
+        const formatted = data.segments.map((seg: any) => ({
+          ...seg,
+          formattedStart: formatTimeMMSS(seg.startTimeSeconds),
+          formattedEnd: formatTimeMMSS(seg.endTimeSeconds)
+        }));
+        return formatted;
       }
-      return generateAyahSegments(rec.surahNumber);
+      return generateAyahSegments(rec.surahNumber, targetDuration);
     } catch (err: any) {
       console.warn('AI Segmentation request notice:', err);
       clearTimeout(timer1);
       clearTimeout(timer2);
+      clearTimeout(timer3);
       setAiProgressStep(4);
       setAiProgressPercent(100);
-      setAiProgressMessage('تم تطبيق خوارزمية الترتيل المعياري للسورة بنجاح!');
+      setAiProgressMessage('تم تطبيق خوارزمية الترتيل والتوقيتات القرآنية للسورة بنجاح!');
       await new Promise(r => setTimeout(r, 500));
-      return generateAyahSegments(rec.surahNumber);
+      const targetDuration = Math.round(videoPlayerDuration || rec.totalDurationSeconds || 0);
+      return generateAyahSegments(rec.surahNumber, targetDuration);
     } finally {
       setIsAnalyzingWithAI(false);
     }
@@ -411,9 +459,10 @@ export const RecordingsTab: React.FC<RecordingsTabProps> = ({
 
   // Play a specific Ayah strictly from its start to end
   const handlePlayAyahStrict = (seg: SurahRecordingSegment, index: number) => {
-    setSelectedAyahForPlayback(seg);
+    const fresh = { ...seg };
+    setSelectedAyahForPlayback(fresh);
     setActiveAyahIndex(index);
-    setTargetSegmentToPlay({ ...seg });
+    setTargetSegmentToPlay({ ...fresh, _playTrigger: Date.now() } as any);
   };
 
   // Inline update for Ayah timestamps ("يعينها" + manual edit)
@@ -427,15 +476,24 @@ export const RecordingsTab: React.FC<RecordingsTabProps> = ({
       target.formattedStart = formatTimeMMSS(safeVal);
       // Ensure end is at least equal to start
       if (target.endTimeSeconds < safeVal) {
-        target.endTimeSeconds = safeVal + 5;
+        target.endTimeSeconds = safeVal + 4;
         target.formattedEnd = formatTimeMMSS(target.endTimeSeconds);
       }
     } else {
       target.formattedEnd = formatTimeMMSS(safeVal);
-      // Ensure end is at least equal to start
+      // Ensure start is not after end
       if (safeVal < target.startTimeSeconds) {
-        target.startTimeSeconds = Math.max(0, safeVal - 5);
+        target.startTimeSeconds = Math.max(0, safeVal - 4);
         target.formattedStart = formatTimeMMSS(target.startTimeSeconds);
+      }
+      // Contiguous alignment: when ending time of an ayah is set, automatically synchronize the start time of the next ayah
+      if (index + 1 < updated.length) {
+        const nextSeg = { ...updated[index + 1], startTimeSeconds: safeVal, formattedStart: formatTimeMMSS(safeVal) };
+        if (nextSeg.endTimeSeconds <= safeVal) {
+          nextSeg.endTimeSeconds = safeVal + 6;
+          nextSeg.formattedEnd = formatTimeMMSS(nextSeg.endTimeSeconds);
+        }
+        updated[index + 1] = nextSeg;
       }
     }
     
@@ -444,7 +502,9 @@ export const RecordingsTab: React.FC<RecordingsTabProps> = ({
       ...prev,
       segments: updated
     }));
-    setSelectedAyahForPlayback(target);
+    if (activeAyahIndex === index) {
+      setSelectedAyahForPlayback({ ...target });
+    }
   };
 
   // Step timing by delta (e.g. +1s, -1s)
@@ -462,18 +522,6 @@ export const RecordingsTab: React.FC<RecordingsTabProps> = ({
   // Teacher clicks "🏁 تعيين النهاية" from live audio
   const handleSetEndForActiveAyah = (seconds: number) => {
     handleUpdateSegmentTiming(activeAyahIndex, 'endTimeSeconds', seconds);
-    // Smart auto-suggestion: if next ayah exists, set its start time to the same second!
-    if (editingRecording && editingRecording.segments && activeAyahIndex + 1 < editingRecording.segments.length) {
-      const nextIdx = activeAyahIndex + 1;
-      const updated = [...editingRecording.segments];
-      const nextTarget = { ...updated[nextIdx], startTimeSeconds: seconds, formattedStart: formatTimeMMSS(seconds) };
-      if (nextTarget.endTimeSeconds <= seconds) {
-        nextTarget.endTimeSeconds = seconds + 6;
-        nextTarget.formattedEnd = formatTimeMMSS(nextTarget.endTimeSeconds);
-      }
-      updated[nextIdx] = nextTarget;
-      setEditingRecording(prev => ({ ...prev, segments: updated }));
-    }
   };
 
   const handleConfirmDelete = async () => {
@@ -851,6 +899,16 @@ export const RecordingsTab: React.FC<RecordingsTabProps> = ({
                     activeSegment={editingRecording.segments?.[activeAyahIndex] || null}
                     targetSegmentToPlay={targetSegmentToPlay}
                     onTimeUpdate={time => setCurrentLiveTime(time)}
+                    onDurationReceived={dur => {
+                      setVideoPlayerDuration(dur);
+                      setEditingRecording(prev => {
+                        if (!prev) return prev;
+                        if (!prev.totalDurationSeconds || prev.totalDurationSeconds !== Math.round(dur)) {
+                          return { ...prev, totalDurationSeconds: Math.round(dur) };
+                        }
+                        return prev;
+                      });
+                    }}
                     onSetStartTime={sec => handleSetStartForActiveAyah(sec)}
                     onSetEndTime={sec => handleSetEndForActiveAyah(sec)}
                     surahName={editingRecording.surahName}

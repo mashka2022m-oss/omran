@@ -137,13 +137,31 @@ export const ParentPortalView: React.FC<ParentPortalViewProps> = ({
     } catch (err: any) {
       console.warn('Student Google link notice:', err);
       const errMsg = err?.message || String(err);
-      if (err?.isPopupClosed || errMsg.includes('popup-closed')) {
+      if (errMsg === 'هذا الحساب مربوط بالفعل' || errMsg.includes('مربوط بالفعل')) {
+        setGoogleLinkError('هذا الحساب مربوط بالفعل');
+      } else if (err?.isPopupClosed || errMsg.includes('popup-closed')) {
         setGoogleLinkError('تم إغلاق نافذة تسجيل الدخول من Google قبل الإكمال. يرجى الضغط مرة أخرى واختيار حساب Google الخاص بك.');
       } else if (err?.isPopupBlocked || errMsg.includes('popup-blocked')) {
         setGoogleLinkError('المتصفح حظر النافذة المنبثقة. يرجى السماح بالنوافذ المنبثقة من إعدادات المتصفح ثم المحاولة مرة أخرى.');
       } else {
         setGoogleLinkError(errMsg || 'تعذر استكمال الربط بحساب Google. يرجى إعادة المحاولة.');
       }
+    } finally {
+      setIsLinkingGoogle(false);
+    }
+  };
+
+  const handleUnlinkGoogleAccount = async () => {
+    if (!window.confirm('هل أنت متأكد من رغبتك في فصل حساب Google الحالي؟')) return;
+    try {
+      setIsLinkingGoogle(true);
+      const updated = await GoogleWorkspaceService.unlinkStudentGoogleAccount(currentStudent);
+      setCurrentStudent(updated);
+      if (onUpdateStudent) {
+        onUpdateStudent(updated);
+      }
+    } catch (e: any) {
+      alert(e?.message || 'تعذر فصل حساب Google');
     } finally {
       setIsLinkingGoogle(false);
     }
@@ -427,6 +445,15 @@ export const ParentPortalView: React.FC<ParentPortalViewProps> = ({
                 </svg>
                 <span className="text-emerald-300 font-bold truncate max-w-[150px]">{currentStudent.googleEmail}</span>
                 <span className="text-[10px] bg-emerald-500/20 text-emerald-300 px-1.5 py-0.5 rounded-full font-bold">موثق</span>
+                <button
+                  type="button"
+                  onClick={handleUnlinkGoogleAccount}
+                  disabled={isLinkingGoogle}
+                  className="text-[10px] text-red-300 hover:text-red-100 hover:underline cursor-pointer mr-1 px-1 py-0.5 rounded bg-red-950/50 border border-red-500/30"
+                  title="فصل حساب Google"
+                >
+                  فصل
+                </button>
               </div>
             ) : (
               <button
@@ -790,7 +817,7 @@ export const ParentPortalView: React.FC<ParentPortalViewProps> = ({
                               type="button"
                               onClick={() => {
                                 setActivePortalAyah(seg);
-                                setActivePortalTargetAyah({ ...seg });
+                                setActivePortalTargetAyah({ ...seg, _playTrigger: Date.now() } as any);
                               }}
                               className={`w-full text-right p-3 rounded-xl text-xs flex flex-col gap-1.5 transition-all cursor-pointer border ${
                                 isCurrent

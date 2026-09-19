@@ -7,6 +7,7 @@ interface YouTubeAyahPlayerProps {
   activeSegment: SurahRecordingSegment | null;
   targetSegmentToPlay?: SurahRecordingSegment | null;
   onTimeUpdate?: (currentTime: number) => void;
+  onDurationReceived?: (duration: number) => void;
   onSetStartTime?: (seconds: number) => void;
   onSetEndTime?: (seconds: number) => void;
   onNextAyah?: () => void;
@@ -29,6 +30,7 @@ export const YouTubeAyahPlayer: React.FC<YouTubeAyahPlayerProps> = ({
   activeSegment,
   targetSegmentToPlay,
   onTimeUpdate,
+  onDurationReceived,
   onSetStartTime,
   onSetEndTime,
   onNextAyah,
@@ -43,6 +45,14 @@ export const YouTubeAyahPlayer: React.FC<YouTubeAyahPlayerProps> = ({
   const [isLooping, setIsLooping] = useState<boolean>(false);
   const [playingSegment, setPlayingSegment] = useState<SurahRecordingSegment | null>(null);
   const [justFinishedAlert, setJustFinishedAlert] = useState<boolean>(false);
+  const seekGracePeriodRef = useRef<number>(0);
+
+  // Sync playing segment when active segment timings change
+  useEffect(() => {
+    if (activeSegment && playingSegment && playingSegment.ayahNumber === activeSegment.ayahNumber) {
+      setPlayingSegment({ ...activeSegment });
+    }
+  }, [activeSegment]);
 
   // Send command to YouTube iframe via postMessage
   const sendYTCommand = useCallback((func: string, args: any[] = []) => {
@@ -68,6 +78,10 @@ export const YouTubeAyahPlayer: React.FC<YouTubeAyahPlayerProps> = ({
       try {
         const data = JSON.parse(e.data);
         if (data.event === 'infoDelivery' && data.info) {
+          if (typeof data.info.duration === 'number' && data.info.duration > 0) {
+            onDurationReceived?.(data.info.duration);
+          }
+
           if (typeof data.info.currentTime === 'number') {
             const time = data.info.currentTime;
             setCurrentTime(time);
@@ -75,19 +89,23 @@ export const YouTubeAyahPlayer: React.FC<YouTubeAyahPlayerProps> = ({
 
             // Check if playing a restricted segment and reached its end
             if (playingSegment && playingSegment.endTimeSeconds > 0) {
-              if (time >= playingSegment.endTimeSeconds) {
-                if (isLooping) {
-                  // Loop back to start
-                  sendYTCommand('seekTo', [playingSegment.startTimeSeconds, true]);
-                  sendYTCommand('playVideo');
-                } else {
-                  // Strictly pause at end of segment
-                  sendYTCommand('pauseVideo');
-                  setIsPlaying(false);
-                  setJustFinishedAlert(true);
-                  setTimeout(() => setJustFinishedAlert(false), 2500);
-                  onAyahFinished?.(playingSegment);
-                  setPlayingSegment(null);
+              // Ignore old playback times during seek grace period
+              if (Date.now() > seekGracePeriodRef.current) {
+                if (time >= playingSegment.endTimeSeconds) {
+                  if (isLooping) {
+                    // Loop back to start
+                    seekGracePeriodRef.current = Date.now() + 800;
+                    sendYTCommand('seekTo', [playingSegment.startTimeSeconds, true]);
+                    sendYTCommand('playVideo');
+                  } else {
+                    // Strictly pause at end of segment
+                    sendYTCommand('pauseVideo');
+                    setIsPlaying(false);
+                    setJustFinishedAlert(true);
+                    setTimeout(() => setJustFinishedAlert(false), 2500);
+                    onAyahFinished?.(playingSegment);
+                    setPlayingSegment(null);
+                  }
                 }
               }
             }
@@ -105,7 +123,7 @@ export const YouTubeAyahPlayer: React.FC<YouTubeAyahPlayerProps> = ({
 
     window.addEventListener('message', handleMessage);
     return () => window.removeEventListener('message', handleMessage);
-  }, [playingSegment, isLooping, onTimeUpdate, onAyahFinished, sendYTCommand]);
+  }, [playingSegment, isLooping, onTimeUpdate, onDurationReceived, onAyahFinished, sendYTCommand]);
 
   // Request listening updates from YouTube iframe
   useEffect(() => {
@@ -123,8 +141,10 @@ export const YouTubeAyahPlayer: React.FC<YouTubeAyahPlayerProps> = ({
 
   // Play a specific segment strictly from its start to end
   const playAyahSegment = useCallback((seg: SurahRecordingSegment) => {
-    setPlayingSegment(seg);
+    setPlayingSegment({ ...seg });
     const start = Math.max(0, seg.startTimeSeconds);
+    // Grace period of 800ms ensures seek executes before checking time >= endTimeSeconds
+    seekGracePeriodRef.current = Date.now() + 800;
     sendYTCommand('seekTo', [start, true]);
     sendYTCommand('playVideo');
     setIsPlaying(true);

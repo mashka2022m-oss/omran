@@ -552,6 +552,10 @@ export class OmranDataService {
     }
   }
 
+  static async getTeachers(): Promise<TeacherAccount[]> {
+    return this.loadTeachers();
+  }
+
   // Save Teacher directly in Firestore
   static async saveTeacher(teacher: TeacherAccount): Promise<void> {
     try {
@@ -678,6 +682,10 @@ export class OmranDataService {
       handleFirestoreError(e, OperationType.LIST, 'students');
       return [];
     }
+  }
+
+  static async getStudents(): Promise<Student[]> {
+    return this.loadStudents();
   }
 
   // Save Student directly in Firestore
