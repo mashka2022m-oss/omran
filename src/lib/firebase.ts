@@ -26,6 +26,8 @@ import {
   TeacherAccount,
   BehaviorViolation,
   FullBackupData,
+  ComplexBackupData,
+  QuranComplex,
   Halaqah,
   Exam,
   ExamQuestion,
@@ -135,11 +137,24 @@ export const DEFAULT_CRITERIA: EvaluationCriteria[] = [
   }
 ];
 
+export const DEFAULT_COMPLEXES: QuranComplex[] = [
+  {
+    id: 'complex-zubeir',
+    name: 'مجمع حلقات الصحابي الزبير بن العوام رضي الله عنه',
+    description: 'المجمع القرآني النموذجي الرئيسي التابع لمنظومة عمران',
+    supervisorTeacherId: 'teacher-1',
+    supervisorTeacherName: 'الشيخ محمد منتصر',
+    createdAt: new Date().toISOString()
+  }
+];
+
 export const DEFAULT_HALAQAHS: Halaqah[] = [
   {
     id: 'halaqah-zubeir',
     name: 'حلقة الزبير بن العوام رضي الله عنه',
     description: 'الحلقة الأساسية التابعة لمنظومة عمران',
+    complexId: 'complex-zubeir',
+    complexName: 'مجمع حلقات الصحابي الزبير بن العوام رضي الله عنه',
     primaryTeacherName: 'الشيخ محمد منتصر',
     createdAt: new Date().toISOString(),
     isDefault: true
@@ -162,9 +177,11 @@ export const INITIAL_TEACHERS: TeacherAccount[] = [
     username: 'محمد منتصر',
     password: '123',
     phone: '0500000000',
-    title: 'المشرف الأساسي والمعلم الأول',
-    role: 'supervisor',
+    title: 'المعلم والمشرف والمبرمج',
+    role: 'developer',
     isPrimary: true,
+    complexId: 'complex-zubeir',
+    complexName: 'مجمع حلقات الصحابي الزبير بن العوام رضي الله عنه',
     halaqahId: 'halaqah-zubeir',
     halaqahName: 'حلقة الزبير بن العوام رضي الله عنه',
     createdAt: new Date().toISOString()
@@ -475,11 +492,19 @@ export class OmranDataService {
   // Seed baseline data directly into Firestore on first deployment
   static async seedInitialDataIfEmpty() {
     try {
+      // 0. Complexes (المجمعات القرآنية)
+      const complexSnap = await getDocs(collection(db, 'complexes'));
+      if (complexSnap.empty) {
+        for (const c of DEFAULT_COMPLEXES) {
+          await setDoc(doc(db, 'complexes', c.id), cleanFirestoreData(c));
+        }
+      }
+
       // 1. Halaqahs
       const halaqahSnap = await getDocs(collection(db, 'halaqahs'));
       if (halaqahSnap.empty) {
         for (const h of DEFAULT_HALAQAHS) {
-          await setDoc(doc(db, 'halaqahs', h.id), h);
+          await setDoc(doc(db, 'halaqahs', h.id), cleanFirestoreData(h));
         }
       }
 
@@ -487,7 +512,7 @@ export class OmranDataService {
       const teachSnap = await getDocs(collection(db, 'teachers'));
       if (teachSnap.empty) {
         for (const t of INITIAL_TEACHERS) {
-          await setDoc(doc(db, 'teachers', t.id), t);
+          await setDoc(doc(db, 'teachers', t.id), cleanFirestoreData(t));
         }
       }
 
@@ -549,17 +574,27 @@ export class OmranDataService {
           cleanName.includes('محمد منتصر') ||
           raw.id === 'teacher-1';
 
+        const role = (isMohamed || raw.role === 'developer')
+          ? 'developer'
+          : (raw.role === 'supervisor' ? 'supervisor' : 'teacher');
+
+        const title = raw.title || (
+          role === 'developer'
+            ? 'المعلم والمشرف والمبرمج'
+            : (role === 'supervisor' ? 'معلم مشرف' : 'معلم حلقة ومحفظ')
+        );
+
         const normalized: TeacherAccount = {
           ...raw,
-          role: isMohamed ? 'supervisor' : (raw.role === 'supervisor' ? 'supervisor' : 'teacher'),
-          isPrimary: isMohamed,
-          title: raw.title || (isMohamed ? 'المشرف الأساسي والمعلم الأول' : (raw.role === 'supervisor' ? 'معلم مشرف' : 'معلم حلقة ومحفظ'))
+          role,
+          isPrimary: role === 'developer' || role === 'supervisor',
+          title
         };
         list.push(normalized);
       });
       if (list.length === 0) {
         for (const t of INITIAL_TEACHERS) {
-          await setDoc(doc(db, 'teachers', t.id), t);
+          await setDoc(doc(db, 'teachers', t.id), cleanFirestoreData(t));
         }
         return INITIAL_TEACHERS;
       }
@@ -593,6 +628,267 @@ export class OmranDataService {
       handleFirestoreError(e, OperationType.DELETE, `teachers/${teacherId}`);
       throw e;
     }
+  }
+
+  // Load Complexes directly from Firestore
+  static async loadComplexes(): Promise<QuranComplex[]> {
+    try {
+      const snap = await getDocs(collection(db, 'complexes'));
+      const list: QuranComplex[] = [];
+      snap.forEach(d => list.push(d.data() as QuranComplex));
+      if (list.length === 0) {
+        for (const c of DEFAULT_COMPLEXES) {
+          const cleanC = cleanFirestoreData(c);
+          await setDoc(doc(db, 'complexes', c.id), cleanC);
+        }
+        return DEFAULT_COMPLEXES;
+      }
+      return list;
+    } catch (e) {
+      handleFirestoreError(e, OperationType.LIST, 'complexes');
+      return DEFAULT_COMPLEXES;
+    }
+  }
+
+  // Subscribe to Complexes in real-time
+  static subscribeComplexes(callback: (complexes: QuranComplex[]) => void): () => void {
+    try {
+      return onSnapshot(collection(db, 'complexes'), snap => {
+        const list: QuranComplex[] = [];
+        snap.forEach(d => list.push(d.data() as QuranComplex));
+        if (list.length === 0) {
+          callback(DEFAULT_COMPLEXES);
+        } else {
+          callback(list);
+        }
+      }, err => {
+        handleFirestoreError(err, OperationType.LIST, 'complexes');
+      });
+    } catch (e) {
+      return () => {};
+    }
+  }
+
+  // Save / Update Complex in Firestore
+  static async saveComplex(complex: QuranComplex): Promise<void> {
+    try {
+      const clean = cleanFirestoreData(complex);
+      await setDoc(doc(db, 'complexes', complex.id), clean);
+    } catch (e) {
+      handleFirestoreError(e, OperationType.WRITE, `complexes/${complex.id}`);
+      throw e;
+    }
+  }
+
+  // Delete Complex from Firestore and detach attached halaqahs safely
+  static async deleteComplex(complexId: string): Promise<void> {
+    try {
+      await deleteDoc(doc(db, 'complexes', complexId));
+      // Unlink attached halaqahs
+      const halaqahs = await this.loadHalaqahs();
+      for (const h of halaqahs) {
+        if (h.complexId === complexId) {
+          const updated: Halaqah = {
+            ...h,
+            complexId: undefined,
+            complexName: undefined
+          };
+          await setDoc(doc(db, 'halaqahs', h.id), cleanFirestoreData(updated));
+        }
+      }
+    } catch (e) {
+      handleFirestoreError(e, OperationType.DELETE, `complexes/${complexId}`);
+      throw e;
+    }
+  }
+
+  // Link or Move Halaqah to a Complex
+  static async assignHalaqahToComplex(
+    halaqahId: string,
+    complexId?: string,
+    complexName?: string
+  ): Promise<Halaqah | null> {
+    try {
+      const halaqahRef = doc(db, 'halaqahs', halaqahId);
+      const snap = await getDoc(halaqahRef);
+      if (!snap.exists()) return null;
+      const data = snap.data() as Halaqah;
+      const updated: Halaqah = {
+        ...data,
+        complexId: complexId || undefined,
+        complexName: complexName || undefined
+      };
+      await setDoc(halaqahRef, cleanFirestoreData(updated));
+      return updated;
+    } catch (e) {
+      handleFirestoreError(e, OperationType.WRITE, `halaqahs/${halaqahId}`);
+      throw e;
+    }
+  }
+
+  // Export specific complex data (Halaqahs, Students, Attendance, Evaluations, Violations)
+  static async exportComplexBackup(complexId: string): Promise<ComplexBackupData> {
+    const complexes = await this.loadComplexes();
+    const complex = complexes.find(c => c.id === complexId) || {
+      id: complexId,
+      name: 'مجمع قرآني',
+      createdAt: new Date().toISOString()
+    };
+    const allHalaqahs = await this.loadHalaqahs();
+    const complexHalaqahs = allHalaqahs.filter(h => h.complexId === complexId);
+    const halaqahIds = new Set(complexHalaqahs.map(h => h.id));
+
+    const allStudents = await this.loadStudents();
+    const complexStudents = allStudents.filter(s => s.halaqahId && halaqahIds.has(s.halaqahId));
+    const studentIds = new Set(complexStudents.map(s => s.id));
+
+    const allAttendance = await this.loadAttendance();
+    const complexAttendance = allAttendance.filter(a => studentIds.has(a.studentId));
+
+    const allEvaluations = await this.loadEvaluations();
+    const complexEvaluations = allEvaluations.filter(e => studentIds.has(e.studentId));
+
+    const allViolations = await this.loadViolations();
+    const complexViolations = allViolations.filter(v => studentIds.has(v.studentId));
+
+    return {
+      version: '2.0.0',
+      exportDate: new Date().toISOString(),
+      complex,
+      halaqahs: complexHalaqahs,
+      students: complexStudents,
+      attendance: complexAttendance,
+      evaluations: complexEvaluations,
+      violations: complexViolations
+    };
+  }
+
+  // Import / Restore specific complex data
+  static async importComplexBackup(
+    arg1: string | ComplexBackupData,
+    arg2?: string | ComplexBackupData
+  ): Promise<{ studentsCount: number; halaqahsCount: number }> {
+    let complexId: string;
+    let data: ComplexBackupData;
+    if (typeof arg1 === 'string') {
+      complexId = arg1;
+      data = arg2 as ComplexBackupData;
+    } else {
+      data = arg1 as ComplexBackupData;
+      complexId = typeof arg2 === 'string' ? arg2 : (data.complex?.id || 'unknown');
+    }
+
+    if (!data || typeof data !== 'object') {
+      throw new Error('بيانات النسخة الاحتياطية للمجمع غير صالحة.');
+    }
+    if (data.complex) {
+      await this.saveComplex({ ...data.complex, id: complexId });
+    }
+    if (Array.isArray(data.halaqahs)) {
+      for (const h of data.halaqahs) {
+        await this.saveHalaqah({ ...h, complexId, complexName: data.complex?.name });
+      }
+    }
+    if (Array.isArray(data.students)) {
+      for (const s of data.students) {
+        await setDoc(doc(db, 'students', s.id), cleanFirestoreData(s));
+      }
+    }
+    if (Array.isArray(data.attendance)) {
+      for (const a of data.attendance) {
+        await setDoc(doc(db, 'attendance', a.id), cleanFirestoreData(a));
+      }
+    }
+    if (Array.isArray(data.evaluations)) {
+      for (const ev of data.evaluations) {
+        await setDoc(doc(db, 'evaluations', ev.id), cleanFirestoreData(ev));
+      }
+    }
+    if (Array.isArray(data.violations)) {
+      for (const v of data.violations) {
+        await setDoc(doc(db, 'violations', v.id), cleanFirestoreData(v));
+      }
+    }
+
+    return {
+      studentsCount: data.students?.length || 0,
+      halaqahsCount: data.halaqahs?.length || 0
+    };
+  }
+
+  // Purge / empty all data belonging to a complex
+  static async purgeComplexData(complexId: string): Promise<{
+    studentsCount: number;
+    halaqahsCount: number;
+    deletedStudents: number;
+    deletedAttendance: number;
+  }> {
+    const allHalaqahs = await this.loadHalaqahs();
+    const complexHalaqahs = allHalaqahs.filter(h => h.complexId === complexId);
+    const halaqahIds = new Set(complexHalaqahs.map(h => h.id));
+
+    const allStudents = await this.loadStudents();
+    const complexStudents = allStudents.filter(s => s.halaqahId && halaqahIds.has(s.halaqahId));
+    const studentIds = new Set(complexStudents.map(s => s.id));
+
+    // Delete attendance
+    const allAttendance = await this.loadAttendance();
+    let deletedAttendance = 0;
+    for (const a of allAttendance) {
+      if (studentIds.has(a.studentId)) {
+        await deleteDoc(doc(db, 'attendance', a.id));
+        deletedAttendance++;
+      }
+    }
+
+    // Delete evaluations
+    const allEvaluations = await this.loadEvaluations();
+    for (const ev of allEvaluations) {
+      if (studentIds.has(ev.studentId)) {
+        await deleteDoc(doc(db, 'evaluations', ev.id));
+      }
+    }
+
+    // Delete violations
+    const allViolations = await this.loadViolations();
+    for (const v of allViolations) {
+      if (studentIds.has(v.studentId)) {
+        await deleteDoc(doc(db, 'violations', v.id));
+      }
+    }
+
+    // Delete students
+    for (const s of complexStudents) {
+      await deleteDoc(doc(db, 'students', s.id));
+    }
+
+    // Delete halaqahs
+    for (const h of complexHalaqahs) {
+      await deleteDoc(doc(db, 'halaqahs', h.id));
+    }
+
+    return {
+      studentsCount: complexStudents.length,
+      halaqahsCount: complexHalaqahs.length,
+      deletedStudents: complexStudents.length,
+      deletedAttendance
+    };
+  }
+
+  // Update Complex Database Config (for multi-tenant separation)
+  static async updateComplexDatabaseConfig(
+    complexId: string,
+    databaseConfig?: QuranComplex['databaseConfig']
+  ): Promise<void> {
+    const complexRef = doc(db, 'complexes', complexId);
+    const snap = await getDoc(complexRef);
+    if (!snap.exists()) throw new Error('المجمع غير موجود');
+    const data = snap.data() as QuranComplex;
+    const updated: QuranComplex = {
+      ...data,
+      databaseConfig: databaseConfig || undefined
+    };
+    await setDoc(complexRef, cleanFirestoreData(updated));
   }
 
   // Load Halaqahs directly from Firestore
@@ -1485,6 +1781,7 @@ export class OmranDataService {
       settings,
       chatMessages,
       teachers,
+      complexes,
       halaqahs,
       violations,
       exams,
@@ -1502,6 +1799,7 @@ export class OmranDataService {
       this.loadSettings(),
       this.loadChats(),
       this.loadTeachers(),
+      this.loadComplexes(),
       this.loadHalaqahs(),
       this.loadViolations(),
       this.loadExams(),
@@ -1523,6 +1821,7 @@ export class OmranDataService {
       settings,
       chatMessages,
       teachers,
+      complexes,
       halaqahs,
       violations,
       exams,
@@ -1551,6 +1850,7 @@ export class OmranDataService {
     evaluationsCount: number;
     criteriaCount: number;
     teachersCount: number;
+    complexesCount?: number;
     halaqahsCount?: number;
     violationsCount?: number;
     examsCount?: number;
@@ -1571,6 +1871,9 @@ export class OmranDataService {
     const teachersList = Array.isArray(backup.teachers) && backup.teachers.length > 0
       ? backup.teachers
       : INITIAL_TEACHERS;
+    const complexesList = Array.isArray(backup.complexes) && backup.complexes.length > 0
+      ? backup.complexes
+      : DEFAULT_COMPLEXES;
     const halaqahsList = Array.isArray(backup.halaqahs) && backup.halaqahs.length > 0
       ? backup.halaqahs
       : DEFAULT_HALAQAHS;
@@ -1601,6 +1904,7 @@ export class OmranDataService {
       clearCol('evaluations'),
       clearCol('criteria'),
       clearCol('teachers'),
+      clearCol('complexes'),
       clearCol('halaqahs'),
       clearCol('violations'),
       clearCol('exams'),
@@ -1627,6 +1931,9 @@ export class OmranDataService {
       }
       for (const t of teachersList) {
         if (t?.id) promises.push(setDoc(doc(db, 'teachers', t.id), t));
+      }
+      for (const comp of complexesList) {
+        if (comp?.id) promises.push(setDoc(doc(db, 'complexes', comp.id), comp));
       }
       for (const h of halaqahsList) {
         if (h?.id) promises.push(setDoc(doc(db, 'halaqahs', h.id), h));
@@ -1672,6 +1979,7 @@ export class OmranDataService {
       evaluationsCount: evaluationsList.length,
       criteriaCount: criteriaList.length,
       teachersCount: teachersList.length,
+      complexesCount: complexesList.length,
       halaqahsCount: halaqahsList.length,
       violationsCount: violationsList.length,
       examsCount: examsList.length,

@@ -21,13 +21,14 @@ import {
   CheckSquare,
   Square
 } from 'lucide-react';
-import { TeacherAccount, Halaqah, Student, AppSettings, isTeacherSupervisor } from '../types';
+import { TeacherAccount, Halaqah, Student, AppSettings, QuranComplex, isTeacherSupervisor } from '../types';
 
 interface SettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
   teachers: TeacherAccount[];
   halaqahs: Halaqah[];
+  complexes?: QuranComplex[];
   students: Student[];
   settings: AppSettings;
   activeHalaqahId?: string;
@@ -45,6 +46,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onClose,
   teachers,
   halaqahs,
+  complexes = [],
   students,
   settings,
   activeHalaqahId,
@@ -144,11 +146,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     const executeSave = async () => {
       try {
         setIsSubmitting(true);
+        const targetComplex = complexes.find(c => c.id === editingHalaqah.complexId);
         const halaqahObj: Halaqah = {
           id: halaqahId,
           name: halaqahName,
           description: editingHalaqah.description?.trim() || '',
           primaryTeacherName: selectedTeacherName,
+          complexId: editingHalaqah.complexId || undefined,
+          complexName: targetComplex?.name || editingHalaqah.complexName || undefined,
           createdAt: editingHalaqah.createdAt || new Date().toISOString(),
           isDefault: editingHalaqah.isDefault ?? false
         };
@@ -603,6 +608,34 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       * إذا اخترت معلماً مرتبطاً بحلقة أخرى، سيتم سؤاله لنقله لهذه الحلقة الجديدة.
                     </p>
                   </div>
+
+                  {/* Complex Selection */}
+                  {complexes && complexes.length > 0 && (
+                    <div className="sm:col-span-2">
+                      <label className="block text-xs font-bold text-amber-300 mb-1">
+                        المجمع القرآني التابعة له الحلقة:
+                      </label>
+                      <select
+                        value={editingHalaqah.complexId || ''}
+                        onChange={e => {
+                          const targetC = complexes.find(c => c.id === e.target.value);
+                          setEditingHalaqah({
+                            ...editingHalaqah,
+                            complexId: e.target.value || undefined,
+                            complexName: targetC?.name || undefined
+                          });
+                        }}
+                        className="w-full bg-[#064e3b] border border-[#065f46] rounded-xl px-3 py-2 text-white text-xs focus:border-[#fbbf24] focus:outline-none cursor-pointer"
+                      >
+                        <option value="">-- حلقة مستقلة (غير مرتبطة بمجمع حالياً) --</option>
+                        {complexes.map(c => (
+                          <option key={c.id} value={c.id}>
+                            {c.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
 
                   {/* Description */}
                   <div className="sm:col-span-2">

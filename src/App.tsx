@@ -36,7 +36,9 @@ import {
   GoogleOAuthConfig,
   SurahRecording,
   RecordingsConfig,
-  isTeacherSupervisor
+  isTeacherSupervisor,
+  isTeacherDeveloper,
+  QuranComplex
 } from './types';
 import {
   OmranDataService,
@@ -54,6 +56,7 @@ import { CloudLoadingScreen } from './components/CloudLoadingScreen';
 import { ParentPortalView } from './components/ParentPortalView';
 import { TeacherManagementModal } from './components/TeacherManagementModal';
 import { SettingsModal } from './components/SettingsModal';
+import { ComplexManagementModal } from './components/ComplexManagementModal';
 import { UnassignedTeacherView } from './components/UnassignedTeacherView';
 import { UnassignedStudentView } from './components/UnassignedStudentView';
 import { getSurahInfo } from './data/quranData';
@@ -106,6 +109,10 @@ export function App() {
   const [halaqahs, setHalaqahs] = useState<Halaqah[]>(DEFAULT_HALAQAHS);
   const [activeHalaqahId, setActiveHalaqahId] = useState<string>('all');
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
+
+  // Complexes State & Complex Management Modal (المجمعات القرآنية)
+  const [complexes, setComplexes] = useState<QuranComplex[]>([]);
+  const [isComplexModalOpen, setIsComplexModalOpen] = useState(false);
 
   // Main Data States
   const [students, setStudents] = useState<Student[]>([]);
@@ -210,7 +217,8 @@ export function App() {
         loadedLeaderboard,
         loadedGoogleOAuth,
         loadedRecordings,
-        loadedRecordingsConfig
+        loadedRecordingsConfig,
+        loadedComplexes
       ] = await Promise.all([
         OmranDataService.loadStudents(),
         OmranDataService.loadAttendance(),
@@ -226,7 +234,8 @@ export function App() {
         OmranDataService.loadLeaderboardSettings(),
         OmranDataService.loadGoogleOAuthConfig(),
         OmranDataService.loadRecordings(),
-        OmranDataService.loadRecordingsConfig()
+        OmranDataService.loadRecordingsConfig(),
+        OmranDataService.loadComplexes()
       ]);
 
       setStudents(loadedStudents);
@@ -244,6 +253,7 @@ export function App() {
       setGoogleAuthConfig(loadedGoogleOAuth);
       setRecordings(loadedRecordings);
       setRecordingsConfig(loadedRecordingsConfig);
+      setComplexes(loadedComplexes);
     } catch (e) {
       console.error('Error loading initial data:', e);
     } finally {
@@ -280,6 +290,9 @@ export function App() {
     const unsubHalaqahs = OmranDataService.subscribeHalaqahs(newHalaqahs => {
       setHalaqahs(newHalaqahs);
     });
+    const unsubComplexes = OmranDataService.subscribeComplexes(newComplexes => {
+      setComplexes(newComplexes);
+    });
     const unsubExams = OmranDataService.subscribeExams(newExams => {
       setExams(newExams);
     });
@@ -308,6 +321,7 @@ export function App() {
       unsubTeachers();
       unsubViolations();
       unsubHalaqahs();
+      unsubComplexes();
       unsubExams();
       unsubSubmissions();
       unsubLeaderboard();
@@ -340,6 +354,20 @@ export function App() {
       cleanUser === 'الشيخ محمد منتصر' ||
       cleanUser === 'admin' ||
       cleanUser === 'المشرف العام'
+    );
+  }, [currentUser, currentTeacher]);
+
+  // Check Programmer (معلم ومشرف ومبرمج - خاص بالشيخ محمد منتصر)
+  const isDeveloper = useMemo(() => {
+    if (!currentUser || currentUser.role !== 'admin') return false;
+    if (currentTeacher) {
+      return isTeacherDeveloper(currentTeacher, currentUser);
+    }
+    const cleanUser = currentUser.username.trim().toLowerCase();
+    return (
+      cleanUser === 'محمد منتصر' ||
+      cleanUser === 'الشيخ محمد منتصر' ||
+      cleanUser === 'admin'
     );
   }, [currentUser, currentTeacher]);
 
@@ -387,12 +415,12 @@ export function App() {
     }
   }, [currentUser, isSupervisor, assignedHalaqahs, activeHalaqahId]);
 
-  // Guard supervisor-only tabs: recordings, accounts, backup are strictly for supervisor (Mohamed Montaser)
+  // Guard programmer-only tabs: recordings, accounts/ranks, and database backup are strictly for Programmer (Mohamed Montaser)
   useEffect(() => {
-    if (!isSupervisor && (activeTab === 'recordings' || activeTab === 'accounts' || activeTab === 'backup')) {
+    if (!isDeveloper && (activeTab === 'recordings' || activeTab === 'accounts' || activeTab === 'backup')) {
       setActiveTab('home');
     }
-  }, [isSupervisor, activeTab]);
+  }, [isDeveloper, activeTab]);
 
   // Helper to check whether a student has an assigned halaqah
   const isStudentAssigned = (s: Student) => {
@@ -812,7 +840,22 @@ export function App() {
     setGoogleAuthConfig(cfg);
   };
 
-  // 14. Navigation Handlers
+  // 14. Complexes Handlers (المجمعات القرآنية)
+  const handleSaveComplex = async (complex: QuranComplex) => {
+    await OmranDataService.saveComplex(complex);
+    const list = await OmranDataService.loadComplexes();
+    setComplexes(list);
+  };
+
+  const handleDeleteComplex = async (complexId: string) => {
+    await OmranDataService.deleteComplex(complexId);
+    const list = await OmranDataService.loadComplexes();
+    setComplexes(list);
+    const hList = await OmranDataService.loadHalaqahs();
+    setHalaqahs(hList);
+  };
+
+  // 15. Navigation Handlers
   const handleNavigateTab = (tab: string) => {
     setActiveTab(tab);
   };
@@ -984,21 +1027,21 @@ export function App() {
   }
 
   // Navigation Items for Admin/Teacher
-  // Recordings, Accounts/Ranks Management, and Backup are strictly restricted to Supervisor (Mohamed Montaser)
+  // Recordings, Accounts/Ranks Management, and Backup are strictly restricted to Programmer (Mohamed Montaser)
   const navItems = [
     { id: 'home', label: 'الرئيسية', icon: Home },
     { id: 'students', label: 'الطلاب والتسجيل', icon: Users, badge: displayedStudents.length },
     { id: 'attendance', label: 'الحضور والغياب', icon: UserCheck },
     { id: 'evaluation', label: 'تقييم التسميع', icon: BookOpen },
     { id: 'exams', label: 'قسم الاختبارات', icon: FileText, badge: exams.length > 0 ? exams.length : undefined },
-    ...(isSupervisor ? [
+    ...(isDeveloper ? [
       { id: 'recordings', label: 'مقاطع التلاوة والواجبات', icon: Headphones, badge: recordings.length > 0 ? recordings.length : undefined },
       { id: 'accounts', label: 'إدارة الحسابات والرتب', icon: UserCog, badge: teachers.length }
     ] : []),
     { id: 'behavior', label: 'المخالفات السلوكية', icon: ShieldAlert, badge: displayedViolations.length > 0 ? displayedViolations.length : undefined },
     { id: 'parents', label: 'رسائل الواتساب', icon: MessageCircle },
     { id: 'reports', label: 'التقارير الدورية', icon: Award },
-    ...(isSupervisor ? [
+    ...(isDeveloper ? [
       { id: 'backup', label: 'النسخ الاحتياطي', icon: Database }
     ] : [])
   ];
@@ -1014,13 +1057,16 @@ export function App() {
         settings={settings}
         studentsCount={displayedStudents.length}
         teachersCount={teachers.length}
+        complexesCount={complexes.length}
         halaqahs={halaqahs}
         assignedHalaqahs={assignedHalaqahs}
         isSupervisor={isSupervisor}
+        isDeveloper={isDeveloper}
         activeHalaqahId={activeHalaqahId}
         onSwitchHalaqah={setActiveHalaqahId}
         onOpenTeacherManagement={() => setIsSettingsModalOpen(true)}
         onOpenSettings={() => setIsSettingsModalOpen(true)}
+        onOpenComplexManagement={() => setIsComplexModalOpen(true)}
       />
 
       <main className="max-w-7xl mx-auto px-4 lg:px-8 pt-6 relative space-y-6">
@@ -1211,7 +1257,7 @@ export function App() {
           />
         )}
 
-        {activeTab === 'recordings' && isSupervisor && (
+        {activeTab === 'recordings' && isDeveloper && (
           <RecordingsTab
             recordings={recordings}
             recordingsConfig={recordingsConfig}
@@ -1221,7 +1267,7 @@ export function App() {
           />
         )}
 
-        {activeTab === 'accounts' && isSupervisor && (
+        {activeTab === 'accounts' && isDeveloper && (
           <AccountsTab
             teachers={teachers}
             students={students}
@@ -1264,12 +1310,15 @@ export function App() {
           />
         )}
 
-        {activeTab === 'backup' && isSupervisor && (
+        {activeTab === 'backup' && isDeveloper && (
           <DataBackupTab
             onRefreshAllData={loadAllData}
             googleAuthConfig={googleAuthConfig}
             onRefreshGoogleAuth={handleRefreshGoogleAuth}
             isSupervisor={isSupervisor}
+            isDeveloper={isDeveloper}
+            complexes={complexes}
+            onSaveComplex={handleSaveComplex}
           />
         )}
       </main>
@@ -1282,6 +1331,7 @@ export function App() {
         halaqahs={halaqahs}
         students={students}
         settings={settings}
+        complexes={complexes}
         activeHalaqahId={activeHalaqahId}
         onSaveTeacher={handleSaveTeacher}
         onDeleteTeacher={handleDeleteTeacher}
@@ -1290,6 +1340,20 @@ export function App() {
         onTransferStudent={handleTransferStudent}
         onBatchTransferStudents={handleBatchTransferStudents}
         onSwitchActiveHalaqah={setActiveHalaqahId}
+      />
+
+      {/* Programmer Complex Management Modal (إدارة المجمعات القرآنية) */}
+      <ComplexManagementModal
+        isOpen={isComplexModalOpen}
+        onClose={() => setIsComplexModalOpen(false)}
+        complexes={complexes}
+        halaqahs={halaqahs}
+        teachers={teachers}
+        students={students}
+        onSaveComplex={handleSaveComplex}
+        onDeleteComplex={handleDeleteComplex}
+        onSaveHalaqah={handleSaveHalaqah}
+        onSaveTeacher={handleSaveTeacher}
       />
     </div>
   );

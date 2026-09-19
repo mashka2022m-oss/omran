@@ -16,6 +16,14 @@ service cloud.firestore {
       allow read, write: if true;
     }
 
+    // Complexes collection (المجمعات القرآنية)
+    match /complexes/{complexId} {
+      allow read: if true;
+      allow create, update: if isValidId(complexId)
+        && request.resource.data.name is string;
+      allow delete: if isValidId(complexId);
+    }
+
     // Halaqahs collection
     match /halaqahs/{halaqahId} {
       allow read: if true;

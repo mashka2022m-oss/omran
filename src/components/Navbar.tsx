@@ -11,7 +11,8 @@ import {
   Users,
   Settings,
   Layers,
-  ChevronDown
+  ChevronDown,
+  Building2
 } from 'lucide-react';
 import { UserRole, AppSettings, Halaqah } from '../types';
 
@@ -21,13 +22,16 @@ interface NavbarProps {
   settings: AppSettings;
   studentsCount: number;
   teachersCount?: number;
+  complexesCount?: number;
   halaqahs?: Halaqah[];
   assignedHalaqahs?: Halaqah[];
   isSupervisor?: boolean;
+  isDeveloper?: boolean;
   activeHalaqahId?: string;
   onSwitchHalaqah?: (halaqahId: string) => void;
   onOpenTeacherManagement?: () => void;
   onOpenSettings?: () => void;
+  onOpenComplexManagement?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -36,13 +40,16 @@ export const Navbar: React.FC<NavbarProps> = ({
   settings,
   studentsCount,
   teachersCount = 1,
+  complexesCount = 1,
   halaqahs = [],
   assignedHalaqahs = [],
   isSupervisor = false,
+  isDeveloper = false,
   activeHalaqahId,
   onSwitchHalaqah,
   onOpenTeacherManagement,
-  onOpenSettings
+  onOpenSettings,
+  onOpenComplexManagement
 }) => {
   const todayArabic = new Intl.DateTimeFormat('ar-SA', {
     weekday: 'long',
@@ -159,7 +166,24 @@ export const Navbar: React.FC<NavbarProps> = ({
 
         {/* Right User & Actions */}
         <div className="flex items-center gap-2.5">
-          {/* Top Settings Button (Exclusively for Supervisor: إدارة المعلمين والحلقات ونقل الطلاب) */}
+          {/* Top Complexes Button (Exclusively for Programmer: إدارة المجمعات القرآنية والحلقات التابعة) */}
+          {currentUser?.role === 'admin' && isDeveloper && onOpenComplexManagement && (
+            <button
+              onClick={onOpenComplexManagement}
+              title="إدارة المجمعات القرآنية وتوزيع الحلقات"
+              className="flex items-center gap-1.5 py-1.5 px-3 rounded-2xl bg-gradient-to-r from-amber-400 to-amber-500 hover:brightness-110 text-[#064e3b] text-xs font-black shadow-[0_0_15px_rgba(251,191,36,0.3)] transition-all cursor-pointer"
+            >
+              <Building2 className="w-4 h-4" />
+              <span>المجمعات</span>
+              {complexesCount !== undefined && (
+                <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-[#022c22] text-amber-300 font-mono font-bold">
+                  {complexesCount}
+                </span>
+              )}
+            </button>
+          )}
+
+          {/* Top Settings Button (Exclusively for Supervisor/Programmer: إدارة المعلمين والحلقات ونقل الطلاب) */}
           {currentUser?.role === 'admin' && isSupervisor && onOpenSettings && (
             <button
               onClick={onOpenSettings}
@@ -195,7 +219,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                   {currentUser.username}
                 </div>
                 <div className="text-[10px] text-[#86efac]">
-                  {currentUser.role === 'admin' ? (isSupervisor ? 'المعلم المشرف' : 'معلم عادي') : 'حساب طالب'}
+                  {currentUser.role === 'admin' ? (isDeveloper ? 'معلم ومشرف ومبرمج' : isSupervisor ? 'المعلم المشرف' : 'معلم عادي') : 'حساب طالب'}
                 </div>
               </div>
 

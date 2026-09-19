@@ -1,9 +1,40 @@
 export type UserRole = 'admin' | 'student';
 
+export interface QuranComplex {
+  id: string;
+  name: string; // e.g. "مجمع حلقات الصحابي الزبير بن العوام"
+  description?: string;
+  supervisorTeacherId?: string; // ID of the supervisor teacher assigned to this complex
+  supervisorTeacherName?: string; // Display name of supervisor teacher
+  createdAt: string;
+  updatedAt?: string;
+  databaseConfig?: {
+    isCustom?: boolean;
+    projectId?: string;
+    apiKey?: string;
+    authDomain?: string;
+    storageBucket?: string;
+    appId?: string;
+    enabledAt?: string;
+  };
+  // Independent Firebase database config if separated
+  customFirebaseConfig?: {
+    isEnabled: boolean;
+    projectId: string;
+    apiKey: string;
+    firestoreDatabaseId?: string;
+    storageBucket?: string;
+    authDomain?: string;
+    connectedAt?: string;
+  };
+}
+
 export interface Halaqah {
   id: string;
   name: string; // e.g. "حلقة الصحابي الزبير بن العوام رضي الله عنه"
   description?: string;
+  complexId?: string; // ID of the complex this halaqah belongs to
+  complexName?: string; // Cached display name of the complex
   primaryTeacherName?: string;
   teacherIds?: string[]; // Teacher IDs linked to this halaqah
   teacherNames?: string[]; // Cached teacher names
@@ -17,9 +48,11 @@ export interface TeacherAccount {
   username: string; // username used to log in
   password?: string; // password used to log in
   phone: string; // teacher's phone number
-  title?: string; // e.g. "المعلم الأساسي", "معلم شريك / ثانٍ", "محفظ ومساعد"
+  title?: string; // e.g. "معلم ومشرف ومبرمج", "المعلم الأساسي", "معلم شريك / ثانٍ"
   isPrimary?: boolean;
-  role?: 'teacher' | 'supervisor'; // رتبة المعلم: معلم عادي أو مشرف
+  role?: 'teacher' | 'supervisor' | 'developer'; // رتبة المعلم: معلم عادي، مشرف، أو مبرمج (معلم ومشرف ومبرمج)
+  complexId?: string; // Complex supervised by this teacher if applicable
+  complexName?: string;
   halaqahId?: string; // Legacy single halaqah id
   halaqahName?: string; // Legacy single halaqah name
   halaqahIds?: string[]; // All halaqahs this teacher teaches (supports multiple halaqahs)
@@ -33,8 +66,38 @@ export interface TeacherAccount {
 }
 
 /**
+ * Check if user or teacher has developer privileges (معلم ومشرف ومبرمج).
+ * Mohamed Montaser is always granted developer status.
+ */
+export const isTeacherDeveloper = (
+  teacher?: TeacherAccount | null,
+  userObj?: { username?: string; role?: string } | null
+): boolean => {
+  if (teacher) {
+    if (teacher.role === 'developer') return true;
+    const cleanName = (teacher.name || '').trim().toLowerCase();
+    const cleanUser = (teacher.username || '').trim().toLowerCase();
+    if (
+      cleanUser === 'محمد منتصر' ||
+      cleanUser === 'admin' ||
+      cleanName.includes('محمد منتصر')
+    ) {
+      return true;
+    }
+  }
+  if (userObj) {
+    const cleanUser = (userObj.username || '').trim().toLowerCase();
+    if (cleanUser === 'محمد منتصر' || cleanUser === 'admin') {
+      return true;
+    }
+  }
+  return false;
+};
+
+/**
  * Standard utility to determine if a teacher account has supervisor rank and permissions.
- * Mohamed Montaser is always supervisor.
+ * Mohamed Montaser is always supervisor (and developer).
+ * If explicitly marked as 'developer', they have all supervisor permissions + developer features.
  * If explicitly marked as 'teacher', they are strictly a regular teacher (not supervisor).
  */
 export const isTeacherSupervisor = (teacher?: TeacherAccount | null): boolean => {
@@ -42,7 +105,12 @@ export const isTeacherSupervisor = (teacher?: TeacherAccount | null): boolean =>
   const cleanName = (teacher.name || '').trim().toLowerCase();
   const cleanUser = (teacher.username || '').trim().toLowerCase();
 
-  // Mohamed Montaser is always the primary supervisor
+  // Developer has full supervisor permissions
+  if (teacher.role === 'developer') {
+    return true;
+  }
+
+  // Mohamed Montaser is always the primary supervisor and developer
   if (cleanUser === 'محمد منتصر' || cleanUser === 'admin' || cleanName.includes('محمد منتصر')) {
     return true;
   }
@@ -241,6 +309,7 @@ export interface BehaviorViolation {
 export interface FullBackupData {
   version: string;
   exportDate: string;
+  complexes?: QuranComplex[];
   students: Student[];
   attendance: AttendanceRecord[];
   evaluations: StudentEvaluation[];
@@ -258,6 +327,18 @@ export interface FullBackupData {
   recordings?: SurahRecording[];
   recordingsConfig?: RecordingsConfig;
   listeningLogs?: StudentListeningLog[];
+}
+
+export interface ComplexBackupData {
+  version: string;
+  exportDate: string;
+  complex: QuranComplex;
+  halaqahs: Halaqah[];
+  students: Student[];
+  attendance: AttendanceRecord[];
+  evaluations: StudentEvaluation[];
+  violations?: BehaviorViolation[];
+  exams?: Exam[];
 }
 
 export type ExamQuestionType = 'multiple_choice' | 'true_false' | 'essay' | 'short_answer';

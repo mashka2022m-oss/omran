@@ -122,6 +122,21 @@
       },
       "required": ["id", "studentId", "date", "violationType", "severity"]
     },
+    "QuranComplex": {
+      "title": "QuranComplex",
+      "description": "سجل المجمع القرآني والمشرف والحلقات التابعة له",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "name": { "type": "string", "maxLength": 150 },
+        "description": { "type": "string", "maxLength": 500 },
+        "supervisorTeacherId": { "type": "string", "maxLength": 128 },
+        "supervisorTeacherName": { "type": "string", "maxLength": 150 },
+        "customFirebaseConfig": { "type": "object" },
+        "createdAt": { "type": "string", "maxLength": 50 }
+      },
+      "required": ["id", "name"]
+    },
     "Halaqah": {
       "title": "Halaqah",
       "description": "سجل الحلقة القرآنية والمعلمين المنتسبين لها",
@@ -226,6 +241,10 @@
     }
   },
   "firestore": {
+    "/complexes/{complexId}": {
+      "schema": "QuranComplex",
+      "description": "قائمة المجمعات القرآنية والمشرفين التابعين لها"
+    },
     "/teachers/{teacherId}": {
       "schema": "TeacherAccount",
       "description": "حسابات وبيانات المعلمين والمشرفين"
