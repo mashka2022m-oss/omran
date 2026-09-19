@@ -50,19 +50,32 @@ export const LoginModal: React.FC<LoginModalProps> = ({
   const [isGoogleSigningIn, setIsGoogleSigningIn] = useState(false);
   const [googleError, setGoogleError] = useState('');
 
-  const handleGoogleStudentLogin = async () => {
+  const handleGoogleUnifiedLogin = async () => {
     setGoogleError('');
     setLoginError('');
     setIsGoogleSigningIn(true);
     try {
-      const { student } = await GoogleWorkspaceService.signInStudentWithGoogle(students);
-      onLoginSuccess({
-        username: student.name,
-        role: 'student',
-        studentId: student.id
-      });
+      const res = await GoogleWorkspaceService.signInUniversalWithGoogle(students, teachers);
+      if (res.userType === 'teacher' && res.teacher) {
+        onLoginSuccess({
+          username: res.teacher.name || res.teacher.username,
+          role: 'admin',
+          teacherId: res.teacher.id
+        });
+      } else if (res.student) {
+        onLoginSuccess({
+          username: res.student.name,
+          role: 'student',
+          studentId: res.student.id
+        });
+      } else {
+        onLoginSuccess({
+          username: res.username,
+          role: res.role || 'student'
+        });
+      }
     } catch (err: any) {
-      console.warn('Google Student Sign-In notice:', err);
+      console.warn('Google Unified Sign-In notice:', err);
       const errMsg = err?.message || String(err);
       if (err?.isPopupClosed || errMsg.includes('popup-closed')) {
         setGoogleError('تم إغلاق نافذة تسجيل الدخول من Google قبل استكمال التفويض. يرجى الضغط مرة أخرى والموافقة.');
@@ -241,18 +254,18 @@ export const LoginModal: React.FC<LoginModalProps> = ({
         {/* 1. Login Form */}
         {activeTab === 'login' && (
           <div className="space-y-4">
-            {/* Google Sign-in Card for Students */}
+            {/* Google Sign-in Card for Teachers, Supervisors & Students */}
             <div>
               <button
                 type="button"
-                onClick={handleGoogleStudentLogin}
+                onClick={handleGoogleUnifiedLogin}
                 disabled={isGoogleSigningIn}
                 className="w-full py-3.5 px-4 rounded-2xl bg-white hover:bg-slate-50 active:bg-slate-100 text-slate-800 font-bold text-xs sm:text-sm flex items-center justify-center gap-2.5 shadow-lg shadow-emerald-950/40 hover:shadow-xl transition-all border border-slate-200 cursor-pointer disabled:opacity-60"
               >
                 {isGoogleSigningIn ? (
                   <div className="flex items-center gap-2 text-slate-600">
                     <div className="w-4 h-4 border-2 border-slate-400 border-t-emerald-600 rounded-full animate-spin" />
-                    <span>جاري تسجيل الدخول بحساب Google...</span>
+                    <span>جاري تسجيل الدخول السريع بحساب Google...</span>
                   </div>
                 ) : (
                   <>
@@ -263,13 +276,13 @@ export const LoginModal: React.FC<LoginModalProps> = ({
                       <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
                     </svg>
                     <span className="text-slate-800 font-extrabold font-heading">
-                      الدخول السريع لطلاب الحلقات بحساب Google
+                      تسجيل الدخول السريع بحساب Google (المعلمين والطلاب)
                     </span>
                   </>
                 )}
               </button>
               <p className="text-[11px] text-emerald-200/80 text-center mt-2" dir="rtl">
-                ✨ اربط حسابك بـ Google لتتمكن من دخول الاختبارات وتوثيق درجاتك تلقائياً.
+                ✨ تسجيل دخول فوري ومباشر للمعلمين والمشرفين والطلاب بحساباتهم المربوطة.
               </p>
 
               {googleError && (

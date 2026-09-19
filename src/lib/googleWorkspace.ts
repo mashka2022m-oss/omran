@@ -2,7 +2,7 @@ import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
 import { auth, db, OmranDataService } from './firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
-import { Exam, ExamQuestion, ExamSubmission, ExamSubmissionAnswer, GoogleOAuthConfig, FullBackupData, Student, AttendanceRecord, StudentEvaluation, Halaqah } from '../types';
+import { Exam, ExamQuestion, ExamSubmission, ExamSubmissionAnswer, GoogleOAuthConfig, FullBackupData, Student, TeacherAccount, AttendanceRecord, StudentEvaluation, Halaqah } from '../types';
 
 export const GOOGLE_SCOPES = [
   'https://www.googleapis.com/auth/forms.body',
@@ -528,6 +528,281 @@ export class GoogleWorkspaceService {
     return { student: newStudent, isNew: true };
   }
 
+  // Link Google Account to a Teacher/Supervisor
+  static async linkTeacherGoogleAccount(teacher: TeacherAccount): Promise<TeacherAccount> {
+    let googleUser: { email: string; displayName: string; uid: string; photoURL?: string | null } | null = null;
+
+    // 1. Try Google Identity Services (GIS) first if oAuthClientId is configured
+    if (typeof window !== 'undefined' && firebaseConfig.oAuthClientId) {
+      try {
+        await loadGoogleGISScript();
+        if (window.google?.accounts?.oauth2) {
+          const gisRes = await requestAccessTokenViaGIS(firebaseConfig.oAuthClientId, ['email', 'profile']);
+          if (gisRes?.email) {
+            googleUser = {
+              email: gisRes.email,
+              displayName: gisRes.displayName || gisRes.email.split('@')[0],
+              uid: `gis_${Date.now()}`,
+              photoURL: gisRes.photoURL || null
+            };
+          }
+        }
+      } catch (gisErr) {
+        console.warn('GIS Token client teacher notice:', gisErr);
+      }
+    }
+
+    // 2. Fallback via Firebase Auth popup
+    if (!googleUser) {
+      try {
+        const provider = new GoogleAuthProvider();
+        provider.addScope('email');
+        provider.addScope('profile');
+        provider.setCustomParameters({ prompt: 'select_account' });
+        const result = await signInWithPopup(auth, provider);
+        if (result?.user) {
+          googleUser = {
+            email: result.user.email || '',
+            displayName: result.user.displayName || '',
+            uid: result.user.uid,
+            photoURL: result.user.photoURL || null
+          };
+        }
+      } catch (err: any) {
+        const errMsg = err?.message || String(err);
+        if (err?.code === 'auth/unauthorized-domain' || errMsg.includes('auth/unauthorized-domain')) {
+          const domain = typeof window !== 'undefined' ? window.location.hostname : '';
+          throw new UnauthorizedDomainError(domain, firebaseConfig.projectId);
+        }
+        if (err?.code === 'auth/popup-closed-by-user' || errMsg.includes('popup-closed')) {
+          throw new PopupClosedByUserError();
+        }
+        if (err?.code === 'auth/popup-blocked' || errMsg.includes('popup-blocked')) {
+          throw new PopupBlockedError();
+        }
+        throw err;
+      }
+    }
+
+    if (!googleUser || !googleUser.email) {
+      throw new Error('تعذر استلام بيانات حساب Google.');
+    }
+
+    const updatedTeacher: TeacherAccount = {
+      ...teacher,
+      googleEmail: googleUser.email.trim().toLowerCase(),
+      googleUid: googleUser.uid,
+      googleName: googleUser.displayName || teacher.name,
+      googlePhotoUrl: googleUser.photoURL || teacher.googlePhotoUrl || null,
+      isGoogleLinked: true
+    };
+
+    await OmranDataService.saveTeacher(updatedTeacher);
+    return updatedTeacher;
+  }
+
+  // Unlink Google Account from a Teacher/Supervisor
+  static async unlinkTeacherGoogleAccount(teacher: TeacherAccount): Promise<TeacherAccount> {
+    const updatedTeacher: TeacherAccount = {
+      ...teacher,
+      googleEmail: undefined,
+      googleUid: undefined,
+      googleName: undefined,
+      googlePhotoUrl: undefined,
+      isGoogleLinked: false
+    };
+
+    await OmranDataService.saveTeacher(updatedTeacher);
+    return updatedTeacher;
+  }
+
+  // Universal Sign-in with Google for Teachers, Supervisors, and Students
+  static async signInUniversalWithGoogle(
+    existingStudents: Student[],
+    existingTeachers: TeacherAccount[]
+  ): Promise<{
+    userType: 'teacher' | 'student';
+    role: 'admin' | 'student';
+    teacher?: TeacherAccount;
+    student?: Student;
+    username: string;
+    isNewStudent?: boolean;
+  }> {
+    let googleUser: { email: string; displayName: string; uid: string; photoURL?: string | null } | null = null;
+
+    try {
+      const provider = new GoogleAuthProvider();
+      provider.addScope('email');
+      provider.addScope('profile');
+      provider.setCustomParameters({ prompt: 'select_account' });
+      const result = await signInWithPopup(auth, provider);
+      if (result?.user) {
+        googleUser = {
+          email: result.user.email || '',
+          displayName: result.user.displayName || '',
+          uid: result.user.uid,
+          photoURL: result.user.photoURL || null
+        };
+      }
+    } catch (popupErr: any) {
+      if (popupErr.code === 'auth/popup-closed-by-user') {
+        throw new PopupClosedByUserError();
+      }
+      if (popupErr.code === 'auth/popup-blocked') {
+        throw new PopupBlockedError();
+      }
+
+      if (typeof window !== 'undefined' && firebaseConfig.oAuthClientId) {
+        try {
+          await loadGoogleGISScript();
+          if (window.google?.accounts?.oauth2) {
+            const gisRes = await requestAccessTokenViaGIS(firebaseConfig.oAuthClientId, ['email', 'profile']);
+            if (gisRes?.email) {
+              googleUser = {
+                email: gisRes.email,
+                displayName: gisRes.displayName || gisRes.email.split('@')[0],
+                uid: `gis_${Date.now()}`,
+                photoURL: gisRes.photoURL || null
+              };
+            }
+          }
+        } catch {
+          // ignore GIS
+        }
+      }
+
+      if (!googleUser) {
+        const domain = typeof window !== 'undefined' ? window.location.hostname : '';
+        if (popupErr.code === 'auth/unauthorized-domain') {
+          throw new UnauthorizedDomainError(domain, firebaseConfig.projectId);
+        }
+        throw popupErr;
+      }
+    }
+
+    if (!googleUser || !googleUser.email) {
+      throw new Error('تعذر استلام بيانات حساب Google.');
+    }
+
+    const cleanEmail = googleUser.email.trim().toLowerCase();
+    const cleanName = googleUser.displayName ? googleUser.displayName.trim() : '';
+
+    // 1. Check if matches any teacher / supervisor by Google Email or UID or name
+    let matchedTeacher = existingTeachers.find(
+      t => (t.googleEmail && t.googleEmail.trim().toLowerCase() === cleanEmail) ||
+           (t.googleUid && t.googleUid === googleUser!.uid)
+    );
+
+    if (!matchedTeacher && cleanName) {
+      const normGoogleName = normalizeArabicText(cleanName);
+      matchedTeacher = existingTeachers.find(t => {
+        const normT = normalizeArabicText(t.name);
+        return normT === normGoogleName ||
+               (normGoogleName.length >= 6 && normT.includes(normGoogleName)) ||
+               (normT.length >= 6 && normGoogleName.includes(normT));
+      });
+    }
+
+    // Also check if matches known supervisor keywords (e.g. الشيخ محمد منتصر)
+    if (!matchedTeacher && (cleanName.includes('منتصر') || cleanEmail.includes('montaser') || cleanEmail.includes('admin'))) {
+      matchedTeacher = existingTeachers.find(t => t.role === 'supervisor' || t.isPrimary || t.name.includes('منتصر'));
+    }
+
+    if (matchedTeacher) {
+      // Auto-link Google email if not already linked
+      if (!matchedTeacher.isGoogleLinked || matchedTeacher.googleEmail !== cleanEmail) {
+        const updatedTeacher: TeacherAccount = {
+          ...matchedTeacher,
+          googleEmail: cleanEmail,
+          googleUid: googleUser.uid,
+          googleName: cleanName || matchedTeacher.name,
+          googlePhotoUrl: googleUser.photoURL || matchedTeacher.googlePhotoUrl || null,
+          isGoogleLinked: true
+        };
+        await OmranDataService.saveTeacher(updatedTeacher);
+        matchedTeacher = updatedTeacher;
+      }
+
+      return {
+        userType: 'teacher',
+        role: 'admin',
+        teacher: matchedTeacher,
+        username: matchedTeacher.name || matchedTeacher.username
+      };
+    }
+
+    // 2. Check if matches any student by Google Email, UID, or name
+    let matchedStudent = existingStudents.find(
+      s => (s.googleEmail && s.googleEmail.trim().toLowerCase() === cleanEmail) ||
+           (s.googleUid && s.googleUid === googleUser!.uid)
+    );
+
+    if (!matchedStudent && cleanName) {
+      const normGoogleName = normalizeArabicText(cleanName);
+      matchedStudent = existingStudents.find(s => {
+        const normS = normalizeArabicText(s.name);
+        return normS === normGoogleName ||
+               (normGoogleName.length >= 6 && normS.includes(normGoogleName)) ||
+               (normS.length >= 6 && normGoogleName.includes(normS));
+      });
+    }
+
+    if (matchedStudent) {
+      const updatedStudent: Student = {
+        ...matchedStudent,
+        googleEmail: cleanEmail,
+        googleUid: googleUser.uid,
+        googleName: cleanName || matchedStudent.name,
+        googlePhotoUrl: googleUser.photoURL || matchedStudent.googlePhotoUrl || null,
+        isGoogleLinked: true
+      };
+      await OmranDataService.saveStudent(updatedStudent);
+      return {
+        userType: 'student',
+        role: 'student',
+        student: updatedStudent,
+        username: updatedStudent.name,
+        isNewStudent: false
+      };
+    }
+
+    // 3. New User Onboarding as Student
+    const newStudentId = `std_g_${Date.now()}`;
+    const newStudentName = cleanName || cleanEmail.split('@')[0];
+    const newStudent: Student = {
+      id: newStudentId,
+      name: newStudentName,
+      password: '123',
+      phone: '',
+      age: 12,
+      parentName: `ولي أمر ${newStudentName}`,
+      parentPhones: [],
+      currentSurah: 78,
+      currentSurahName: 'النبأ',
+      currentAyah: 1,
+      dailyNewTarget: 'نصف وجه',
+      dailyReviewTarget: 'وجه واحد',
+      level: 'متوسط',
+      halaqahId: 'halaqah-zubeir',
+      halaqahName: 'حلقة الزبير بن العوام رضي الله عنه',
+      googleEmail: cleanEmail,
+      googleUid: googleUser.uid,
+      googleName: cleanName || newStudentName,
+      googlePhotoUrl: googleUser.photoURL || null,
+      isGoogleLinked: true,
+      createdAt: new Date().toISOString()
+    };
+
+    await OmranDataService.saveStudent(newStudent);
+    return {
+      userType: 'student',
+      role: 'student',
+      student: newStudent,
+      username: newStudent.name,
+      isNewStudent: true
+    };
+  }
+
   // Look up Google Form response for a student by their registered Google email/name and save score automatically
   static async fetchAndRecordStudentGoogleFormScore(
     exam: Exam,
@@ -554,7 +829,7 @@ export class GoogleWorkspaceService {
     if (!token) {
       return {
         found: false,
-        message: 'يتطلب فحص نتائج Google Forms سحابياً اتصال حساب المعلم المشرف (الشيخ محمد منتصر).'
+        message: 'يتطلب فحص نتائج Google Forms سحابياً اتصال وتفويض حساب المعلم أو المشرف بـ Google Workspace.'
       };
     }
 

@@ -484,7 +484,7 @@ export const ParentsWhatsAppTab: React.FC<ParentsWhatsAppTabProps> = ({
 
       {/* Manual Edit Message Modal */}
       {editingStudentId && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[9999] bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
           <div className="w-full max-w-xl bg-[#064e3b] border border-[#fbbf24]/40 rounded-[32px] p-6 sm:p-8 shadow-2xl space-y-4">
             <h3 className="text-base font-bold text-[#fbbf24] font-heading">
               تعديل نص رسالة الواتساب

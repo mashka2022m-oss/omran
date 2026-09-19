@@ -100,6 +100,21 @@ service cloud.firestore {
         && request.resource.data.examId is string;
       allow delete: if isValidId(submissionId);
     }
+
+    // Surah Recordings
+    match /surah_recordings/{recordingId} {
+      allow read: if true;
+      allow create, update: if isValidId(recordingId);
+      allow delete: if isValidId(recordingId);
+    }
+
+    // Student Listening Logs
+    match /listening_logs/{logId} {
+      allow read: if true;
+      allow create, update: if isValidId(logId)
+        && request.resource.data.studentId is string;
+      allow delete: if isValidId(logId);
+    }
   }
 }
 

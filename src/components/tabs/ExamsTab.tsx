@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   FileText,
   Plus,
@@ -126,14 +126,16 @@ export const ExamsTab: React.FC<ExamsTabProps> = ({
   const [isExportingSheets, setIsExportingSheets] = useState(false);
   const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error'; text: string; linkUrl?: string } | null>(null);
 
-  // Restrict linking accounts of the exam to supervisor Mohamed Montaser
-  const isMontaserSupervisor = Boolean(isSupervisor || (currentUserName && (currentUserName.includes('محمد منتصر') || currentUserName.includes('منتصر'))));
+  // Teachers and supervisors can manage Google Forms and Exam account linking
+  const canManageGoogleForms = Boolean(isSupervisor || currentUserName);
 
   // Deletion Confirmation Modal State (Exams & Submissions)
   const [examToDelete, setExamToDelete] = useState<Exam | null>(null);
   const [submissionToDelete, setSubmissionToDelete] = useState<ExamSubmission | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isDeletingSubmission, setIsDeletingSubmission] = useState(false);
+  const [isConfirmingBulkDelete, setIsConfirmingBulkDelete] = useState(false);
+  const [isBulkDeletingSubmissions, setIsBulkDeletingSubmissions] = useState(false);
 
   // Correction Modal State
   const [selectedSubmissionForGrading, setSelectedSubmissionForGrading] = useState<ExamSubmission | null>(null);
@@ -542,8 +544,8 @@ export const ExamsTab: React.FC<ExamsTabProps> = ({
 
   // Generate Form inside the Exam Builder modal before saving
   const handleGenerateFormInModal = async () => {
-    if (!isMontaserSupervisor) {
-      alert('عذراً، صلاحية ربط حسابات الاختبار وإنشاء نماذج Google Forms مقتصرة حصرياً على المعلم المشرف (محمد منتصر).');
+    if (!canManageGoogleForms) {
+      alert('عذراً، يرجى تسجيل الدخول بحساب معلم أو مشرف لربط حسابات الاختبار وإنشاء نماذج Google Forms.');
       return;
     }
     if (!formTitle.trim()) {
@@ -601,8 +603,8 @@ export const ExamsTab: React.FC<ExamsTabProps> = ({
 
   // Generate Google Form and Sheet on-demand for an existing Exam
   const handleGenerateGoogleFormForExam = async (targetExam: Exam) => {
-    if (!isMontaserSupervisor) {
-      alert('عذراً، صلاحية ربط وإنشاء نماذج الاختبار مقتصرة حصرياً على المعلم المشرف (محمد منتصر).');
+    if (!canManageGoogleForms) {
+      alert('عذراً، يرجى تسجيل الدخول بحساب معلم أو مشرف لربط وإنشاء نماذج الاختبار.');
       return;
     }
     setIsSaving(true);
@@ -734,10 +736,90 @@ export const ExamsTab: React.FC<ExamsTabProps> = ({
     }
   };
 
+  // Perform Bulk Deletion of Submissions
+  const handleConfirmBulkDeleteSubmissions = async () => {
+    if (filteredSubmissions.length === 0) return;
+    setIsBulkDeletingSubmissions(true);
+    try {
+      const count = filteredSubmissions.length;
+      for (const sub of filteredSubmissions) {
+        if (onDeleteSubmission) {
+          await onDeleteSubmission(sub.id);
+        } else {
+          await OmranDataService.deleteSubmission(sub.id);
+        }
+      }
+      setStatusMessage({
+        type: 'success',
+        text: `تم حذف كافة الردود المحددة (${count}) بنجاح من قاعدة البيانات السحابية!`
+      });
+      setIsConfirmingBulkDelete(false);
+      setTimeout(() => setStatusMessage(null), 4000);
+    } catch (err: any) {
+      console.error('Error bulk deleting submissions:', err);
+      setStatusMessage({
+        type: 'error',
+        text: `حدث خطأ أثناء حذف الردود: ${err.message || err}`
+      });
+    } finally {
+      setIsBulkDeletingSubmissions(false);
+    }
+  };
+
+  // Auto-sync Google Form responses for teacher on page return/focus or periodically
+  useEffect(() => {
+    let intervalId: any = null;
+
+    const autoSyncGoogleForms = async () => {
+      const gfExams = exams.filter(e => e.deliveryMode === 'google_form' && e.googleFormId);
+      if (gfExams.length === 0) return;
+
+      const token = await GoogleWorkspaceService.getValidAccessToken();
+      if (!token) return;
+
+      for (const exam of gfExams) {
+        try {
+          const { newCount, updatedCount, importedSubmissions } = await GoogleWorkspaceService.importResponsesFromGoogleForm(
+            exam,
+            students,
+            submissions,
+            token
+          );
+          if ((newCount > 0 || updatedCount > 0) && importedSubmissions.length > 0) {
+            for (const sub of importedSubmissions) {
+              await onSaveSubmission(sub);
+            }
+          }
+        } catch {
+          // Silent catch for background auto-sync
+        }
+      }
+    };
+
+    const handleFocusOrVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        autoSyncGoogleForms();
+      }
+    };
+
+    window.addEventListener('focus', handleFocusOrVisibility);
+    document.addEventListener('visibilitychange', handleFocusOrVisibility);
+
+    if (activeSubTab === 'submissions') {
+      intervalId = setInterval(autoSyncGoogleForms, 25000);
+    }
+
+    return () => {
+      window.removeEventListener('focus', handleFocusOrVisibility);
+      document.removeEventListener('visibilitychange', handleFocusOrVisibility);
+      if (intervalId) clearInterval(intervalId);
+    };
+  }, [activeSubTab, exams, students, submissions]);
+
   // Connect Google Account for Sheets Export
   const handleConnectGoogle = async () => {
-    if (!isMontaserSupervisor) {
-      alert('عذراً، ربط وتفويض حسابات الاختبار وGoogle Workspace مقتصر حصرياً على المعلم المشرف (محمد منتصر).');
+    if (!canManageGoogleForms) {
+      alert('عذراً، يرجى تسجيل الدخول بحساب معلم أو مشرف لربط وتفويض حسابات الاختبار وGoogle Workspace.');
       return;
     }
     setIsSaving(true);
@@ -1434,6 +1516,17 @@ export const ExamsTab: React.FC<ExamsTabProps> = ({
                 <Download className="w-3.5 h-3.5 text-emerald-400" />
                 <span>تحميل Excel / CSV</span>
               </button>
+
+              {filteredSubmissions.length > 0 && (
+                <button
+                  onClick={() => setIsConfirmingBulkDelete(true)}
+                  className="px-3 py-2 rounded-xl bg-rose-950/70 hover:bg-rose-900 text-rose-300 hover:text-white text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer border border-rose-600/40 shadow-sm"
+                  title="حذف جميع الردود المعروضة حالياً لإتاحة الإعادة أو تفريغ الردود"
+                >
+                  <Trash2 className="w-3.5 h-3.5 text-rose-400" />
+                  <span>حذف الردود ({filteredSubmissions.length})</span>
+                </button>
+              )}
             </div>
 
             <div className="relative w-full sm:w-64">
@@ -1778,7 +1871,7 @@ export const ExamsTab: React.FC<ExamsTabProps> = ({
 
       {/* CREATE / EDIT EXAM MODAL */}
       {isCreatingExam && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto">
+        <div className="fixed inset-0 z-[9999] bg-black/80 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto">
           <div className="bg-[#022c22] border border-[#065f46] rounded-3xl w-full max-w-4xl max-h-[90vh] overflow-y-auto p-6 shadow-2xl space-y-6">
             <div className="flex items-center justify-between border-b border-emerald-800 pb-4">
               <div>
@@ -2468,7 +2561,7 @@ export const ExamsTab: React.FC<ExamsTabProps> = ({
 
       {/* DELETE CONFIRMATION MODAL */}
       {examToDelete && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[9999] bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
           <div className="bg-[#022c22] border border-rose-600/50 rounded-3xl w-full max-w-md p-6 shadow-2xl space-y-4 text-center">
             <div className="w-14 h-14 rounded-2xl bg-rose-950 text-rose-400 flex items-center justify-center mx-auto border border-rose-500/40">
               <Trash2 className="w-7 h-7" />
@@ -2500,7 +2593,7 @@ export const ExamsTab: React.FC<ExamsTabProps> = ({
 
       {/* DELETE SUBMISSION CONFIRMATION MODAL */}
       {submissionToDelete && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[9999] bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
           <div className="bg-[#022c22] border border-rose-600/50 rounded-3xl w-full max-w-md p-6 shadow-2xl space-y-4 text-center">
             <div className="w-14 h-14 rounded-2xl bg-rose-950 text-rose-400 flex items-center justify-center mx-auto border border-rose-500/40">
               <Trash2 className="w-7 h-7" />
@@ -2533,9 +2626,44 @@ export const ExamsTab: React.FC<ExamsTabProps> = ({
         </div>
       )}
 
+      {/* BULK DELETE SUBMISSIONS CONFIRMATION MODAL */}
+      {isConfirmingBulkDelete && (
+        <div className="fixed inset-0 z-[9999] bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="bg-[#022c22] border border-rose-600/50 rounded-3xl w-full max-w-md p-6 shadow-2xl space-y-4 text-center">
+            <div className="w-14 h-14 rounded-2xl bg-rose-950 text-rose-400 flex items-center justify-center mx-auto border border-rose-500/40">
+              <Trash2 className="w-7 h-7" />
+            </div>
+            <div>
+              <h3 className="text-base font-bold text-white">تأكيد حذف الردود المحددة</h3>
+              <p className="text-xs text-rose-200/80 mt-1">
+                هل أنت متأكد من رغبتك في حذف <strong className="text-[#fbbf24] font-bold">({filteredSubmissions.length})</strong> تسليم/رد معروض حالياً؟
+              </p>
+              <div className="p-3 rounded-xl bg-rose-950/40 border border-rose-500/30 text-[11px] text-rose-200 mt-2 text-right leading-relaxed">
+                ⚠️ تحذير: سيتم حذف جميع نتائج هذه التسليمات من السحابة وتفريغ الردود، مما يمكن الطلاب من إعادة الاختبار. لا يمكن التراجع عن هذا الإجراء.
+              </div>
+            </div>
+            <div className="flex items-center justify-center gap-3 pt-2">
+              <button
+                onClick={() => setIsConfirmingBulkDelete(false)}
+                className="px-4 py-2 rounded-xl bg-emerald-900/60 text-emerald-200 text-xs font-bold cursor-pointer hover:bg-emerald-800"
+              >
+                تراجع
+              </button>
+              <button
+                onClick={handleConfirmBulkDeleteSubmissions}
+                disabled={isBulkDeletingSubmissions}
+                className="px-5 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold shadow-lg cursor-pointer"
+              >
+                {isBulkDeletingSubmissions ? 'جارٍ حذف كافة الردود...' : `نعم، حذف (${filteredSubmissions.length}) رد`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* SUBMISSION GRADING MODAL */}
       {selectedSubmissionForGrading && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto">
+        <div className="fixed inset-0 z-[9999] bg-black/80 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto">
           <div className="bg-[#022c22] border border-[#065f46] rounded-3xl w-full max-w-3xl max-h-[90vh] overflow-y-auto p-6 shadow-2xl space-y-6">
             <div className="flex items-center justify-between border-b border-emerald-800 pb-4">
               <div>
@@ -2646,7 +2774,7 @@ export const ExamsTab: React.FC<ExamsTabProps> = ({
 
       {/* PREVIEW / TEST EXAM MODAL FOR TEACHER */}
       {previewingExam && (
-        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto">
+        <div className="fixed inset-0 z-[9999] bg-black/85 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto">
           <div className="bg-[#022c22] border border-[#fbbf24]/50 rounded-3xl w-full max-w-4xl max-h-[92vh] overflow-y-auto p-6 shadow-2xl space-y-6">
             <div className="flex items-center justify-between border-b border-emerald-800 pb-4">
               <div>
@@ -2787,7 +2915,7 @@ export const ExamsTab: React.FC<ExamsTabProps> = ({
 
       {/* GOOGLE & FIREBASE DOMAIN AUTHORIZATION HELPER MODAL */}
       {showDomainHelpModal && (
-        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto">
+        <div className="fixed inset-0 z-[9999] bg-black/85 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto">
           <div className="bg-[#022c22] border-2 border-[#fbbf24] rounded-3xl w-full max-w-2xl overflow-hidden shadow-2xl p-6 sm:p-8 space-y-6 text-right">
             {/* Header */}
             <div className="flex items-center justify-between border-b border-emerald-800/80 pb-4">
@@ -2935,7 +3063,7 @@ export const ExamsTab: React.FC<ExamsTabProps> = ({
 
       {/* GOOGLE POPUP CLOSED / BLOCKED HELPER MODAL */}
       {showPopupHelpModal && (
-        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto">
+        <div className="fixed inset-0 z-[9999] bg-black/85 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto">
           <div className="bg-[#022c22] border-2 border-amber-400/80 rounded-3xl w-full max-w-2xl overflow-hidden shadow-2xl p-6 sm:p-8 space-y-6 text-right">
             {/* Header */}
             <div className="flex items-center justify-between border-b border-emerald-800/80 pb-4">

@@ -730,7 +730,7 @@ export const BehaviorTab: React.FC<BehaviorTabProps> = ({
 
       {/* Add / Edit Violation Modal */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+        <div className="fixed inset-0 z-[9999] bg-black/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
           <div className="bg-[#064e3b] border border-[#fbbf24]/40 rounded-[32px] w-full max-w-2xl max-h-[92vh] overflow-y-auto shadow-2xl p-6 sm:p-7 space-y-5 text-right relative">
             {/* Modal Header */}
             <div className="flex items-center justify-between border-b border-[#065f46] pb-4">
@@ -1035,7 +1035,7 @@ export const BehaviorTab: React.FC<BehaviorTabProps> = ({
 
       {/* Delete Confirmation Modal (Safe for iframes without window.confirm) */}
       {deleteTargetViolation && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[9999] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-[#064e3b] border border-rose-500/50 rounded-[28px] max-w-md w-full p-6 text-right space-y-4 shadow-2xl animate-fadeIn">
             <div className="flex items-center gap-3 text-rose-400">
               <div className="w-10 h-10 rounded-xl bg-rose-500/20 border border-rose-500/40 flex items-center justify-center">

@@ -360,7 +360,7 @@ export const AttendanceTab: React.FC<AttendanceTabProps> = ({
 
       {/* Full History Modal */}
       {showHistoryModal && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 md:p-6 overflow-y-auto">
+        <div className="fixed inset-0 z-[9999] bg-black/80 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 md:p-6 overflow-y-auto">
           <div className="relative w-full max-w-3xl bg-[#064e3b] border border-[#fbbf24]/40 rounded-2xl sm:rounded-[32px] shadow-2xl shadow-emerald-950/80 max-h-[90vh] flex flex-col my-auto overflow-hidden animate-fadeIn">
             {/* Header */}
             <div className="flex items-center justify-between p-4 sm:p-6 border-b border-[#065f46] shrink-0 bg-[#064e3b]">

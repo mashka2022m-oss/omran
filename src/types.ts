@@ -24,6 +24,11 @@ export interface TeacherAccount {
   halaqahName?: string; // Legacy single halaqah name
   halaqahIds?: string[]; // All halaqahs this teacher teaches (supports multiple halaqahs)
   halaqahNames?: string[]; // Display names of those halaqahs
+  googleEmail?: string; // بريد حساب Google المرتبط بالمعلم
+  googleUid?: string; // معرف Google UID
+  googleName?: string; // اسم الحساب في Google
+  googlePhotoUrl?: string; // صورة الحساب في Google
+  isGoogleLinked?: boolean; // هل حساب المعلم موثق ومربوط بـ Google للتسجيل السريع
   createdAt: string;
 }
 

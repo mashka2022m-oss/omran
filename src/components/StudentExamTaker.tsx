@@ -729,7 +729,7 @@ export const StudentExamTaker: React.FC<StudentExamTakerProps> = ({
 
       {/* 4. CONFIRM SUBMISSION MODAL */}
       {isConfirmingSubmitModal && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[9999] bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
           <div className="bg-[#022c22] border border-[#fbbf24]/50 rounded-3xl w-full max-w-md p-6 sm:p-8 shadow-2xl space-y-5 text-right">
             <div className="w-12 h-12 rounded-2xl bg-amber-500/20 border border-amber-500/40 text-[#fbbf24] flex items-center justify-center mx-auto">
               <Send className="w-6 h-6" />
@@ -771,7 +771,7 @@ export const StudentExamTaker: React.FC<StudentExamTakerProps> = ({
 
       {/* 5. CONFIRM EXIT MODAL */}
       {isConfirmingExit && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[9999] bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
           <div className="bg-[#022c22] border border-amber-500/50 rounded-3xl w-full max-w-sm p-6 shadow-2xl space-y-4 text-right">
             <h3 className="text-base font-bold text-white">تأكيد الخروج من الاختبار</h3>
             <p className="text-xs text-emerald-200/80 leading-relaxed">

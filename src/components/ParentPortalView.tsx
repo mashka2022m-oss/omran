@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   BookOpen,
   Award,
@@ -147,9 +147,11 @@ export const ParentPortalView: React.FC<ParentPortalViewProps> = ({
     }
   };
 
-  const handleCheckAndRecordGoogleScore = async (targetExam: Exam) => {
-    setIsCheckingGoogleScore(true);
-    setGoogleScoreFeedback(null);
+  const handleCheckAndRecordGoogleScore = async (targetExam: Exam, isAuto: boolean = false) => {
+    if (!isAuto) {
+      setIsCheckingGoogleScore(true);
+      setGoogleScoreFeedback(null);
+    }
     try {
       const result = await GoogleWorkspaceService.fetchAndRecordStudentGoogleFormScore(
         targetExam,
@@ -162,23 +164,71 @@ export const ParentPortalView: React.FC<ParentPortalViewProps> = ({
         }
         setGoogleScoreFeedback({
           success: true,
-          message: result.message
+          message: `تم رصد وتحديث درجتك بنجاح! الدرجة: ${result.submission.totalScoreEarned} من ${result.submission.maxPossibleScore} (${result.submission.percentage}%)`
         });
-      } else {
+        if (googleFormModalData) {
+          setTimeout(() => {
+            setGoogleFormModalData(null);
+          }, 2500);
+        }
+      } else if (!isAuto) {
         setGoogleScoreFeedback({
           success: false,
           message: result.message
         });
       }
     } catch (err: any) {
-      setGoogleScoreFeedback({
-        success: false,
-        message: err?.message || 'تعذر التحقق من درجات Google Forms حالياً.'
-      });
+      if (!isAuto) {
+        setGoogleScoreFeedback({
+          success: false,
+          message: err?.message || 'تعذر التحقق من درجات Google Forms حالياً.'
+        });
+      }
     } finally {
-      setIsCheckingGoogleScore(false);
+      if (!isAuto) {
+        setIsCheckingGoogleScore(false);
+      }
     }
   };
+
+  // Auto-sync Google Form scores whenever student returns to this page or in background
+  useEffect(() => {
+    const checkActiveGoogleForms = async () => {
+      const gfExams = exams.filter(e => e.deliveryMode === 'google_form');
+      if (gfExams.length === 0) return;
+
+      if (googleFormModalData?.exam) {
+        await handleCheckAndRecordGoogleScore(googleFormModalData.exam, true);
+        return;
+      }
+
+      for (const ex of gfExams) {
+        await handleCheckAndRecordGoogleScore(ex, true);
+      }
+    };
+
+    const onFocusOrVisible = () => {
+      if (document.visibilityState === 'visible') {
+        checkActiveGoogleForms();
+      }
+    };
+
+    window.addEventListener('focus', onFocusOrVisible);
+    document.addEventListener('visibilitychange', onFocusOrVisible);
+
+    let pollInterval: any = null;
+    if (googleFormModalData?.exam) {
+      pollInterval = setInterval(() => {
+        handleCheckAndRecordGoogleScore(googleFormModalData.exam, true);
+      }, 8000);
+    }
+
+    return () => {
+      window.removeEventListener('focus', onFocusOrVisible);
+      document.removeEventListener('visibilitychange', onFocusOrVisible);
+      if (pollInterval) clearInterval(pollInterval);
+    };
+  }, [googleFormModalData, exams, currentStudent, submissions]);
 
   const studentAttendance = attendance.filter(a => a.studentId === student.id);
   const studentEvaluations = evaluations.filter(e => e.studentId === student.id);
@@ -724,14 +774,14 @@ export const ParentPortalView: React.FC<ParentPortalViewProps> = ({
                       <div className="p-4 bg-[#022c22]/90 border-t border-[#065f46] flex items-center justify-between">
                         <div className="flex items-center gap-2 text-xs">
                           <span className="px-2 py-0.5 rounded-full bg-[#fbbf24]/20 text-[#fbbf24] font-bold">
-                            الآية {activePortalAyah.ayahNumber}
+                            {activePortalAyah.ayahNumber === 0 ? 'البسملة' : `الآية ${activePortalAyah.ayahNumber}`}
                           </span>
                           <span className="text-[#86efac]">
-                            {activePortalAyah.textSnippet || `الآية رقم ${activePortalAyah.ayahNumber}`}
+                            {activePortalAyah.ayahText || `الآية رقم ${activePortalAyah.ayahNumber}`}
                           </span>
                         </div>
                         <span className="text-[11px] text-[#86efac]/70 font-mono">
-                          {Math.floor(activePortalAyah.startTime / 60)}:{(Math.floor(activePortalAyah.startTime % 60)).toString().padStart(2, '0')}
+                          {activePortalAyah.formattedStart || `${Math.floor((activePortalAyah.startTimeSeconds || 0) / 60)}:${(Math.floor((activePortalAyah.startTimeSeconds || 0) % 60)).toString().padStart(2, '0')}`}
                         </span>
                       </div>
                     )}
@@ -761,7 +811,7 @@ export const ParentPortalView: React.FC<ParentPortalViewProps> = ({
                                 const match = clean.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))([\w-]{11})/);
                                 const vId = activeRecording.youtubeVideoId || (match ? match[1] : '');
                                 if (vId) {
-                                  const startSec = Math.floor(seg.startTime);
+                                  const startSec = Math.floor(seg.startTimeSeconds || 0);
                                   setActivePortalIframeUrl(`https://www.youtube.com/embed/${vId}?start=${startSec}&autoplay=1&rel=0&enablejsapi=1`);
                                 }
                               }}
@@ -775,14 +825,14 @@ export const ParentPortalView: React.FC<ParentPortalViewProps> = ({
                                 <span className={`w-6 h-6 rounded-lg text-[11px] font-black flex items-center justify-center shrink-0 ${
                                   isCurrent ? 'bg-[#064e3b] text-[#fbbf24]' : 'bg-[#022c22] text-[#86efac]'
                                 }`}>
-                                  {seg.ayahNumber}
+                                  {seg.ayahNumber === 0 ? '0' : seg.ayahNumber}
                                 </span>
                                 <span className="truncate text-[11px]">
-                                  {seg.textSnippet || `الآية ${seg.ayahNumber}`}
+                                  {seg.ayahText || `الآية ${seg.ayahNumber}`}
                                 </span>
                               </div>
                               <span className={`text-[10px] font-mono shrink-0 ${isCurrent ? 'text-[#064e3b]' : 'text-[#86efac]/70'}`}>
-                                {Math.floor(seg.startTime / 60)}:{(Math.floor(seg.startTime % 60)).toString().padStart(2, '0')}
+                                {seg.formattedStart || `${Math.floor((seg.startTimeSeconds || 0) / 60)}:${(Math.floor((seg.startTimeSeconds || 0) % 60)).toString().padStart(2, '0')}`}
                               </span>
                             </button>
                           );
@@ -957,7 +1007,7 @@ export const ParentPortalView: React.FC<ParentPortalViewProps> = ({
 
         {/* REVIEW PREVIOUS ATTEMPT MODAL */}
         {viewingReviewSubmission && (
-          <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto">
+          <div className="fixed inset-0 z-[9999] bg-black/80 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto">
             <div className="bg-[#022c22] border border-[#fbbf24]/50 rounded-3xl w-full max-w-2xl max-h-[90vh] overflow-y-auto p-6 shadow-2xl space-y-4">
               <div className="flex items-center justify-between border-b border-emerald-800 pb-3">
                 <div>
@@ -1270,7 +1320,7 @@ export const ParentPortalView: React.FC<ParentPortalViewProps> = ({
 
         {/* SMART GOOGLE FORM LAUNCH & PRE-FILL MODAL */}
         {googleFormModalData && (
-          <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="fixed inset-0 z-[9999] bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
             <div className="bg-[#022c22] border border-[#fbbf24]/60 rounded-3xl w-full max-w-lg p-6 sm:p-8 shadow-2xl space-y-5 text-right relative">
               <button
                 onClick={() => setGoogleFormModalData(null)}
@@ -1419,7 +1469,7 @@ export const ParentPortalView: React.FC<ParentPortalViewProps> = ({
 
         {/* GOOGLE FORM SUBMITTED CONFIRMATION MODAL */}
         {openedGoogleFormExam && (
-          <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="fixed inset-0 z-[9999] bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
             <div className="bg-[#022c22] border border-[#fbbf24]/50 rounded-3xl w-full max-w-lg p-6 shadow-2xl space-y-4 text-center">
               <div className="w-14 h-14 rounded-2xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 flex items-center justify-center mx-auto">
                 <CheckCircle2 className="w-7 h-7 text-[#fbbf24]" />
@@ -1489,7 +1539,7 @@ export const ParentPortalView: React.FC<ParentPortalViewProps> = ({
 
         {/* MANDATORY GOOGLE AUTH GATEKEEPER MODAL BEFORE EXAM ENTRY */}
         {googleAuthGateExam && (
-          <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="fixed inset-0 z-[9999] bg-black/85 backdrop-blur-md flex items-center justify-center p-4">
             <div className="bg-[#022c22] border border-[#fbbf24]/60 rounded-3xl w-full max-w-md p-6 sm:p-7 shadow-2xl space-y-4 text-center">
               <div className="w-16 h-16 rounded-2xl bg-amber-500/20 text-[#fbbf24] border border-[#fbbf24]/40 flex items-center justify-center mx-auto">
                 <svg className="w-8 h-8" viewBox="0 0 24 24">

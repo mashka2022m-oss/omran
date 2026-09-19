@@ -966,7 +966,7 @@ export function App() {
           onOpenTeacherManagement={() => setIsSettingsModalOpen(true)}
           onOpenSettings={() => setIsSettingsModalOpen(true)}
         />
-        <main className="max-w-4xl mx-auto px-4 py-8 relative z-10">
+        <main className="max-w-4xl mx-auto px-4 py-8 relative">
           <UnassignedTeacherView
             teacherName={currentTeacher?.name || currentUser.username}
             onRefresh={loadAllData}
@@ -1013,7 +1013,7 @@ export function App() {
         onOpenSettings={() => setIsSettingsModalOpen(true)}
       />
 
-      <main className="max-w-7xl mx-auto px-4 lg:px-8 pt-6 relative z-10 space-y-6">
+      <main className="max-w-7xl mx-auto px-4 lg:px-8 pt-6 relative space-y-6">
         {/* Active Halaqah Header & Switcher Banner */}
         <div className="bg-gradient-to-r from-[#064e3b] via-[#022c22] to-[#064e3b] p-3.5 sm:p-4 rounded-2xl border border-[#065f46] shadow-md flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
           <div className="flex items-center gap-3">

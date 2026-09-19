@@ -325,7 +325,7 @@ export const DataBackupTab: React.FC<DataBackupTabProps> = ({
 
       {/* Restore Backup Confirmation Modal */}
       {pendingRestore && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[9999] bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
           <div className="w-full max-w-md bg-[#064e3b] border border-[#fbbf24]/50 rounded-[32px] p-6 sm:p-7 shadow-2xl space-y-4 text-center">
             <div className="w-14 h-14 rounded-2xl bg-[#fbbf24]/20 text-[#fbbf24] flex items-center justify-center mx-auto border border-[#fbbf24]/30">
               <Upload className="w-7 h-7" />

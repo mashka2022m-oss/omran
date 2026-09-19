@@ -391,7 +391,7 @@ export const TeacherManagementModal: React.FC<TeacherManagementModalProps> = ({
 
         {/* Delete Confirmation Modal */}
         {deleteConfirmId && (
-          <div className="fixed inset-0 z-60 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="fixed inset-0 z-[10000] bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
             <div className="w-full max-w-sm bg-[#064e3b] border border-red-500/50 rounded-[28px] p-6 text-center space-y-4 shadow-2xl">
               <div className="w-12 h-12 rounded-2xl bg-red-500/20 text-red-400 flex items-center justify-center mx-auto border border-red-500/30">
                 <Trash2 className="w-6 h-6" />

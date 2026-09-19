@@ -57,7 +57,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   const displayHalaqahName = currentHalaqah ? currentHalaqah.name : settings.halaqahName;
 
   return (
-    <header className="sticky top-0 z-40 bg-[#064e3b]/95 backdrop-blur-xl border-b border-[#065f46] px-4 lg:px-8 py-3.5 shadow-2xl transition-all">
+    <header className="sticky top-0 z-30 bg-[#064e3b]/95 backdrop-blur-xl border-b border-[#065f46] px-4 lg:px-8 py-3.5 shadow-2xl transition-all">
       <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
         {/* Brand & Logo */}
         <div className="flex items-center gap-3.5">

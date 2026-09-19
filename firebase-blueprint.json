@@ -163,6 +163,66 @@
         "createdAt": { "type": "string", "maxLength": 50 }
       },
       "required": ["id", "name", "username", "password"]
+    },
+    "Exam": {
+      "title": "Exam",
+      "description": "سجل اختبار أو كويز قرآني وتجويدي",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "title": { "type": "string", "maxLength": 200 },
+        "description": { "type": "string", "maxLength": 1000 },
+        "totalPoints": { "type": "number" },
+        "createdAt": { "type": "string", "maxLength": 50 }
+      },
+      "required": ["id", "title"]
+    },
+    "ExamSubmission": {
+      "title": "ExamSubmission",
+      "description": "تسليمات وإجابات ونتائج الطلاب في الاختبارات",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "examId": { "type": "string", "maxLength": 128 },
+        "studentId": { "type": "string", "maxLength": 128 },
+        "studentName": { "type": "string", "maxLength": 150 },
+        "totalScoreEarned": { "type": "number" },
+        "percentage": { "type": "number" },
+        "submittedAt": { "type": "string", "maxLength": 50 }
+      },
+      "required": ["id", "examId", "studentId"]
+    },
+    "SurahRecording": {
+      "title": "SurahRecording",
+      "description": "تسجيلات السور والتقسيم الزمني للآيات",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "surahNumber": { "type": "number" },
+        "surahName": { "type": "string", "maxLength": 100 },
+        "youtubeUrl": { "type": "string", "maxLength": 500 },
+        "status": { "type": "string", "enum": ["processing", "ready"] },
+        "createdAt": { "type": "string", "maxLength": 50 }
+      },
+      "required": ["id", "surahNumber", "surahName", "youtubeUrl"]
+    },
+    "StudentListeningLog": {
+      "title": "StudentListeningLog",
+      "description": "سجل استماع الطالب للسور والآيات ومعدل التكرار",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "studentId": { "type": "string", "maxLength": 128 },
+        "studentName": { "type": "string", "maxLength": 150 },
+        "surahNumber": { "type": "number" },
+        "surahName": { "type": "string", "maxLength": 100 },
+        "targetCount": { "type": "number" },
+        "completedCount": { "type": "number" },
+        "isFullyCompleted": { "type": "boolean" },
+        "date": { "type": "string", "maxLength": 30 },
+        "timestamp": { "type": "string", "maxLength": 50 }
+      },
+      "required": ["id", "studentId", "surahNumber", "completedCount"]
     }
   },
   "firestore": {
@@ -201,6 +261,22 @@
     "/violations/{violationId}": {
       "schema": "BehaviorViolation",
       "description": "سجلات المخالفات السلوكية والتوجيهات التربوية"
+    },
+    "/exams/{examId}": {
+      "schema": "Exam",
+      "description": "قائمة الاختبارات والكويزات القرآنية"
+    },
+    "/exam_submissions/{submissionId}": {
+      "schema": "ExamSubmission",
+      "description": "تسليمات ودرجات الطلاب في الاختبارات"
+    },
+    "/surah_recordings/{recordingId}": {
+      "schema": "SurahRecording",
+      "description": "تسجيلات السور وتقسيم المقاطع للاستماع"
+    },
+    "/listening_logs/{logId}": {
+      "schema": "StudentListeningLog",
+      "description": "سجلات استماع الطلاب للسور والتكرار اليومي"
     },
     "/test/{testId}": {
       "schema": {

@@ -19,6 +19,7 @@ import {
   AlertCircle
 } from 'lucide-react';
 import { TeacherAccount, Student, Halaqah } from '../../types';
+import { GoogleWorkspaceService } from '../../lib/googleWorkspace';
 
 interface AccountsTabProps {
   teachers: TeacherAccount[];
@@ -55,6 +56,7 @@ export const AccountsTab: React.FC<AccountsTabProps> = ({
 
   const [statusMsg, setStatusMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [linkingTeacherId, setLinkingTeacherId] = useState<string | null>(null);
 
   // Lock background scrolling when any modal is open
   useEffect(() => {
@@ -153,6 +155,11 @@ export const AccountsTab: React.FC<AccountsTabProps> = ({
         halaqahName: resolvedHalaqahNames[0] || '',
         halaqahIds: selectedHalaqahIds,
         halaqahNames: resolvedHalaqahNames,
+        googleEmail: editingTeacherData.googleEmail,
+        googleUid: editingTeacherData.googleUid,
+        googleName: editingTeacherData.googleName,
+        googlePhotoUrl: editingTeacherData.googlePhotoUrl,
+        isGoogleLinked: editingTeacherData.isGoogleLinked ?? false,
         createdAt: editingTeacherData.createdAt || new Date().toISOString()
       };
 
@@ -167,6 +174,52 @@ export const AccountsTab: React.FC<AccountsTabProps> = ({
       setStatusMsg({ type: 'error', text: err?.message || 'حدث خطأ أثناء حفظ حساب المعلم.' });
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleLinkTeacherGoogle = async (teacher: TeacherAccount) => {
+    setLinkingTeacherId(teacher.id);
+    try {
+      const updated = await GoogleWorkspaceService.linkTeacherGoogleAccount(teacher);
+      await onSaveTeacher(updated);
+      if (editingTeacherData && editingTeacherData.id === teacher.id) {
+        setEditingTeacherData(updated);
+      }
+      setStatusMsg({
+        type: 'success',
+        text: `تم ربط حساب Google (${updated.googleEmail}) بالمعلم ${teacher.name} بنجاح!`
+      });
+    } catch (err: any) {
+      console.warn('Link teacher Google error:', err);
+      setStatusMsg({
+        type: 'error',
+        text: err?.message || 'تعذر ربط حساب Google بالمعلم. يرجى المحاولة مرة أخرى.'
+      });
+    } finally {
+      setLinkingTeacherId(null);
+    }
+  };
+
+  const handleUnlinkTeacherGoogle = async (teacher: TeacherAccount) => {
+    setLinkingTeacherId(teacher.id);
+    try {
+      const updated = await GoogleWorkspaceService.unlinkTeacherGoogleAccount(teacher);
+      await onSaveTeacher(updated);
+      if (editingTeacherData && editingTeacherData.id === teacher.id) {
+        setEditingTeacherData(updated);
+      }
+      setStatusMsg({
+        type: 'success',
+        text: `تم فصل حساب Google عن المعلم ${teacher.name} بنجاح!`
+      });
+    } catch (err: any) {
+      console.warn('Unlink teacher Google error:', err);
+      setStatusMsg({
+        type: 'error',
+        text: err?.message || 'تعذر فصل حساب Google.'
+      });
+    } finally {
+      setLinkingTeacherId(null);
     }
   };
 
@@ -357,6 +410,7 @@ export const AccountsTab: React.FC<AccountsTabProps> = ({
                 <th className="p-4">رقم الهاتف</th>
                 <th className="p-4">الدور والصلاحية</th>
                 <th className="p-4">الحلقات المخصصة</th>
+                <th className="p-4 text-center">حساب Google والتسجيل السريع</th>
                 <th className="p-4 text-center">رابط الدخول السريع</th>
                 <th className="p-4 text-center">الإجراءات</th>
               </tr>
@@ -445,6 +499,41 @@ export const AccountsTab: React.FC<AccountsTabProps> = ({
                           <span className="text-[10px] text-red-300">غير محدد</span>
                         )}
                       </div>
+                    </td>
+
+                    <td className="p-4 text-center">
+                      {teacher.isGoogleLinked ? (
+                        <div className="flex flex-col items-center gap-1">
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-900/70 text-emerald-200 border border-emerald-500/50 text-[10px] font-bold">
+                            <CheckCircle2 className="w-3 h-3 text-emerald-400 shrink-0" />
+                            <span className="truncate max-w-[130px] font-mono">{teacher.googleEmail}</span>
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => handleUnlinkTeacherGoogle(teacher)}
+                            disabled={linkingTeacherId === teacher.id}
+                            className="text-[10px] text-red-400 hover:text-red-300 underline cursor-pointer disabled:opacity-50"
+                          >
+                            {linkingTeacherId === teacher.id ? 'جاري الفصل...' : 'فصل حساب Google'}
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => handleLinkTeacherGoogle(teacher)}
+                          disabled={linkingTeacherId === teacher.id}
+                          className="px-2.5 py-1.5 rounded-xl bg-white hover:bg-slate-100 text-slate-800 text-[11px] font-bold border border-slate-300 shadow-sm inline-flex items-center gap-1.5 cursor-pointer disabled:opacity-50 transition-all"
+                          title="ربط حساب Google لهذا المعلم لتسجيل الدخول السريع"
+                        >
+                          <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24">
+                            <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                            <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                            <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
+                            <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
+                          </svg>
+                          <span>{linkingTeacherId === teacher.id ? 'جاري الربط...' : 'ربط Google'}</span>
+                        </button>
+                      )}
                     </td>
 
                     <td className="p-4 text-center">
@@ -702,6 +791,68 @@ export const AccountsTab: React.FC<AccountsTabProps> = ({
                   </div>
                 </div>
               )}
+
+              {/* Google Account Linking in Modal */}
+              <div className="bg-[#022c22]/70 border border-[#065f46] rounded-2xl p-3.5 space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
+                      <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                      <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                      <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
+                      <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
+                    </svg>
+                    <span className="text-xs font-bold text-emerald-100">ربط حساب Google للدخول السريع:</span>
+                  </div>
+                  {editingTeacherData.isGoogleLinked ? (
+                    <span className="px-2 py-0.5 rounded-full bg-emerald-900 text-emerald-300 text-[10px] font-bold border border-emerald-500/40">
+                      مرتبط
+                    </span>
+                  ) : (
+                    <span className="text-[10px] text-emerald-400/60 font-medium">غير متصل</span>
+                  )}
+                </div>
+
+                {editingTeacherData.isGoogleLinked ? (
+                  <div className="flex items-center justify-between text-xs bg-[#064e3b]/50 p-2.5 rounded-xl border border-[#065f46]">
+                    <span className="text-emerald-200 font-mono text-[11px] truncate max-w-[200px]">
+                      {editingTeacherData.googleEmail}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditingTeacherData(prev => ({
+                          ...prev,
+                          isGoogleLinked: false,
+                          googleEmail: undefined,
+                          googleUid: undefined,
+                          googleName: undefined,
+                          googlePhotoUrl: undefined
+                        }));
+                      }}
+                      className="text-[11px] text-red-400 hover:text-red-300 font-bold underline cursor-pointer"
+                    >
+                      فصل حساب Google
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-[11px] text-emerald-300/80">
+                      يمكن لهذا المعلم تسجيل الدخول فوراً بضغطة زر عبر حسابه في Google.
+                    </span>
+                    {!isNewTeacher && (
+                      <button
+                        type="button"
+                        onClick={() => handleLinkTeacherGoogle(editingTeacherData as TeacherAccount)}
+                        disabled={linkingTeacherId === editingTeacherData.id}
+                        className="px-3 py-1.5 rounded-xl bg-white hover:bg-slate-100 text-slate-800 text-xs font-bold border border-slate-300 shadow-sm inline-flex items-center gap-1.5 cursor-pointer shrink-0 disabled:opacity-50"
+                      >
+                        {linkingTeacherId === editingTeacherData.id ? 'جاري الربط...' : 'ربط الآن'}
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
 
               <div className="flex gap-2 pt-3 border-t border-[#065f46]">
                 <button
