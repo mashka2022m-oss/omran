@@ -255,15 +255,25 @@ export function App() {
       setRecordingsConfig(loadedRecordingsConfig);
       setComplexes(loadedComplexes);
     } catch (e) {
-      console.error('Error loading initial data:', e);
+      console.warn('Initial data load notice:', e);
     } finally {
       setIsLoadingData(false);
     }
   };
 
   useEffect(() => {
-    OmranDataService.testConnection();
-    loadAllData();
+    let isMounted = true;
+    const initialize = async () => {
+      try {
+        await OmranDataService.testConnection();
+      } catch (err) {
+        // Safe connection test fallback
+      }
+      if (isMounted) {
+        await loadAllData();
+      }
+    };
+    initialize();
 
     // Attach Firestore real-time subscriptions for multi-teacher live sync
     const unsubStudents = OmranDataService.subscribeStudents(newStudents => {

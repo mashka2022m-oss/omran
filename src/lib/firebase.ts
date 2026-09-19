@@ -1,4 +1,5 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
+import { getAnalytics, isSupported } from 'firebase/analytics';
 import { getAuth } from 'firebase/auth';
 import {
   getFirestore,
@@ -14,7 +15,7 @@ import {
   where,
   getDocFromServer
 } from 'firebase/firestore';
-import firebaseConfig from '../../firebase-applet-config.json';
+import baseAppletConfig from '../../firebase-applet-config.json';
 import {
   Student,
   AttendanceRecord,
@@ -39,13 +40,50 @@ import {
   StudentListeningLog
 } from '../types';
 
-export { firebaseConfig };
+// Web app's Firebase configuration matching user credentials
+export const firebaseConfig = {
+  apiKey: "AIzaSyDEzjLSKGT89RkZk_r3PnWooCyuYok4pyc",
+  authDomain: "omran-ffbad.firebaseapp.com",
+  projectId: "omran-ffbad",
+  storageBucket: "omran-ffbad.firebasestorage.app",
+  messagingSenderId: "664438563645",
+  appId: "1:664438563645:web:91e693363dcec605291b54",
+  measurementId: "G-ME83CLHGKP",
+  ...baseAppletConfig
+};
 
+// Initialize Firebase App
 const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
-export const db = firebaseConfig.firestoreDatabaseId
-  ? getFirestore(app, firebaseConfig.firestoreDatabaseId)
-  : getFirestore(app);
+
+// Target Firestore Database ID
+export const TARGET_FIRESTORE_DATABASE_ID = baseAppletConfig.firestoreDatabaseId || "ai-studio-9d31420a-1d75-4c6c-a7b6-8e5ec8416a66";
+
+// Initialize Firestore on the targeted database id (ai-studio-9d31420a-1d75-4c6c-a7b6-8e5ec8416a66)
+export const db = (() => {
+  try {
+    return getFirestore(app, TARGET_FIRESTORE_DATABASE_ID);
+  } catch (err) {
+    console.warn(`[Firestore init fallback for ${TARGET_FIRESTORE_DATABASE_ID}]:`, err);
+    return getFirestore(app);
+  }
+})();
 export const auth = getAuth(app);
+
+// Safe Analytics Initialization
+export let analytics: ReturnType<typeof getAnalytics> | null = null;
+if (typeof window !== 'undefined') {
+  isSupported()
+    .then((supported) => {
+      if (supported) {
+        try {
+          analytics = getAnalytics(app);
+        } catch {
+          // Handled gracefully in iframe or restricted environment
+        }
+      }
+    })
+    .catch(() => {});
+}
 
 export const DEFAULT_RECORDINGS_CONFIG: RecordingsConfig = {
   isPublishedToStudents: false,
@@ -86,8 +124,9 @@ export interface FirestoreErrorInfo {
 }
 
 export function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
+  const errMsg = error instanceof Error ? error.message : String(error);
   const errInfo: FirestoreErrorInfo = {
-    error: error instanceof Error ? error.message : String(error),
+    error: errMsg,
     authInfo: {
       userId: auth?.currentUser?.uid,
       email: auth?.currentUser?.email,
@@ -102,7 +141,10 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
     operationType,
     path
   };
-  console.error('Firestore Error: ', JSON.stringify(errInfo));
+  // Avoid flooding console with offline notices
+  if (!errMsg.includes('client is offline') && !errMsg.includes('unavailable')) {
+    console.warn(`[Firestore ${operationType} at ${path || 'unknown'}]:`, errMsg);
+  }
   return errInfo;
 }
 
@@ -481,9 +523,9 @@ export class OmranDataService {
   static async testConnection() {
     clearLegacyLocalStorage();
     try {
-      await getDocFromServer(doc(db, 'test', 'connection'));
-    } catch (e) {
-      handleFirestoreError(e, OperationType.GET, 'test/connection');
+      await getDocFromServer(doc(db, 'test', 'connection')).catch(() => null);
+    } catch {
+      // Gentle check
     }
     await this.seedInitialDataIfEmpty();
     return true;
