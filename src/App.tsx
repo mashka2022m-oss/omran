@@ -388,17 +388,25 @@ export function App() {
     return getTeacherAllComplexes(currentTeacher, teachers, complexes, halaqahs, isDeveloper);
   }, [currentUser, currentTeacher, teachers, complexes, halaqahs, isDeveloper]);
 
-  // Active Complex: either specifically selected by teacher/dev, or fallback to first available
+  // Permission to switch complexes:
+  // Strictly: ONLY the programmer (developer) can switch between complexes freely.
+  // Teachers and supervisor teachers CANNOT switch complexes under any circumstances.
+  const canSwitchComplex = useMemo(() => {
+    return isDeveloper;
+  }, [isDeveloper]);
+
+  // Active Complex: either specifically selected by developer, or strictly locked to teacher's single complex
   const activeComplex = useMemo<QuranComplex | null>(() => {
-    if (availableTeacherComplexes.length === 0) {
-      return complexes[0] || null;
+    if (complexes.length === 0) return null;
+    if (!isDeveloper) {
+      return availableTeacherComplexes[0] || complexes[0] || null;
     }
     if (selectedComplexId) {
-      const match = availableTeacherComplexes.find(c => c.id === selectedComplexId);
+      const match = complexes.find(c => c.id === selectedComplexId);
       if (match) return match;
     }
-    return availableTeacherComplexes[0] || null;
-  }, [availableTeacherComplexes, selectedComplexId, complexes]);
+    return complexes[0] || null;
+  }, [availableTeacherComplexes, selectedComplexId, complexes, isDeveloper]);
 
   // Complex scope resolution for teacher/supervisor:
   const supervisedComplex = activeComplex;
@@ -422,11 +430,11 @@ export function App() {
     );
   }, [currentUser, isDeveloper, activeComplex, currentTeacher]);
 
-  // Scoped complexes: Programmer sees all complexes; supervisor/teacher sees their available complexes
+  // Scoped complexes: Programmer sees all complexes; supervisor/teacher sees ONLY their single complex
   const scopedComplexes = useMemo(() => {
     if (isDeveloper) return complexes;
-    return availableTeacherComplexes;
-  }, [isDeveloper, complexes, availableTeacherComplexes]);
+    return activeComplex ? [activeComplex] : (availableTeacherComplexes.slice(0, 1));
+  }, [isDeveloper, complexes, activeComplex, availableTeacherComplexes]);
 
   // Scoped halaqahs: Strictly sees halaqahs of their ACTIVE QuranComplex!
   const scopedHalaqahs = useMemo(() => {
@@ -478,6 +486,9 @@ export function App() {
 
   // Switch between complexes seamlessly
   const handleSwitchComplex = (newComplexId: string) => {
+    // Only permitted if developer, or teacher linked to multiple complexes
+    if (!canSwitchComplex) return;
+
     setSelectedComplexId(newComplexId);
     try {
       localStorage.setItem('omran_selected_complex_id', newComplexId);
@@ -498,7 +509,8 @@ export function App() {
   // Multi-complex detection & welcome alert when teacher is added to another complex or enters
   useEffect(() => {
     if (!currentUser || currentUser.role !== 'admin') return;
-    if (availableTeacherComplexes.length <= 1) return;
+    if (!canSwitchComplex || availableTeacherComplexes.length <= 1) return;
+    if (isDeveloper) return; // Developers don't need intrusive popups for complex list
 
     const teacherKey = currentTeacher?.id || currentTeacher?.username || currentUser.username;
     const storageKeyKnown = `omran_known_complexes_${teacherKey}`;
@@ -1279,8 +1291,9 @@ export function App() {
         complexName={supervisedComplex?.name}
         availableComplexes={scopedComplexes}
         activeComplexId={activeComplex?.id}
-        onSwitchComplex={handleSwitchComplex}
-        onOpenMultiComplexModal={() => setIsMultiComplexModalOpen(true)}
+        onSwitchComplex={canSwitchComplex ? handleSwitchComplex : undefined}
+        onOpenMultiComplexModal={canSwitchComplex ? () => setIsMultiComplexModalOpen(true) : undefined}
+        canSwitchComplex={canSwitchComplex}
         halaqahs={scopedHalaqahs}
         assignedHalaqahs={assignedHalaqahs}
         isSupervisor={isSupervisor}
@@ -1327,7 +1340,7 @@ export function App() {
 
           {/* Quick Switching Buttons */}
           <div className="flex items-center gap-1.5 flex-wrap self-stretch sm:self-auto justify-end">
-            {scopedComplexes.length > 1 && (
+            {canSwitchComplex && scopedComplexes.length > 1 && (
               <button
                 type="button"
                 onClick={() => setIsMultiComplexModalOpen(true)}
@@ -1512,6 +1525,7 @@ export function App() {
             teachers={teachers}
             students={students}
             halaqahs={halaqahs}
+            complexes={complexes}
             onSaveTeacher={handleSaveTeacher}
             onDeleteTeacher={handleDeleteTeacher}
             onUpdateStudent={handleUpdateStudent}
@@ -1602,7 +1616,7 @@ export function App() {
 
       {/* Teacher Multi-Complex Modal (عرض المجمعات والحلقات والانتقال بينها) */}
       <TeacherMultiComplexModal
-        isOpen={isMultiComplexModalOpen}
+        isOpen={isMultiComplexModalOpen && canSwitchComplex && scopedComplexes.length > 1}
         onClose={() => {
           setIsMultiComplexModalOpen(false);
           setNewlyAddedComplexName(null);

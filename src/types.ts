@@ -165,9 +165,11 @@ export const isSameTeacher = (
 };
 
 /**
- * Resolves all QuranComplexes that a teacher is associated with or has been added to.
- * Checks direct complex assignment, supervisor appointment, halaqah assignments across complexes,
- * and teacher accounts in other complexes that share the same name/username/phone.
+ * Resolves QuranComplexes for a teacher/user.
+ * STRICT RULE:
+ * - Developer / Programmer (role === 'developer'): has access to ALL complexes and can freely navigate between them.
+ * - Teacher or Supervisor Teacher: STRICTLY bound to ONE single designated complex.
+ *   They cannot be linked to more than one complex and cannot navigate between complexes under any circumstances.
  */
 export const getTeacherAllComplexes = (
   teacher?: TeacherAccount | null,
@@ -178,92 +180,51 @@ export const getTeacherAllComplexes = (
 ): QuranComplex[] => {
   if (complexes.length === 0) return [];
 
-  // Developer / System Administrator has access to all complexes
+  // ONLY Developer / Programmer has access to all complexes and navigation
   if (isDev || isTeacherDeveloper(teacher)) {
     return complexes;
   }
 
+  // Non-developer (Teacher or Supervisor Teacher): STRICTLY limited to ONE single designated complex.
   if (!teacher) {
-    return complexes.slice(0, 1);
-  }
-
-  const teacherNameNorm = normalizeTeacherText(teacher.name);
-  const teacherUserNorm = normalizeTeacherText(teacher.username);
-
-  // Find all sibling teacher accounts that share this teacher's identity (same name, username, or phone)
-  const matchingTeacherAccounts = allTeachers.filter(t => isSameTeacher(teacher, t));
-  const matchingTeacherIds = new Set<string>(matchingTeacherAccounts.map(t => t.id));
-  matchingTeacherIds.add(teacher.id);
-
-  const matchedComplexIds = new Set<string>();
-
-  for (const complex of complexes) {
-    let isMatched = false;
-
-    // 1. Direct match on complexId or complexIds list
-    if (teacher.complexId === complex.id) isMatched = true;
-    if (teacher.complexIds?.includes(complex.id)) isMatched = true;
-
-    // 2. Supervisor of this complex
-    if (complex.supervisorTeacherId && matchingTeacherIds.has(complex.supervisorTeacherId)) isMatched = true;
-    if (complex.supervisorTeacherName && (
-      normalizeTeacherText(complex.supervisorTeacherName) === teacherNameNorm ||
-      normalizeTeacherText(complex.supervisorTeacherName) === teacherUserNorm
-    )) {
-      isMatched = true;
-    }
-
-    // 3. Matched sibling teacher account assigned in this complex
-    for (const acc of matchingTeacherAccounts) {
-      if (acc.complexId === complex.id || acc.complexIds?.includes(complex.id)) {
-        isMatched = true;
-        break;
-      }
-    }
-
-    // 4. Halaqahs in this complex where this teacher is assigned (by ID or by name)
-    const complexHalaqahs = halaqahs.filter(h => {
-      const cId = h.complexId || (complexes[0] ? complexes[0].id : '');
-      return cId === complex.id;
-    });
-
-    for (const h of complexHalaqahs) {
-      if (h.teacherIds && h.teacherIds.some(tid => matchingTeacherIds.has(tid))) {
-        isMatched = true;
-        break;
-      }
-      if (h.primaryTeacherName) {
-        const primNorm = normalizeTeacherText(h.primaryTeacherName);
-        if (primNorm === teacherNameNorm || primNorm === teacherUserNorm) {
-          isMatched = true;
-          break;
-        }
-      }
-      if (h.teacherNames) {
-        if (h.teacherNames.some(tn => {
-          const norm = normalizeTeacherText(tn);
-          return norm === teacherNameNorm || norm === teacherUserNorm;
-        })) {
-          isMatched = true;
-          break;
-        }
-      }
-    }
-
-    if (isMatched) {
-      matchedComplexIds.add(complex.id);
-    }
-  }
-
-  // Filter complexes matching the resolved IDs
-  const result = complexes.filter(c => matchedComplexIds.has(c.id));
-
-  // If no specific complex matched, fallback to single complex or first complex
-  if (result.length === 0 && complexes.length > 0) {
     return [complexes[0]];
   }
 
-  return result;
+  // 1. Direct match on teacher's complexId
+  if (teacher.complexId) {
+    const found = complexes.find(c => c.id === teacher.complexId);
+    if (found) return [found];
+  }
+
+  // 2. Complex where this teacher is assigned as supervisor by ID
+  const supById = complexes.find(c => c.supervisorTeacherId && c.supervisorTeacherId === teacher.id);
+  if (supById) return [supById];
+
+  // 3. Complex where this teacher is assigned as supervisor by verified name
+  const teacherNameNorm = normalizeTeacherText(teacher.name);
+  const teacherUserNorm = normalizeTeacherText(teacher.username);
+  if (teacherNameNorm.length > 3) {
+    const supByName = complexes.find(c =>
+      c.supervisorTeacherName &&
+      c.supervisorTeacherName.trim().length > 3 &&
+      (normalizeTeacherText(c.supervisorTeacherName) === teacherNameNorm ||
+       normalizeTeacherText(c.supervisorTeacherName) === teacherUserNorm)
+    );
+    if (supByName) return [supByName];
+  }
+
+  // 4. Complex containing halaqahs taught by this teacher
+  const teacherHalaqah = halaqahs.find(h =>
+    (h.teacherIds && h.teacherIds.includes(teacher.id)) ||
+    (h.primaryTeacherName && normalizeTeacherText(h.primaryTeacherName) === teacherNameNorm)
+  );
+  if (teacherHalaqah && teacherHalaqah.complexId) {
+    const found = complexes.find(c => c.id === teacherHalaqah.complexId);
+    if (found) return [found];
+  }
+
+  // Fallback strictly to first complex (EXACTLY ONE complex)
+  return [complexes[0]];
 };
 
 /**

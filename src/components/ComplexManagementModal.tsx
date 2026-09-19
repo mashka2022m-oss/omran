@@ -156,6 +156,17 @@ export const ComplexManagementModal: React.FC<ComplexManagementModalProps> = ({
         const found = teachers.find(t => t.id === supId);
         if (found) {
           supName = found.name;
+          // Ensure this supervisor teacher is strictly bound to this complex
+          const updatedTeacher: TeacherAccount = {
+            ...found,
+            role: found.role === 'developer' ? 'developer' : 'supervisor',
+            complexId: editingComplex.id,
+            complexName: editingComplex.name.trim(),
+            complexIds: [editingComplex.id],
+            complexNames: [editingComplex.name.trim()],
+            title: found.title || `مشرف ${editingComplex.name.trim()}`
+          };
+          await onSaveTeacher(updatedTeacher);
         }
       }
 

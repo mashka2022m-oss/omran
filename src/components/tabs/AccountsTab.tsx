@@ -16,15 +16,18 @@ import {
   RefreshCw,
   BookOpen,
   CheckCircle2,
-  AlertCircle
+  AlertCircle,
+  Building2,
+  Sparkles
 } from 'lucide-react';
-import { TeacherAccount, Student, Halaqah, getThreePartNameValidation } from '../../types';
+import { TeacherAccount, Student, Halaqah, QuranComplex, getThreePartNameValidation } from '../../types';
 import { GoogleWorkspaceService } from '../../lib/googleWorkspace';
 
 interface AccountsTabProps {
   teachers: TeacherAccount[];
   students: Student[];
   halaqahs: Halaqah[];
+  complexes?: QuranComplex[];
   onSaveTeacher: (teacher: TeacherAccount) => Promise<void>;
   onDeleteTeacher: (teacherId: string) => Promise<void>;
   onUpdateStudent: (student: Student) => Promise<void>;
@@ -34,6 +37,7 @@ export const AccountsTab: React.FC<AccountsTabProps> = ({
   teachers,
   students,
   halaqahs,
+  complexes = [],
   onSaveTeacher,
   onDeleteTeacher,
   onUpdateStudent
@@ -47,6 +51,8 @@ export const AccountsTab: React.FC<AccountsTabProps> = ({
   const [editingTeacherData, setEditingTeacherData] = useState<Partial<TeacherAccount> | null>(null);
   const [isNewTeacher, setIsNewTeacher] = useState(false);
   const [selectedHalaqahIds, setSelectedHalaqahIds] = useState<string[]>([]);
+  const [selectedComplexIds, setSelectedComplexIds] = useState<string[]>([]);
+  const [primaryComplexId, setPrimaryComplexId] = useState<string>('');
   const [teacherToDelete, setTeacherToDelete] = useState<TeacherAccount | null>(null);
 
   // Student password edit modal state
@@ -86,6 +92,10 @@ export const AccountsTab: React.FC<AccountsTabProps> = ({
   // -------------------------------------------------------------
   const handleOpenAddTeacher = () => {
     setIsNewTeacher(true);
+    const firstComplex = complexes.length > 0 ? complexes[0] : null;
+    const firstComplexId = firstComplex ? firstComplex.id : '';
+    setPrimaryComplexId(firstComplexId);
+    setSelectedComplexIds(firstComplexId ? [firstComplexId] : []);
     setEditingTeacherData({
       id: `teacher-${Date.now()}`,
       name: '',
@@ -95,6 +105,10 @@ export const AccountsTab: React.FC<AccountsTabProps> = ({
       title: 'معلم حلقة ومحفظ',
       role: 'teacher',
       isPrimary: false,
+      complexId: firstComplexId,
+      complexName: firstComplex?.name || '',
+      complexIds: firstComplexId ? [firstComplexId] : [],
+      complexNames: firstComplex ? [firstComplex.name] : [],
       halaqahIds: halaqahs.length > 0 ? [halaqahs[0].id] : [],
       createdAt: new Date().toISOString()
     });
@@ -108,6 +122,12 @@ export const AccountsTab: React.FC<AccountsTabProps> = ({
     setEditingTeacherData({ ...t });
     const hIds = t.halaqahIds || (t.halaqahId ? [t.halaqahId] : []);
     setSelectedHalaqahIds(hIds);
+
+    const targetComplex = complexes.find(c => c.id === t.complexId) || complexes[0];
+    const pId = targetComplex ? targetComplex.id : '';
+    setPrimaryComplexId(pId);
+    setSelectedComplexIds(pId ? [pId] : []);
+
     setIsEditingTeacher(true);
     setStatusMsg(null);
   };
@@ -126,7 +146,9 @@ export const AccountsTab: React.FC<AccountsTabProps> = ({
     }
 
     const isSuper = editingTeacherData.role === 'supervisor';
-    const nameVal = getThreePartNameValidation(editingTeacherData.name, isSuper ? 'مشرف' : 'معلم');
+    const isDev = editingTeacherData.role === 'developer';
+    const roleLabel: 'مشرف' | 'معلم' = (isDev || isSuper) ? 'مشرف' : 'معلم';
+    const nameVal = getThreePartNameValidation(editingTeacherData.name, roleLabel);
     if (!nameVal.isValid) {
       setStatusMsg({ type: 'error', text: nameVal.message || 'الاسم الثلاثي إلزامي.' });
       return;
@@ -145,10 +167,11 @@ export const AccountsTab: React.FC<AccountsTabProps> = ({
 
     try {
       setIsSubmitting(true);
-      const isSuper = editingTeacherData.role === 'supervisor';
       const resolvedHalaqahNames = halaqahs
         .filter(h => selectedHalaqahIds.includes(h.id))
         .map(h => h.name);
+
+      const targetPrimaryComplex = complexes.find(c => c.id === primaryComplexId) || complexes[0];
 
       const fullTeacher: TeacherAccount = {
         id: editingTeacherData.id || `teacher-${Date.now()}`,
@@ -156,9 +179,14 @@ export const AccountsTab: React.FC<AccountsTabProps> = ({
         username: editingTeacherData.username.trim(),
         password: editingTeacherData.password?.trim() || '123',
         phone: editingTeacherData.phone?.trim() || '0500000000',
-        title: editingTeacherData.title?.trim() || (isSuper ? 'المشرف العام' : 'معلم حلقة'),
+        title: editingTeacherData.title?.trim() || (isDev ? 'مشرف ومطور المنظومة' : (isSuper ? 'المعلم المشرف' : 'معلم حلقة ومحفظ')),
         role: editingTeacherData.role || 'teacher',
-        isPrimary: isSuper,
+        isPrimary: isSuper || isDev,
+        complexId: targetPrimaryComplex?.id,
+        complexName: targetPrimaryComplex?.name,
+        // STRICT RULE: Bound to single complex only
+        complexIds: targetPrimaryComplex ? [targetPrimaryComplex.id] : [],
+        complexNames: targetPrimaryComplex ? [targetPrimaryComplex.name] : [],
         halaqahId: selectedHalaqahIds[0] || '',
         halaqahName: resolvedHalaqahNames[0] || '',
         halaqahIds: selectedHalaqahIds,
@@ -231,24 +259,41 @@ export const AccountsTab: React.FC<AccountsTabProps> = ({
     }
   };
 
-  const handleToggleSupervisorRole = async (teacher: TeacherAccount) => {
+  const handleUpdateTeacherRole = async (
+    teacher: TeacherAccount,
+    newRole: 'developer' | 'supervisor' | 'teacher'
+  ) => {
     try {
-      const newRole = teacher.role === 'supervisor' || teacher.isPrimary ? 'teacher' : 'supervisor';
+      const isDev = newRole === 'developer';
       const isSuper = newRole === 'supervisor';
+      const targetComplex = complexes.find(c => c.id === teacher.complexId) || complexes[0];
       const updated: TeacherAccount = {
         ...teacher,
         role: newRole,
-        isPrimary: isSuper,
-        title: isSuper ? 'معلم مشرف' : 'معلم حلقة'
+        isPrimary: isSuper || isDev,
+        title: isDev ? 'مشرف ومطور المنظومة' : (isSuper ? 'معلم مشرف' : 'معلم حلقة ومحفظ'),
+        // Non-developer is strictly bound to single designated complex
+        complexId: targetComplex?.id,
+        complexName: targetComplex?.name,
+        complexIds: targetComplex ? [targetComplex.id] : [],
+        complexNames: targetComplex ? [targetComplex.name] : []
       };
       await onSaveTeacher(updated);
+      const roleLabel = isDev
+        ? 'مبرمج ومطور المنظومة (كامل الصلاحيات والتنقل بين كافة المجمعات)'
+        : (isSuper ? 'معلم مشرف (إشراف كامل على مجمعه القرآني وحلقاته فقط)' : 'معلم حلقة ومحفظ');
       setStatusMsg({
         type: 'success',
-        text: `تم تغيير صلاحية (${teacher.name}) إلى: ${isSuper ? 'معلم مشرف (صلاحيات كاملة)' : 'معلم حلقة'}`
+        text: `تمت ترقية/تعيين (${teacher.name}) بنجاح إلى: ${roleLabel}`
       });
     } catch (e: any) {
-      setStatusMsg({ type: 'error', text: 'فشل تغيير الصلاحية: ' + e?.message });
+      setStatusMsg({ type: 'error', text: 'فشل تغيير الرتبة والصلاحية: ' + e?.message });
     }
+  };
+
+  const handleToggleSupervisorRole = async (teacher: TeacherAccount) => {
+    const nextRole = teacher.role === 'supervisor' || teacher.isPrimary ? 'teacher' : 'supervisor';
+    await handleUpdateTeacherRole(teacher, nextRole);
   };
 
   const handleConfirmDeleteTeacher = async () => {
@@ -436,7 +481,8 @@ export const AccountsTab: React.FC<AccountsTabProps> = ({
                 <th className="p-4">اسم المستخدم</th>
                 <th className="p-4">كلمة المرور</th>
                 <th className="p-4">رقم الهاتف</th>
-                <th className="p-4">الدور والصلاحية</th>
+                <th className="p-4">الدور والصلاحية / الترقية</th>
+                <th className="p-4">المجمع القرآني</th>
                 <th className="p-4">الحلقات المخصصة</th>
                 <th className="p-4 text-center">حساب Google والتسجيل السريع</th>
                 <th className="p-4 text-center">رابط الدخول السريع</th>
@@ -493,19 +539,59 @@ export const AccountsTab: React.FC<AccountsTabProps> = ({
 
                     <td className="p-4 font-mono text-emerald-200">{teacher.phone || '-'}</td>
 
+                    <td className="p-4 min-w-[210px]">
+                      <div className="flex flex-col gap-1.5">
+                        {teacher.role === 'developer' || teacher.username.trim().toLowerCase() === 'admin' ? (
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-black bg-gradient-to-r from-amber-400 to-amber-500 text-[#064e3b] shadow-sm border border-amber-300">
+                            <Sparkles className="w-3.5 h-3.5" />
+                            <span>مبرمج ومطور المنظومة</span>
+                          </span>
+                        ) : teacher.role === 'supervisor' || teacher.isPrimary ? (
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold bg-amber-500/20 text-[#fbbf24] border border-amber-500/40">
+                            <Shield className="w-3.5 h-3.5 text-amber-400" />
+                            <span>معلم مشرف (مجمعه فقط)</span>
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium bg-emerald-800/40 text-emerald-300 border border-emerald-600/40">
+                            <BookOpen className="w-3.5 h-3.5 text-emerald-400" />
+                            <span>معلم حلقة ومحفظ</span>
+                          </span>
+                        )}
+
+                        {/* Quick Role Upgrade Dropdown for Developer */}
+                        <div className="flex items-center gap-1 mt-1">
+                          <span className="text-[10px] text-amber-300/80 font-bold shrink-0">الترقية:</span>
+                          <select
+                            value={teacher.role || (teacher.isPrimary ? 'supervisor' : 'teacher')}
+                            onChange={e => handleUpdateTeacherRole(teacher, e.target.value as 'developer' | 'supervisor' | 'teacher')}
+                            className="w-full bg-[#022c22] border border-amber-500/40 hover:border-amber-400 rounded-lg px-2 py-1 text-[11px] text-amber-200 font-bold cursor-pointer focus:outline-none transition-colors"
+                            title="ترقية أو تغيير رتبة وصلاحية هذا الحساب فورياً"
+                          >
+                            <option value="developer" className="bg-[#064e3b] text-amber-300 font-bold">⭐ ترقية إلى: مبرمج ومطور</option>
+                            <option value="supervisor" className="bg-[#064e3b] text-emerald-200 font-bold">🛡️ ترقية إلى: معلم مشرف</option>
+                            <option value="teacher" className="bg-[#064e3b] text-emerald-300">📖 تعيين كـ: معلم حلقة</option>
+                          </select>
+                        </div>
+                      </div>
+                    </td>
+
                     <td className="p-4">
-                      <button
-                        onClick={() => handleToggleSupervisorRole(teacher)}
-                        className={`px-2.5 py-1 rounded-full text-[11px] font-bold border transition-all cursor-pointer flex items-center gap-1 ${
-                          isSuper
-                            ? 'bg-amber-500/20 text-[#fbbf24] border-amber-500/40 hover:bg-amber-500/30'
-                            : 'bg-emerald-800/40 text-emerald-300 border-emerald-600/40 hover:bg-emerald-800/60'
-                        }`}
-                        title="اضغط لتبديل الدور بين معلم ومشرف"
-                      >
-                        <Shield className="w-3 h-3" />
-                        <span>{isSuper ? 'معلم مشرف' : 'معلم حلقة'}</span>
-                      </button>
+                      {teacher.role === 'developer' || teacher.username.trim().toLowerCase() === 'admin' ? (
+                        <span className="inline-flex items-center gap-1 text-[10px] px-2.5 py-1 rounded-full bg-amber-400 text-[#064e3b] font-black shadow-sm" title="صلاحية المبرمج: يمكنه التنقل بين كافة المجمعات بحرية تامة">
+                          <Sparkles className="w-3 h-3" />
+                          المبرمج (يتنقل بين كل المجمعات)
+                        </span>
+                      ) : (
+                        <div className="flex flex-col gap-0.5 items-start">
+                          <span className="inline-flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-xl bg-[#064e3b] text-[#86efac] border border-[#065f46] font-bold">
+                            <Building2 className="w-3.5 h-3.5 text-[#fbbf24]" />
+                            {teacher.complexName || (complexes.find(c => c.id === teacher.complexId)?.name) || 'المجمع الرئيسي'}
+                          </span>
+                          <span className="text-[9px] text-emerald-400/60 font-sans">
+                            مجمع حصري (لا يتنقل)
+                          </span>
+                        </div>
+                      )}
                     </td>
 
                     <td className="p-4">
@@ -811,26 +897,31 @@ export const AccountsTab: React.FC<AccountsTabProps> = ({
                 </div>
 
                 <div>
-                  <label className="block text-emerald-200 font-bold mb-1">نوع الدور والصلاحية:</label>
+                  <label className="block text-emerald-200 font-bold mb-1">نوع الدور والصلاحية والترقية:</label>
                   <select
-                    value={editingTeacherData.role || 'teacher'}
-                    onChange={e =>
+                    value={editingTeacherData.role || (editingTeacherData.isPrimary ? 'supervisor' : 'teacher')}
+                    onChange={e => {
+                      const val = e.target.value as 'developer' | 'supervisor' | 'teacher';
+                      const isSuper = val === 'supervisor';
+                      const isDev = val === 'developer';
                       setEditingTeacherData(prev => ({
                         ...prev,
-                        role: e.target.value as 'supervisor' | 'teacher',
-                        isPrimary: e.target.value === 'supervisor'
-                      }))
-                    }
-                    className="w-full bg-[#064e3b]/70 border border-[#065f46] rounded-xl px-3 py-2 text-[#fbbf24] font-bold outline-none focus:border-[#fbbf24]"
+                        role: val,
+                        isPrimary: isSuper || isDev,
+                        title: isDev ? 'مشرف ومطور المنظومة' : (isSuper ? 'معلم مشرف' : 'معلم حلقة ومحفظ')
+                      }));
+                    }}
+                    className="w-full bg-[#064e3b]/70 border border-[#065f46] rounded-xl px-3 py-2 text-[#fbbf24] font-bold outline-none focus:border-[#fbbf24] text-xs"
                   >
-                    <option value="teacher">معلم حلقة (مخصص لحلقاته فقط)</option>
-                    <option value="supervisor">معلم مشرف (صلاحيات كاملة لكل الحلقات والإعدادات)</option>
+                    <option value="developer" className="bg-[#022c22] text-amber-300 font-bold">⭐ مبرمج ومطور المنظومة (كامل الصلاحيات والتنقل بين كافة المجمعات)</option>
+                    <option value="supervisor" className="bg-[#022c22] text-emerald-200 font-bold">🛡️ معلم مشرف (إشراف كامل على مجمعه وحلقاته فقط - لا يتنقل)</option>
+                    <option value="teacher" className="bg-[#022c22] text-emerald-300">📖 معلم حلقة ومحفظ (مخصص لحلقاته فقط ضمن مجمعه)</option>
                   </select>
                 </div>
               </div>
 
               {/* Halaqahs assignment */}
-              {editingTeacherData.role !== 'supervisor' && (
+              {editingTeacherData.role === 'teacher' && (
                 <div className="space-y-2 pt-1">
                   <label className="block text-emerald-200 font-bold">الحلقات المسندة لهذا المعلم:</label>
                   <div className="max-h-36 overflow-y-auto space-y-1.5 p-2 bg-[#064e3b]/40 rounded-xl border border-[#065f46]">
@@ -852,6 +943,40 @@ export const AccountsTab: React.FC<AccountsTabProps> = ({
                         </label>
                       );
                     })}
+                  </div>
+                </div>
+              )}
+
+              {/* Complex Assignment (Strict Single Complex) */}
+              {complexes.length > 0 && (
+                <div className="space-y-2.5 pt-2 border-t border-[#065f46]">
+                  <div className="flex items-center justify-between flex-wrap gap-2">
+                    <label className="text-emerald-200 font-bold flex items-center gap-1.5 text-xs">
+                      <Building2 className="w-4 h-4 text-amber-400" />
+                      <span>المجمع القرآني التابع له الحساب:</span>
+                    </label>
+                    <span className="text-[10px] text-emerald-300 font-bold bg-[#064e3b] border border-[#065f46] px-2.5 py-0.5 rounded-full">
+                      مجمع حصري (لا يمكن ربطه بأكثر من مجمع)
+                    </span>
+                  </div>
+
+                  <div className="text-[11px] text-emerald-200/90 leading-relaxed bg-[#022c22]/80 p-2.5 rounded-xl border border-emerald-700/50">
+                    💡 <strong className="text-amber-300">قاعدة المنظومة:</strong> المعلم والمعلم المشرف يتبعان حصراً لمجمع قرآني واحد فقط وحلقاته، ولا يمكن ربطهما بأكثر من مجمع أو التنقل بين المجمعات، بينما المبرمج فقط هو من يمتلك صلاحية التنقل والإشراف الشامل.
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] text-emerald-200 font-bold mb-1">حدد المجمع القرآني:</label>
+                    <select
+                      value={primaryComplexId}
+                      onChange={e => setPrimaryComplexId(e.target.value)}
+                      className="w-full bg-[#064e3b]/70 border border-[#065f46] rounded-xl px-3 py-2 text-white font-bold outline-none focus:border-[#fbbf24] text-xs"
+                    >
+                      {complexes.map(c => (
+                        <option key={c.id} value={c.id} className="bg-[#022c22] text-white font-bold">
+                          {c.name}
+                        </option>
+                      ))}
+                    </select>
                   </div>
                 </div>
               )}

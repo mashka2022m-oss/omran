@@ -28,6 +28,7 @@ interface NavbarProps {
   activeComplexId?: string;
   onSwitchComplex?: (complexId: string) => void;
   onOpenMultiComplexModal?: () => void;
+  canSwitchComplex?: boolean;
   halaqahs?: Halaqah[];
   assignedHalaqahs?: Halaqah[];
   isSupervisor?: boolean;
@@ -51,6 +52,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   activeComplexId,
   onSwitchComplex,
   onOpenMultiComplexModal,
+  canSwitchComplex = false,
   halaqahs = [],
   assignedHalaqahs = [],
   isSupervisor = false,
@@ -88,15 +90,15 @@ export const Navbar: React.FC<NavbarProps> = ({
                 مَنَصَّةُ عُمْرَان
               </h1>
 
-              {/* Complex Switcher / Badge */}
-              {availableComplexes.length > 1 && onSwitchComplex ? (
+              {/* Complex Switcher / Badge: Restricted strictly: Programmer switches all, teacher/supervisor switches ONLY if linked to multiple complexes */}
+              {canSwitchComplex && availableComplexes.length > 1 && onSwitchComplex ? (
                 <div className="flex items-center gap-1.5 bg-[#022c22] border border-amber-400/40 rounded-xl px-2 py-0.5 shadow-sm">
                   <Building2 className="w-3.5 h-3.5 text-[#fbbf24]" />
                   <select
                     value={activeComplexId || availableComplexes[0]?.id || ''}
                     onChange={e => onSwitchComplex(e.target.value)}
                     className="text-xs text-amber-300 font-black bg-transparent border-none focus:outline-none cursor-pointer pr-1"
-                    title="التبديل بين المجمعات التي تنتمي إليها"
+                    title={isDeveloper ? "التبديل بين كافة المجمعات القرآنية (صلاحية المبرمج)" : "التبديل بين المجمعات المرتبط بها"}
                   >
                     {availableComplexes.map(c => (
                       <option key={c.id} value={c.id} className="bg-[#064e3b] text-white">
@@ -116,7 +118,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                   )}
                 </div>
               ) : (
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#022c22] text-[#86efac] border border-[#065f46] font-sans font-medium line-clamp-1 max-w-[200px]" title={complexName || 'المنظومة القرآنية'}>
+                <span className="text-[10px] px-2.5 py-1 rounded-full bg-[#022c22] text-[#86efac] border border-[#065f46] font-sans font-bold line-clamp-1 max-w-[220px]" title={complexName || 'المنظومة القرآنية'}>
                   {complexName || 'القرآنية'}
                 </span>
               )}

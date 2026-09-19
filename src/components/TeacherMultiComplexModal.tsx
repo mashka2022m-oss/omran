@@ -124,8 +124,8 @@ export const TeacherMultiComplexModal: React.FC<TeacherMultiComplexModalProps> =
               // Check if teacher is supervisor of this complex
               const isSupervisorThis =
                 (comp.supervisorTeacherId && (comp.supervisorTeacherId === teacher?.id)) ||
-                (comp.supervisorTeacherName && teacher?.name && comp.supervisorTeacherName.trim().toLowerCase() === teacher.name.trim().toLowerCase()) ||
-                (teacher?.role === 'developer' || teacher?.role === 'supervisor');
+                (comp.supervisorTeacherName && teacher?.name && comp.supervisorTeacherName.trim().length > 3 && comp.supervisorTeacherName.trim().toLowerCase() === teacher.name.trim().toLowerCase()) ||
+                (teacher?.role === 'developer');
 
               // Halaqahs in this complex belonging to teacher
               const complexHalaqahs = halaqahs.filter(h => (h.complexId || complexes[0]?.id) === comp.id);
