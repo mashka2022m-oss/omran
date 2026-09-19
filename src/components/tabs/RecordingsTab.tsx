@@ -465,38 +465,40 @@ export const RecordingsTab: React.FC<RecordingsTabProps> = ({
     setTargetSegmentToPlay({ ...fresh, _playTrigger: Date.now() } as any);
   };
 
-  // Inline update for Ayah timestamps ("يعينها" + manual edit)
+  // Inline update for Ayah timestamps ("يعينها" + manual edit with decimal precision)
   const handleUpdateSegmentTiming = (index: number, field: 'startTimeSeconds' | 'endTimeSeconds', value: number) => {
     if (!editingRecording || !editingRecording.segments) return;
-    const safeVal = Math.max(0, value);
+    const safeVal = Math.round(Math.max(0, value) * 100) / 100;
     const updated = [...editingRecording.segments];
     const target = { ...updated[index], [field]: safeVal };
     
     if (field === 'startTimeSeconds') {
       target.formattedStart = formatTimeMMSS(safeVal);
-      // Ensure end is at least equal to start
-      if (target.endTimeSeconds < safeVal) {
-        target.endTimeSeconds = safeVal + 4;
+      // Ensure end is greater than start
+      if (target.endTimeSeconds <= safeVal) {
+        target.endTimeSeconds = Math.round((safeVal + 3) * 100) / 100;
         target.formattedEnd = formatTimeMMSS(target.endTimeSeconds);
       }
     } else {
       target.formattedEnd = formatTimeMMSS(safeVal);
       // Ensure start is not after end
-      if (safeVal < target.startTimeSeconds) {
-        target.startTimeSeconds = Math.max(0, safeVal - 4);
+      if (safeVal <= target.startTimeSeconds) {
+        target.startTimeSeconds = Math.max(0, Math.round((safeVal - 3) * 100) / 100);
         target.formattedStart = formatTimeMMSS(target.startTimeSeconds);
       }
       // Contiguous alignment: when ending time of an ayah is set, automatically synchronize the start time of the next ayah
       if (index + 1 < updated.length) {
         const nextSeg = { ...updated[index + 1], startTimeSeconds: safeVal, formattedStart: formatTimeMMSS(safeVal) };
         if (nextSeg.endTimeSeconds <= safeVal) {
-          nextSeg.endTimeSeconds = safeVal + 6;
+          nextSeg.endTimeSeconds = Math.round((safeVal + 4) * 100) / 100;
           nextSeg.formattedEnd = formatTimeMMSS(nextSeg.endTimeSeconds);
         }
+        nextSeg.duration = Math.round((nextSeg.endTimeSeconds - nextSeg.startTimeSeconds) * 100) / 100;
         updated[index + 1] = nextSeg;
       }
     }
     
+    target.duration = Math.round((target.endTimeSeconds - target.startTimeSeconds) * 100) / 100;
     updated[index] = target;
     setEditingRecording(prev => ({
       ...prev,
@@ -507,11 +509,12 @@ export const RecordingsTab: React.FC<RecordingsTabProps> = ({
     }
   };
 
-  // Step timing by delta (e.g. +1s, -1s)
+  // Step timing by delta (e.g. +1s, -1s, +0.25s, -0.25s)
   const handleStepTiming = (index: number, field: 'startTimeSeconds' | 'endTimeSeconds', delta: number) => {
     if (!editingRecording || !editingRecording.segments || !editingRecording.segments[index]) return;
     const currentVal = editingRecording.segments[index][field] || 0;
-    handleUpdateSegmentTiming(index, field, currentVal + delta);
+    const nextVal = Math.round((currentVal + delta) * 100) / 100;
+    handleUpdateSegmentTiming(index, field, nextVal);
   };
 
   // Teacher clicks "📍 تعيين البداية" from live audio
@@ -522,6 +525,42 @@ export const RecordingsTab: React.FC<RecordingsTabProps> = ({
   // Teacher clicks "🏁 تعيين النهاية" from live audio
   const handleSetEndForActiveAyah = (seconds: number) => {
     handleUpdateSegmentTiming(activeAyahIndex, 'endTimeSeconds', seconds);
+  };
+
+  // Teacher clicks "🏁 تعيين النهاية والتالي" from live audio
+  const handleSetEndAndAdvance = (seconds: number) => {
+    if (!editingRecording || !editingRecording.segments) return;
+    const safeVal = Math.round(Math.max(0, seconds) * 100) / 100;
+    const updated = [...editingRecording.segments];
+    const currIndex = activeAyahIndex;
+    if (!updated[currIndex]) return;
+
+    // Set end of current ayah
+    const curr = { ...updated[currIndex], endTimeSeconds: safeVal, formattedEnd: formatTimeMMSS(safeVal) };
+    if (curr.startTimeSeconds >= safeVal) {
+      curr.startTimeSeconds = Math.max(0, Math.round((safeVal - 3) * 100) / 100);
+      curr.formattedStart = formatTimeMMSS(curr.startTimeSeconds);
+    }
+    curr.duration = Math.round((curr.endTimeSeconds - curr.startTimeSeconds) * 100) / 100;
+    updated[currIndex] = curr;
+
+    // If next ayah exists, set its start time and advance
+    if (currIndex + 1 < updated.length) {
+      const nextIndex = currIndex + 1;
+      const nextSeg = { ...updated[nextIndex], startTimeSeconds: safeVal, formattedStart: formatTimeMMSS(safeVal) };
+      if (nextSeg.endTimeSeconds <= safeVal) {
+        nextSeg.endTimeSeconds = Math.round((safeVal + 4) * 100) / 100;
+        nextSeg.formattedEnd = formatTimeMMSS(nextSeg.endTimeSeconds);
+      }
+      nextSeg.duration = Math.round((nextSeg.endTimeSeconds - nextSeg.startTimeSeconds) * 100) / 100;
+      updated[nextIndex] = nextSeg;
+      setEditingRecording(prev => ({ ...prev!, segments: updated }));
+      setActiveAyahIndex(nextIndex);
+      setSelectedAyahForPlayback({ ...nextSeg });
+    } else {
+      setEditingRecording(prev => ({ ...prev!, segments: updated }));
+      setSelectedAyahForPlayback({ ...curr });
+    }
   };
 
   const handleConfirmDelete = async () => {
@@ -911,6 +950,7 @@ export const RecordingsTab: React.FC<RecordingsTabProps> = ({
                     }}
                     onSetStartTime={sec => handleSetStartForActiveAyah(sec)}
                     onSetEndTime={sec => handleSetEndForActiveAyah(sec)}
+                    onSetEndAndAdvance={sec => handleSetEndAndAdvance(sec)}
                     surahName={editingRecording.surahName}
                     readOnlyControls={false}
                   />
@@ -986,7 +1026,7 @@ export const RecordingsTab: React.FC<RecordingsTabProps> = ({
                         .map(({ seg, originalIndex }) => {
                           const isSelected = activeAyahIndex === originalIndex;
                           const isLiveReciting = liveRecitingAyahIndex === originalIndex;
-                          const duration = Math.max(0, Math.round(seg.endTimeSeconds - seg.startTimeSeconds));
+                          const duration = Math.max(0, Number((seg.endTimeSeconds - seg.startTimeSeconds).toFixed(2)));
 
                           return (
                             <div
@@ -1047,14 +1087,19 @@ export const RecordingsTab: React.FC<RecordingsTabProps> = ({
                               {/* Timing Controls & Quick Timestamp Alignment ("يعينها") */}
                               <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
                                 {/* Start Time Controller */}
-                                <div className="flex items-center gap-1 text-[11px]">
+                                <div className="flex flex-wrap items-center gap-1 text-[11px]">
                                   <span className="text-emerald-300 font-bold">البداية:</span>
                                   <input
-                                    type="number"
-                                    min={0}
+                                    type="text"
+                                    inputMode="decimal"
                                     value={seg.startTimeSeconds}
-                                    onChange={e => handleUpdateSegmentTiming(originalIndex, 'startTimeSeconds', Number(e.target.value))}
-                                    className="w-14 bg-[#064e3b] text-white px-1.5 py-0.5 rounded border border-[#065f46] text-center font-mono font-bold"
+                                    onChange={e => {
+                                      const raw = e.target.value.replace(/،/g, '.').replace(/,/g, '.');
+                                      const v = parseFloat(raw);
+                                      handleUpdateSegmentTiming(originalIndex, 'startTimeSeconds', isNaN(v) ? 0 : v);
+                                    }}
+                                    className="w-16 bg-[#064e3b] text-white px-1.5 py-0.5 rounded border border-[#065f46] text-center font-mono font-bold text-xs outline-none focus:border-[#fbbf24]"
+                                    title="يقبل كسور وأرقام عشرية مع فاصلة أو نقطة مثل 1.5 أو 1.25"
                                   />
                                   <span className="text-emerald-400 font-mono text-[10px]">
                                     ({formatTimeMMSS(seg.startTimeSeconds)})
@@ -1069,6 +1114,22 @@ export const RecordingsTab: React.FC<RecordingsTabProps> = ({
                                   </button>
                                   <button
                                     type="button"
+                                    onClick={() => handleStepTiming(originalIndex, 'startTimeSeconds', -0.25)}
+                                    className="px-1 py-0.5 rounded bg-[#064e3b] hover:bg-emerald-700 text-amber-300 text-[10px] font-mono cursor-pointer"
+                                    title="تأخير ربع ثانية (-0.25)"
+                                  >
+                                    -0.25
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleStepTiming(originalIndex, 'startTimeSeconds', 0.25)}
+                                    className="px-1 py-0.5 rounded bg-[#064e3b] hover:bg-emerald-700 text-amber-300 text-[10px] font-mono cursor-pointer"
+                                    title="تقديم ربع ثانية (+0.25)"
+                                  >
+                                    +0.25
+                                  </button>
+                                  <button
+                                    type="button"
                                     onClick={() => handleStepTiming(originalIndex, 'startTimeSeconds', 1)}
                                     className="px-1 py-0.5 rounded bg-[#064e3b] hover:bg-emerald-700 text-white text-[10px] font-mono cursor-pointer"
                                     title="تقديم ثانية"
@@ -1077,7 +1138,7 @@ export const RecordingsTab: React.FC<RecordingsTabProps> = ({
                                   </button>
                                   <button
                                     type="button"
-                                    onClick={() => handleUpdateSegmentTiming(originalIndex, 'startTimeSeconds', Math.round(currentLiveTime))}
+                                    onClick={() => handleUpdateSegmentTiming(originalIndex, 'startTimeSeconds', Math.round(currentLiveTime * 100) / 100)}
                                     className="px-1.5 py-0.5 rounded bg-emerald-800/80 hover:bg-emerald-700 text-emerald-200 text-[10px] font-bold border border-emerald-600/50 cursor-pointer"
                                     title="أخذ وقت المشغل الحالي كبداية لهذه الآية"
                                   >
@@ -1086,14 +1147,19 @@ export const RecordingsTab: React.FC<RecordingsTabProps> = ({
                                 </div>
 
                                 {/* End Time Controller */}
-                                <div className="flex items-center gap-1 text-[11px]">
+                                <div className="flex flex-wrap items-center gap-1 text-[11px]">
                                   <span className="text-amber-300 font-bold">النهاية:</span>
                                   <input
-                                    type="number"
-                                    min={0}
+                                    type="text"
+                                    inputMode="decimal"
                                     value={seg.endTimeSeconds}
-                                    onChange={e => handleUpdateSegmentTiming(originalIndex, 'endTimeSeconds', Number(e.target.value))}
-                                    className="w-14 bg-[#064e3b] text-white px-1.5 py-0.5 rounded border border-[#065f46] text-center font-mono font-bold"
+                                    onChange={e => {
+                                      const raw = e.target.value.replace(/،/g, '.').replace(/,/g, '.');
+                                      const v = parseFloat(raw);
+                                      handleUpdateSegmentTiming(originalIndex, 'endTimeSeconds', isNaN(v) ? 0 : v);
+                                    }}
+                                    className="w-16 bg-[#064e3b] text-white px-1.5 py-0.5 rounded border border-[#065f46] text-center font-mono font-bold text-xs outline-none focus:border-[#fbbf24]"
+                                    title="يقبل كسور وأرقام عشرية مع فاصلة أو نقطة مثل 1.5 أو 1.25"
                                   />
                                   <span className="text-amber-400 font-mono text-[10px]">
                                     ({formatTimeMMSS(seg.endTimeSeconds)})
@@ -1108,6 +1174,22 @@ export const RecordingsTab: React.FC<RecordingsTabProps> = ({
                                   </button>
                                   <button
                                     type="button"
+                                    onClick={() => handleStepTiming(originalIndex, 'endTimeSeconds', -0.25)}
+                                    className="px-1 py-0.5 rounded bg-[#064e3b] hover:bg-emerald-700 text-amber-300 text-[10px] font-mono cursor-pointer"
+                                    title="تأخير ربع ثانية (-0.25)"
+                                  >
+                                    -0.25
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleStepTiming(originalIndex, 'endTimeSeconds', 0.25)}
+                                    className="px-1 py-0.5 rounded bg-[#064e3b] hover:bg-emerald-700 text-amber-300 text-[10px] font-mono cursor-pointer"
+                                    title="تقديم ربع ثانية (+0.25)"
+                                  >
+                                    +0.25
+                                  </button>
+                                  <button
+                                    type="button"
                                     onClick={() => handleStepTiming(originalIndex, 'endTimeSeconds', 1)}
                                     className="px-1 py-0.5 rounded bg-[#064e3b] hover:bg-emerald-700 text-white text-[10px] font-mono cursor-pointer"
                                     title="تقديم ثانية"
@@ -1116,11 +1198,22 @@ export const RecordingsTab: React.FC<RecordingsTabProps> = ({
                                   </button>
                                   <button
                                     type="button"
-                                    onClick={() => handleUpdateSegmentTiming(originalIndex, 'endTimeSeconds', Math.round(currentLiveTime))}
+                                    onClick={() => handleUpdateSegmentTiming(originalIndex, 'endTimeSeconds', Math.round(currentLiveTime * 100) / 100)}
                                     className="px-1.5 py-0.5 rounded bg-amber-800/80 hover:bg-amber-700 text-amber-200 text-[10px] font-bold border border-amber-600/50 cursor-pointer"
                                     title="أخذ وقت المشغل الحالي كنهاية لهذه الآية"
                                   >
                                     🏁 وقت المشغل ({formatTimeMMSS(currentLiveTime)})
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setActiveAyahIndex(originalIndex);
+                                      handleSetEndAndAdvance(Math.round(currentLiveTime * 100) / 100);
+                                    }}
+                                    className="px-2 py-0.5 rounded bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 text-[10px] font-black border border-amber-400 cursor-pointer shadow-sm flex items-center gap-1"
+                                    title="تعيين وقت المشغل كنهاية لهذه الآية والانتقال التلقائي للآية التالية"
+                                  >
+                                    <span>🏁 ضبط والتالي ⬅</span>
                                   </button>
                                 </div>
                               </div>

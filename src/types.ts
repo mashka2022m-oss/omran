@@ -24,10 +24,10 @@ export interface TeacherAccount {
   halaqahName?: string; // Legacy single halaqah name
   halaqahIds?: string[]; // All halaqahs this teacher teaches (supports multiple halaqahs)
   halaqahNames?: string[]; // Display names of those halaqahs
-  googleEmail?: string; // بريد حساب Google المرتبط بالمعلم
-  googleUid?: string; // معرف Google UID
-  googleName?: string; // اسم الحساب في Google
-  googlePhotoUrl?: string; // صورة الحساب في Google
+  googleEmail?: string | null; // بريد حساب Google المرتبط بالمعلم
+  googleUid?: string | null; // معرف Google UID
+  googleName?: string | null; // اسم الحساب في Google
+  googlePhotoUrl?: string | null; // صورة الحساب في Google
   isGoogleLinked?: boolean; // هل حساب المعلم موثق ومربوط بـ Google للتسجيل السريع
   createdAt: string;
 }
@@ -98,10 +98,10 @@ export interface Student {
   notes?: string;
   halaqahId?: string; // ID of the halaqah this student belongs to
   halaqahName?: string; // Cached display name of halaqah
-  googleEmail?: string; // بريد حساب Google المرتبط بالطالب
-  googleUid?: string; // معرف Google UID المرتبط
-  googleName?: string; // اسم الحساب في Google
-  googlePhotoUrl?: string; // صورة الحساب في Google
+  googleEmail?: string | null; // بريد حساب Google المرتبط بالطالب
+  googleUid?: string | null; // معرف Google UID المرتبط
+  googleName?: string | null; // اسم الحساب في Google
+  googlePhotoUrl?: string | null; // صورة الحساب في Google
   isGoogleLinked?: boolean; // هل حساب الطالب موثق ومربوط بـ Google
   completedNewPages?: number[]; // الأوجه المكتملة في الحفظ الجديد (5 نقاط لكل وجه)
   completedReviewPages?: number[]; // الأوجه المكتملة في المراجعة (نقطة واحدة لكل وجه)

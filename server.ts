@@ -935,11 +935,15 @@ function calculateQuranicPhoneticTimings(
 
   for (let j = 0; j < weights.length; j++) {
     const w = weights[j];
-    let duration = Math.round((w.weight * scale) * 10) / 10;
-    if (duration < 2.5) duration = 2.5;
+    let duration = Math.round((w.weight * scale) * 100) / 100;
+    if (duration < 2.0) duration = 2.0;
 
-    const start = Math.round(currentStart * 10) / 10;
-    const end = Math.round((start + duration) * 10) / 10;
+    const start = Math.round(currentStart * 100) / 100;
+    let end = Math.round((start + duration) * 100) / 100;
+    if (j === weights.length - 1 && targetDuration > 10) {
+      end = Math.round(targetDuration * 100) / 100;
+      duration = Math.max(1.5, Math.round((end - start) * 100) / 100);
+    }
     currentStart = end;
 
     segments.push({
@@ -947,7 +951,7 @@ function calculateQuranicPhoneticTimings(
       ayahText: w.text,
       startTimeSeconds: start,
       endTimeSeconds: end,
-      duration: Math.round((end - start) * 10) / 10,
+      duration: Math.round((end - start) * 100) / 100,
     });
   }
 
@@ -996,10 +1000,10 @@ app.post("/api/gemini/segment-recording", async (req, res) => {
       try {
         const versesListText = verses
           .map((v, i) => `[الآية ${i + 1}]: ${v}`)
-          .slice(0, 45) // Keep prompt within safe bounds
+          .slice(0, 50) // Keep prompt within safe bounds
           .join("\n");
 
-        const prompt = `أنت عالم التجويد والقراءات وحساب أزمنة التلاوة القرآنية بدقة الثواني وجزء الثانية.
+        const prompt = `أنت عالم التجويد والقراءات وحساب أزمنة التلاوة القرآنية بدقة الثواني وجزء الثانية (مثل 1.25 أو 4.5 ثانية).
 المطلوب: حساب التوقيت الحقيقي والواقعي لبداية ونهاية كل آية من آيات سورة ${surahName || surahNumber} في هذا التسجيل الصوتي.
 
 بيانات التسجيل:
@@ -1014,13 +1018,14 @@ app.post("/api/gemini/segment-recording", async (req, res) => {
 ${versesListText}
 
 تعليمات حاسمة وصارمة:
-1. [ممنوع منعاً باتاً التكرار]: ممنوع جعل مدة كل آية 8 ثوانٍ أو أي رقم ثابت! كل آية تختلف مدتها اختلافاً جذرياً بحسب عدد كلماتها وحروفها والمدود والوقف.
-2. الآيات القصيرة (2 إلى 4 كلمات) تأخذ من 3 إلى 5 ثوانٍ فقط.
-3. الآيات المتوسطة (6 إلى 12 كلمة) تأخذ من 7 إلى 14 ثانية.
-4. الآيات الطويلة (15 إلى 30 كلمة) تأخذ من 18 إلى 35 ثانية.
-5. البسملة والاستعاذة (رقم 0) تأخذ من 4 إلى 7 ثوانٍ.
-6. [التسلسل والتطابق]: نهاية كل آية (endTimeSeconds) هي نقطة توقف القارئ وانتهاء لفظ الآية، وبداية الآية التالية (startTimeSeconds) تبدأ فوراً بعدها.
-7. لا تتجاوز المدة الإجمالية (${totalDurationSeconds || 300} ثانية).
+1. تقبل التوقيتات بالثواني وجزء الثانية (مثلاً: 0، 6.5، 12.25، 18.75).
+2. [ممنوع منعاً باتاً التكرار]: ممنوع جعل مدة كل آية متساوية أو 8 ثوانٍ! كل آية تختلف مدتها اختلافاً جذرياً بحسب عدد كلماتها وحروفها والمدود والوقف.
+3. الآيات القصيرة تأخذ من 2.5 إلى 5.5 ثوانٍ فقط.
+4. الآيات المتوسطة تأخذ من 6 إلى 14 ثانية.
+5. الآيات الطويلة تأخذ من 15 إلى 35 ثانية.
+6. البسملة والاستعاذة (رقم 0) تأخذ من 4.5 إلى 7.5 ثوانٍ.
+7. [التسلسل والتطابق]: نهاية كل آية (endTimeSeconds) هي نقطة توقف القارئ وانتهاء لفظ الآية، وبداية الآية التالية (startTimeSeconds) تبدأ فوراً بعدها.
+8. الالتزام بالمدة الإجمالية (${totalDurationSeconds || 180} ثانية) بحيث تنتهي الآية الأخيرة عند نهاية التسجيل.
 
 أخرج النتيجة بصيغة JSON فقط:
 {
@@ -1046,16 +1051,27 @@ ${versesListText}
 
         const parsed = JSON.parse(geminiRes.text || "{}");
         if (Array.isArray(parsed.segments) && parsed.segments.length >= Math.min(verses.length, 3)) {
-          // Verify that durations are not all identical
-          const durations = parsed.segments.map((s: any) => Math.round(s.duration || (s.endTimeSeconds - s.startTimeSeconds)));
-          const uniqueDurations = new Set(durations);
+          // Verify that durations are varied and valid numbers
+          const cleanSegments = parsed.segments.map((s: any) => {
+            const start = Math.round(Number(s.startTimeSeconds || 0) * 100) / 100;
+            const end = Math.round(Number(s.endTimeSeconds || (start + 3)) * 100) / 100;
+            return {
+              ayahNumber: Number(s.ayahNumber),
+              ayahText: s.ayahText || "",
+              startTimeSeconds: start,
+              endTimeSeconds: end,
+              duration: Math.round((end - start) * 100) / 100,
+            };
+          });
+
+          const uniqueDurations = new Set(cleanSegments.map(s => Math.round(s.duration)));
           if (uniqueDurations.size > 1) {
-            console.log(`[AI-Segment] Successfully generated ${parsed.segments.length} varied segments via Gemini.`);
+            console.log(`[AI-Segment] Successfully generated ${cleanSegments.length} varied segments via Gemini.`);
             return res.json({
               success: true,
               source: "gemini_ai",
               totalDuration: parsed.totalDuration || totalDurationSeconds,
-              segments: parsed.segments,
+              segments: cleanSegments,
             });
           }
         }

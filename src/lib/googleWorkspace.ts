@@ -510,10 +510,10 @@ export class GoogleWorkspaceService {
   static async unlinkStudentGoogleAccount(student: Student): Promise<Student> {
     const updatedStudent: Student = {
       ...student,
-      googleEmail: undefined,
-      googleUid: undefined,
-      googleName: undefined,
-      googlePhotoUrl: undefined,
+      googleEmail: null,
+      googleUid: null,
+      googleName: null,
+      googlePhotoUrl: null,
       isGoogleLinked: false
     };
 
@@ -696,10 +696,10 @@ export class GoogleWorkspaceService {
   static async unlinkTeacherGoogleAccount(teacher: TeacherAccount): Promise<TeacherAccount> {
     const updatedTeacher: TeacherAccount = {
       ...teacher,
-      googleEmail: undefined,
-      googleUid: undefined,
-      googleName: undefined,
-      googlePhotoUrl: undefined,
+      googleEmail: null,
+      googleUid: null,
+      googleName: null,
+      googlePhotoUrl: null,
       isGoogleLinked: false
     };
 

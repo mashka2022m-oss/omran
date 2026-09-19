@@ -152,7 +152,6 @@ export const ParentPortalView: React.FC<ParentPortalViewProps> = ({
   };
 
   const handleUnlinkGoogleAccount = async () => {
-    if (!window.confirm('هل أنت متأكد من رغبتك في فصل حساب Google الحالي؟')) return;
     try {
       setIsLinkingGoogle(true);
       const updated = await GoogleWorkspaceService.unlinkStudentGoogleAccount(currentStudent);
@@ -160,8 +159,10 @@ export const ParentPortalView: React.FC<ParentPortalViewProps> = ({
       if (onUpdateStudent) {
         onUpdateStudent(updated);
       }
+      setGoogleLinkError('');
     } catch (e: any) {
-      alert(e?.message || 'تعذر فصل حساب Google');
+      console.error('Unlink student Google account error:', e);
+      setGoogleLinkError(e?.message || 'تعذر فصل حساب Google');
     } finally {
       setIsLinkingGoogle(false);
     }

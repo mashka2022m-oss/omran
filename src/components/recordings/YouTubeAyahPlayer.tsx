@@ -10,6 +10,7 @@ interface YouTubeAyahPlayerProps {
   onDurationReceived?: (duration: number) => void;
   onSetStartTime?: (seconds: number) => void;
   onSetEndTime?: (seconds: number) => void;
+  onSetEndAndAdvance?: (seconds: number) => void;
   onNextAyah?: () => void;
   onPrevAyah?: () => void;
   readOnlyControls?: boolean; // For preview or student view
@@ -17,12 +18,20 @@ interface YouTubeAyahPlayerProps {
   onAyahFinished?: (seg: SurahRecordingSegment) => void;
 }
 
-// Format seconds into MM:SS
-export const formatTimeMMSS = (sec: number): string => {
-  const s = Math.max(0, Math.floor(sec));
-  const mins = Math.floor(s / 60);
-  const secs = s % 60;
-  return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+// Format seconds into MM:SS (with support for decimal seconds like 01:23.5 or 00:01.25)
+export const formatTimeMMSS = (sec: number, showDecimals: boolean = true): string => {
+  const safe = Math.max(0, Number(sec) || 0);
+  const mins = Math.floor(safe / 60);
+  const remainder = safe - mins * 60;
+  const wholeSecs = Math.floor(remainder);
+  const fraction = remainder - wholeSecs;
+
+  let secStr = wholeSecs.toString().padStart(2, '0');
+  if (showDecimals && fraction >= 0.01) {
+    const fracStr = (Math.round(fraction * 100) / 100).toFixed(2).replace(/^0/, '').replace(/0+$/, '');
+    if (fracStr) secStr += fracStr;
+  }
+  return `${mins.toString().padStart(2, '0')}:${secStr}`;
 };
 
 export const YouTubeAyahPlayer: React.FC<YouTubeAyahPlayerProps> = ({
@@ -33,6 +42,7 @@ export const YouTubeAyahPlayer: React.FC<YouTubeAyahPlayerProps> = ({
   onDurationReceived,
   onSetStartTime,
   onSetEndTime,
+  onSetEndAndAdvance,
   onNextAyah,
   onPrevAyah,
   readOnlyControls = false,
@@ -71,19 +81,27 @@ export const YouTubeAyahPlayer: React.FC<YouTubeAyahPlayerProps> = ({
     }
   }, []);
 
-  // Listen to postMessage from YouTube iframe
+  // Listen to postMessage from YouTube iframe (accepts both JSON string and already parsed Object)
   useEffect(() => {
     const handleMessage = (e: MessageEvent) => {
-      if (!e.data || typeof e.data !== 'string') return;
+      let data = e.data;
+      if (typeof data === 'string') {
+        try {
+          data = JSON.parse(data);
+        } catch {
+          return;
+        }
+      }
+      if (!data || typeof data !== 'object') return;
+
       try {
-        const data = JSON.parse(e.data);
         if (data.event === 'infoDelivery' && data.info) {
           if (typeof data.info.duration === 'number' && data.info.duration > 0) {
             onDurationReceived?.(data.info.duration);
           }
 
           if (typeof data.info.currentTime === 'number') {
-            const time = data.info.currentTime;
+            const time = Math.round(Number(data.info.currentTime) * 100) / 100;
             setCurrentTime(time);
             onTimeUpdate?.(time);
 
@@ -91,7 +109,7 @@ export const YouTubeAyahPlayer: React.FC<YouTubeAyahPlayerProps> = ({
             if (playingSegment && playingSegment.endTimeSeconds > 0) {
               // Ignore old playback times during seek grace period
               if (Date.now() > seekGracePeriodRef.current) {
-                if (time >= playingSegment.endTimeSeconds) {
+                if (time >= (playingSegment.endTimeSeconds - 0.05)) {
                   if (isLooping) {
                     // Loop back to start
                     seekGracePeriodRef.current = Date.now() + 800;
@@ -117,7 +135,7 @@ export const YouTubeAyahPlayer: React.FC<YouTubeAyahPlayerProps> = ({
           }
         }
       } catch {
-        // Ignore non-json messages
+        // Ignore non-json or unformatted messages
       }
     };
 
@@ -125,7 +143,7 @@ export const YouTubeAyahPlayer: React.FC<YouTubeAyahPlayerProps> = ({
     return () => window.removeEventListener('message', handleMessage);
   }, [playingSegment, isLooping, onTimeUpdate, onDurationReceived, onAyahFinished, sendYTCommand]);
 
-  // Request listening updates from YouTube iframe
+  // High-frequency listening pulse from YouTube iframe (every 250ms for smooth sub-second tracking)
   useEffect(() => {
     const interval = setInterval(() => {
       if (iframeRef.current && iframeRef.current.contentWindow) {
@@ -134,7 +152,7 @@ export const YouTubeAyahPlayer: React.FC<YouTubeAyahPlayerProps> = ({
           '*'
         );
       }
-    }, 400);
+    }, 250);
 
     return () => clearInterval(interval);
   }, []);
@@ -142,9 +160,9 @@ export const YouTubeAyahPlayer: React.FC<YouTubeAyahPlayerProps> = ({
   // Play a specific segment strictly from its start to end
   const playAyahSegment = useCallback((seg: SurahRecordingSegment) => {
     setPlayingSegment({ ...seg });
-    const start = Math.max(0, seg.startTimeSeconds);
-    // Grace period of 800ms ensures seek executes before checking time >= endTimeSeconds
-    seekGracePeriodRef.current = Date.now() + 800;
+    const start = Math.max(0, Number(seg.startTimeSeconds) || 0);
+    // Grace period of 750ms ensures seek executes before checking time >= endTimeSeconds
+    seekGracePeriodRef.current = Date.now() + 750;
     sendYTCommand('seekTo', [start, true]);
     sendYTCommand('playVideo');
     setIsPlaying(true);
@@ -169,21 +187,29 @@ export const YouTubeAyahPlayer: React.FC<YouTubeAyahPlayerProps> = ({
   };
 
   const handleSeekDelta = (deltaSeconds: number) => {
-    const newTime = Math.max(0, currentTime + deltaSeconds);
+    const newTime = Math.max(0, Math.round((currentTime + deltaSeconds) * 100) / 100);
+    setCurrentTime(newTime);
     sendYTCommand('seekTo', [newTime, true]);
   };
 
   const handleSetStartFromCurrent = () => {
     if (onSetStartTime) {
-      const rounded = Math.round(currentTime);
-      onSetStartTime(rounded);
+      const precise = Math.round(currentTime * 100) / 100;
+      onSetStartTime(precise);
     }
   };
 
   const handleSetEndFromCurrent = () => {
     if (onSetEndTime) {
-      const rounded = Math.round(currentTime);
-      onSetEndTime(rounded);
+      const precise = Math.round(currentTime * 100) / 100;
+      onSetEndTime(precise);
+    }
+  };
+
+  const handleSetEndAndAdvanceFromCurrent = () => {
+    if (onSetEndAndAdvance) {
+      const precise = Math.round(currentTime * 100) / 100;
+      onSetEndAndAdvance(precise);
     }
   };
 
@@ -259,11 +285,11 @@ export const YouTubeAyahPlayer: React.FC<YouTubeAyahPlayerProps> = ({
           </div>
 
           {/* Quick player scrubber controls */}
-          <div className="flex items-center gap-1">
+          <div className="flex flex-wrap items-center gap-1">
             <button
               type="button"
               onClick={() => handleSeekDelta(-5)}
-              className="px-2 py-1 rounded-lg bg-[#022c22] hover:bg-[#064e3b] text-[#86efac] text-[10px] font-mono border border-[#065f46] cursor-pointer"
+              className="px-1.5 py-1 rounded-lg bg-[#022c22] hover:bg-[#064e3b] text-[#86efac] text-[10px] font-mono border border-[#065f46] cursor-pointer"
               title="تأخير 5 ثوانٍ"
             >
               -5ث
@@ -271,10 +297,18 @@ export const YouTubeAyahPlayer: React.FC<YouTubeAyahPlayerProps> = ({
             <button
               type="button"
               onClick={() => handleSeekDelta(-1)}
-              className="px-2 py-1 rounded-lg bg-[#022c22] hover:bg-[#064e3b] text-[#86efac] text-[10px] font-mono border border-[#065f46] cursor-pointer"
+              className="px-1.5 py-1 rounded-lg bg-[#022c22] hover:bg-[#064e3b] text-[#86efac] text-[10px] font-mono border border-[#065f46] cursor-pointer"
               title="تأخير ثانية واحدة"
             >
               -1ث
+            </button>
+            <button
+              type="button"
+              onClick={() => handleSeekDelta(-0.25)}
+              className="px-1.5 py-1 rounded-lg bg-[#022c22] hover:bg-[#064e3b] text-amber-300 text-[10px] font-mono border border-amber-500/40 cursor-pointer"
+              title="تأخير ربع ثانية (0.25)"
+            >
+              -0.25ث
             </button>
             <button
               type="button"
@@ -286,8 +320,16 @@ export const YouTubeAyahPlayer: React.FC<YouTubeAyahPlayerProps> = ({
             </button>
             <button
               type="button"
+              onClick={() => handleSeekDelta(0.25)}
+              className="px-1.5 py-1 rounded-lg bg-[#022c22] hover:bg-[#064e3b] text-amber-300 text-[10px] font-mono border border-amber-500/40 cursor-pointer"
+              title="تقديم ربع ثانية (0.25)"
+            >
+              +0.25ث
+            </button>
+            <button
+              type="button"
               onClick={() => handleSeekDelta(1)}
-              className="px-2 py-1 rounded-lg bg-[#022c22] hover:bg-[#064e3b] text-[#86efac] text-[10px] font-mono border border-[#065f46] cursor-pointer"
+              className="px-1.5 py-1 rounded-lg bg-[#022c22] hover:bg-[#064e3b] text-[#86efac] text-[10px] font-mono border border-[#065f46] cursor-pointer"
               title="تقديم ثانية واحدة"
             >
               +1ث
@@ -295,7 +337,7 @@ export const YouTubeAyahPlayer: React.FC<YouTubeAyahPlayerProps> = ({
             <button
               type="button"
               onClick={() => handleSeekDelta(5)}
-              className="px-2 py-1 rounded-lg bg-[#022c22] hover:bg-[#064e3b] text-[#86efac] text-[10px] font-mono border border-[#065f46] cursor-pointer"
+              className="px-1.5 py-1 rounded-lg bg-[#022c22] hover:bg-[#064e3b] text-[#86efac] text-[10px] font-mono border border-[#065f46] cursor-pointer"
               title="تقديم 5 ثوانٍ"
             >
               +5ث
@@ -305,16 +347,16 @@ export const YouTubeAyahPlayer: React.FC<YouTubeAyahPlayerProps> = ({
 
         {/* Teacher Ayah Alignment Controls: "يعينها" (Set Start / End from live audio) */}
         {!readOnlyControls && activeSegment && (
-          <div className="pt-2 border-t border-[#065f46] flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-            <div className="text-xs text-[#86efac] flex items-center gap-2">
+          <div className="pt-2 border-t border-[#065f46] flex flex-col lg:flex-row lg:items-center justify-between gap-2">
+            <div className="text-xs text-[#86efac] flex flex-wrap items-center gap-2">
               <span className="px-2 py-0.5 rounded-md bg-[#fbbf24]/20 text-[#fbbf24] font-black">
                 {activeSegment.ayahNumber === 0 ? 'الاستعاذة والبسملة' : `الآية ${activeSegment.ayahNumber}`}
               </span>
-              <span className="font-bold text-white">
-                التوقيت الحالي للآية: {formatTimeMMSS(activeSegment.startTimeSeconds)} - {formatTimeMMSS(activeSegment.endTimeSeconds)}
+              <span className="font-bold text-white font-mono">
+                {formatTimeMMSS(activeSegment.startTimeSeconds)} - {formatTimeMMSS(activeSegment.endTimeSeconds)}
               </span>
-              <span className="text-[10px] text-amber-300">
-                (المدة: {Math.max(0, Math.round(activeSegment.endTimeSeconds - activeSegment.startTimeSeconds))} ث)
+              <span className="text-[11px] text-amber-300 font-mono font-bold">
+                (المدة: {Math.max(0, Number((activeSegment.endTimeSeconds - activeSegment.startTimeSeconds).toFixed(2)))} ث)
               </span>
             </div>
 
@@ -341,6 +383,19 @@ export const YouTubeAyahPlayer: React.FC<YouTubeAyahPlayerProps> = ({
                 <span>🏁 تعيين النهاية ({formatTimeMMSS(currentTime)})</span>
               </button>
 
+              {/* Set End and Advance to Next Ayah */}
+              {onSetEndAndAdvance && (
+                <button
+                  type="button"
+                  onClick={handleSetEndAndAdvanceFromCurrent}
+                  className="px-3 py-1.5 rounded-lg bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-slate-950 font-black text-xs flex items-center gap-1.5 shadow-md cursor-pointer border border-amber-300"
+                  title="تعيين الوقت الحالي كنهاية للآية والانتقال للآية التالية وضبط بدايتها تلقائياً"
+                >
+                  <Flag className="w-3.5 h-3.5 fill-current" />
+                  <span>🏁 تعيين النهاية والتالي ⬅ ({formatTimeMMSS(currentTime)})</span>
+                </button>
+              )}
+
               {/* Test play this segment strictly */}
               <button
                 type="button"
@@ -349,7 +404,7 @@ export const YouTubeAyahPlayer: React.FC<YouTubeAyahPlayerProps> = ({
                 title="تشغيل هذه الآية فقط من بدايتها لنهايتها للتحقق"
               >
                 <Play className="w-3 h-3 fill-[#fbbf24]" />
-                <span>استماع للآية فقط</span>
+                <span>استماع للآية</span>
               </button>
             </div>
           </div>

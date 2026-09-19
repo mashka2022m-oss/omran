@@ -295,9 +295,6 @@ export const AccountsTab: React.FC<AccountsTabProps> = ({
   };
 
   const handleUnlinkStudentGoogle = async (student: Student) => {
-    if (!window.confirm(`هل أنت متأكد من فصل حساب Google عن الطالب (${student.name})؟ سيتمكن من ربط حساب آخر لاحقاً.`)) {
-      return;
-    }
     try {
       setUnlinkingStudentId(student.id);
       const updated = await GoogleWorkspaceService.unlinkStudentGoogleAccount(student);
@@ -307,10 +304,11 @@ export const AccountsTab: React.FC<AccountsTabProps> = ({
       }
       setStatusMsg({
         type: 'success',
-        text: `تم فصل حساب Google عن الطالب (${student.name}) بنجاح!`
+        text: `تم فصل حساب Google (${student.googleEmail || ''}) عن الطالب (${student.name}) بنجاح!`
       });
     } catch (e: any) {
-      setStatusMsg({ type: 'error', text: 'فشل فصل حساب Google: ' + (e?.message || e) });
+      console.error('Unlink student Google error:', e);
+      setStatusMsg({ type: 'error', text: 'فشل فصل حساب Google: ' + (e?.message || String(e)) });
     } finally {
       setUnlinkingStudentId(null);
     }

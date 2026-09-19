@@ -559,7 +559,8 @@ export class OmranDataService {
   // Save Teacher directly in Firestore
   static async saveTeacher(teacher: TeacherAccount): Promise<void> {
     try {
-      await setDoc(doc(db, 'teachers', teacher.id), teacher);
+      const clean = cleanFirestoreData(teacher);
+      await setDoc(doc(db, 'teachers', teacher.id), clean);
     } catch (e) {
       handleFirestoreError(e, OperationType.WRITE, `teachers/${teacher.id}`);
       throw e;
@@ -584,7 +585,8 @@ export class OmranDataService {
       snap.forEach(d => list.push(d.data() as Halaqah));
       if (list.length === 0) {
         for (const h of DEFAULT_HALAQAHS) {
-          await setDoc(doc(db, 'halaqahs', h.id), h);
+          const cleanH = cleanFirestoreData(h);
+          await setDoc(doc(db, 'halaqahs', h.id), cleanH);
         }
         return DEFAULT_HALAQAHS;
       }
@@ -598,7 +600,8 @@ export class OmranDataService {
   // Save Halaqah directly in Firestore
   static async saveHalaqah(halaqah: Halaqah): Promise<void> {
     try {
-      await setDoc(doc(db, 'halaqahs', halaqah.id), halaqah);
+      const clean = cleanFirestoreData(halaqah);
+      await setDoc(doc(db, 'halaqahs', halaqah.id), clean);
     } catch (e) {
       handleFirestoreError(e, OperationType.WRITE, `halaqahs/${halaqah.id}`);
       throw e;
@@ -1330,7 +1333,8 @@ export class OmranDataService {
   // Save / Update Surah Recording
   static async saveRecording(recording: SurahRecording): Promise<void> {
     try {
-      await setDoc(doc(db, 'surah_recordings', recording.id), recording);
+      const clean = cleanFirestoreData(recording);
+      await setDoc(doc(db, 'surah_recordings', recording.id), clean);
     } catch (e) {
       handleFirestoreError(e, OperationType.WRITE, `surah_recordings/${recording.id}`);
       throw e;
@@ -1379,7 +1383,8 @@ export class OmranDataService {
   // Save Recordings Config
   static async saveRecordingsConfig(config: RecordingsConfig): Promise<void> {
     try {
-      await setDoc(doc(db, 'settings', 'recordings_config'), config);
+      const clean = cleanFirestoreData(config);
+      await setDoc(doc(db, 'settings', 'recordings_config'), clean);
     } catch (e) {
       handleFirestoreError(e, OperationType.WRITE, 'settings/recordings_config');
       throw e;
@@ -1429,7 +1434,8 @@ export class OmranDataService {
   // Save / Update Student Listening Log
   static async saveListeningLog(log: StudentListeningLog): Promise<void> {
     try {
-      await setDoc(doc(db, 'listening_logs', log.id), log);
+      const clean = cleanFirestoreData(log);
+      await setDoc(doc(db, 'listening_logs', log.id), clean);
     } catch (e) {
       handleFirestoreError(e, OperationType.WRITE, `listening_logs/${log.id}`);
       throw e;
