@@ -21,6 +21,8 @@ interface LoginModalProps {
   students: Student[];
   teachers?: TeacherAccount[];
   settings: AppSettings;
+  onBackToLanding?: () => void;
+  onOpenPrivacyPolicy?: () => void;
 }
 
 export const LoginModal: React.FC<LoginModalProps> = ({
@@ -28,7 +30,9 @@ export const LoginModal: React.FC<LoginModalProps> = ({
   onRegisterStudent,
   students,
   teachers = [],
-  settings
+  settings,
+  onBackToLanding,
+  onOpenPrivacyPolicy
 }) => {
   const [activeTab, setActiveTab] = useState<'login' | 'register'>('login');
   
@@ -214,7 +218,28 @@ export const LoginModal: React.FC<LoginModalProps> = ({
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 relative z-10">
+    <div className="min-h-screen flex flex-col items-center justify-center p-4 relative z-10">
+      {onBackToLanding && (
+        <div className="w-full max-w-md mb-3 flex items-center justify-between text-xs">
+          <button
+            type="button"
+            onClick={onBackToLanding}
+            className="inline-flex items-center gap-1.5 text-amber-300 hover:text-white font-bold transition-colors cursor-pointer bg-[#064e3b]/80 border border-[#065f46] px-3.5 py-2 rounded-xl"
+          >
+            <span>← الرجوع إلى الصفحة التعريفية للمنظومة</span>
+          </button>
+          {onOpenPrivacyPolicy && (
+            <button
+              type="button"
+              onClick={onOpenPrivacyPolicy}
+              className="text-[#86efac] hover:text-white underline font-bold cursor-pointer"
+            >
+              سياسة الخصوصية
+            </button>
+          )}
+        </div>
+      )}
+
       <div className="w-full max-w-md bg-[#064e3b]/95 backdrop-blur-2xl border border-[#fbbf24]/30 rounded-[32px] p-6 sm:p-8 shadow-2xl shadow-emerald-950/90">
         {/* Header Branding */}
         <div className="text-center mb-6">
@@ -519,6 +544,18 @@ export const LoginModal: React.FC<LoginModalProps> = ({
             </button>
           </form>
         )}
+      </div>
+
+      {/* Privacy Policy Footer */}
+      <div className="mt-4 text-center text-xs text-[#86efac]/70">
+        <span>تلتزم منظومة عُمْرَان بحماية البيانات و</span>
+        <button
+          type="button"
+          onClick={onOpenPrivacyPolicy}
+          className="text-amber-300 hover:text-white underline font-bold cursor-pointer mr-1"
+        >
+          سياسة الخصوصية الرسمية (Privacy Policy)
+        </button>
       </div>
     </div>
   );

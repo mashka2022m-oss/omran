@@ -58,6 +58,8 @@ import {
 import { AnimatedBackground } from './components/AnimatedBackground';
 import { Navbar } from './components/Navbar';
 import { LoginModal } from './components/LoginModal';
+import { PublicLandingPage } from './components/PublicLandingPage';
+import { PrivacyPolicyPage } from './components/PrivacyPolicyPage';
 import { CloudLoadingScreen } from './components/CloudLoadingScreen';
 import { ParentPortalView } from './components/ParentPortalView';
 import { TeacherManagementModal } from './components/TeacherManagementModal';
@@ -97,6 +99,51 @@ export function App() {
     }
     return null;
   });
+
+  // Public Route State ('landing' | 'login' | 'privacy')
+  const [publicRoute, setPublicRoute] = useState<'landing' | 'login' | 'privacy'>(() => {
+    if (typeof window !== 'undefined') {
+      const p = window.location.pathname.toLowerCase();
+      const s = window.location.search.toLowerCase();
+      const h = window.location.hash.toLowerCase();
+      if (p.includes('/privacy') || s.includes('privacy') || h.includes('privacy')) {
+        return 'privacy';
+      }
+      if (p.includes('/login') || s.includes('login') || h.includes('login')) {
+        return 'login';
+      }
+    }
+    return 'landing';
+  });
+
+  // Keep publicRoute in sync with browser forward/back buttons
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const handlePopState = () => {
+      const p = window.location.pathname.toLowerCase();
+      const s = window.location.search.toLowerCase();
+      const h = window.location.hash.toLowerCase();
+      if (p.includes('/privacy') || s.includes('privacy') || h.includes('privacy')) {
+        setPublicRoute('privacy');
+      } else if (p.includes('/login') || s.includes('login') || h.includes('login')) {
+        setPublicRoute('login');
+      } else {
+        setPublicRoute('landing');
+      }
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
+  const navigatePublic = (route: 'landing' | 'login' | 'privacy') => {
+    setPublicRoute(route);
+    if (typeof window !== 'undefined') {
+      const target = route === 'privacy' ? '/privacy' : route === 'login' ? '/login' : '/';
+      if (window.location.pathname !== target) {
+        window.history.pushState(null, '', target);
+      }
+    }
+  };
 
   // Check URL portal query param for direct parent portal link (?portal=std-1 or ?id=std-1)
   const [portalStudentId, setPortalStudentId] = useState<string | null>(null);
@@ -709,7 +756,7 @@ export function App() {
     setCurrentUser(null);
     localStorage.removeItem('omran_session');
     setPortalStudentId(null);
-    window.history.replaceState({}, '', window.location.pathname);
+    navigatePublic('landing');
   };
 
   // Multi-Teacher Handlers
@@ -1244,19 +1291,45 @@ export function App() {
     );
   }
 
-  // If not logged in, show Login / Register Modal
-  if (!currentUser) {
+  // Priority 1: If user navigated to /privacy or clicked Privacy Policy link
+  if (publicRoute === 'privacy') {
     return (
-      <div className="min-h-screen bg-[#022c22] text-[#f0f9f6] font-sans selection:bg-[#fbbf24] selection:text-[#064e3b]" dir="rtl">
-        <AnimatedBackground />
-        <LoginModal
-          onLoginSuccess={handleLoginSuccess}
-          onRegisterStudent={handleAddStudent}
-          students={students}
-          teachers={teachers}
-          settings={settings}
-        />
-      </div>
+      <PrivacyPolicyPage
+        onBackToHome={() => navigatePublic('landing')}
+        onGoToLogin={!currentUser ? () => navigatePublic('login') : undefined}
+      />
+    );
+  }
+
+  // Priority 2: If not logged in, render Public Landing Page or Login Modal
+  if (!currentUser) {
+    if (publicRoute === 'login') {
+      return (
+        <div className="min-h-screen bg-[#022c22] text-[#f0f9f6] font-sans selection:bg-[#fbbf24] selection:text-[#064e3b]" dir="rtl">
+          <AnimatedBackground />
+          <LoginModal
+            onLoginSuccess={handleLoginSuccess}
+            onRegisterStudent={handleAddStudent}
+            students={students}
+            teachers={teachers}
+            settings={settings}
+            onBackToLanding={() => navigatePublic('landing')}
+            onOpenPrivacyPolicy={() => navigatePublic('privacy')}
+          />
+        </div>
+      );
+    }
+
+    // Default Public Landing Page (accessible to Google App Reviewer and public visitors)
+    return (
+      <PublicLandingPage
+        onOpenLogin={() => navigatePublic('login')}
+        onOpenPrivacyPolicy={() => navigatePublic('privacy')}
+        onOpenParentPortal={() => {
+          navigatePublic('login');
+        }}
+        appName={settings.complexName || 'منظومة عُمْرَان لإدارة الحلقات والمجمعات القرآنية'}
+      />
     );
   }
 
@@ -1618,6 +1691,31 @@ export function App() {
           />
         )}
       </main>
+
+      {/* Platform Global Footer */}
+      <footer className="max-w-7xl mx-auto px-4 mt-12 pt-6 border-t border-[#065f46]/60 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-[#86efac]/70">
+        <div className="flex items-center gap-2">
+          <BookOpen className="w-4 h-4 text-[#fbbf24]" />
+          <span className="font-bold text-white">{settings.complexName || 'منظومة عُمْرَان لإدارة الحلقات والمجمعات القرآنية'}</span>
+        </div>
+        <div className="flex items-center gap-4">
+          <button
+            type="button"
+            onClick={() => navigatePublic('privacy')}
+            className="hover:text-amber-300 transition-colors font-medium underline cursor-pointer"
+          >
+            وثيقة سياسة الخصوصية (Privacy Policy)
+          </button>
+          <span>•</span>
+          <button
+            type="button"
+            onClick={() => navigatePublic('landing')}
+            className="hover:text-amber-300 transition-colors font-medium cursor-pointer"
+          >
+            الصفحة التعريفية للمنظومة
+          </button>
+        </div>
+      </footer>
 
       {/* Comprehensive Settings Modal (Teachers, Halaqahs, Student Transfer) */}
       <SettingsModal

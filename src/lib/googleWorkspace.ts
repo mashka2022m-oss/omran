@@ -159,7 +159,58 @@ function requestAccessTokenViaGIS(
   });
 }
 
+function silentRefreshTokenViaGIS(
+  clientId: string,
+  scopes: string[],
+  loginHint?: string
+): Promise<{ email?: string; accessToken: string } | null> {
+  return new Promise((resolve) => {
+    try {
+      if (typeof window === 'undefined' || !window.google?.accounts?.oauth2) {
+        resolve(null);
+        return;
+      }
+
+      let settled = false;
+      const timeout = setTimeout(() => {
+        if (!settled) {
+          settled = true;
+          resolve(null);
+        }
+      }, 7000);
+
+      const client = window.google.accounts.oauth2.initTokenClient({
+        client_id: clientId,
+        scope: scopes.join(' '),
+        callback: async (response) => {
+          if (settled) return;
+          settled = true;
+          clearTimeout(timeout);
+          if (response.access_token) {
+            resolve({ accessToken: response.access_token, email: loginHint });
+          } else {
+            resolve(null);
+          }
+        },
+        error_callback: () => {
+          if (settled) return;
+          settled = true;
+          clearTimeout(timeout);
+          resolve(null);
+        }
+      });
+
+      // Passing prompt: '' enables silent renewal if user is signed in to Google in browser
+      client.requestAccessToken({ prompt: '', ...(loginHint ? { hint: loginHint } : {}) } as any);
+    } catch {
+      resolve(null);
+    }
+  });
+}
+
+const LOCAL_STORAGE_OAUTH_KEY = 'omran_google_oauth_v2';
 let inMemoryGoogleAccessToken: string | null = null;
+let inMemoryGoogleAuthConfig: GoogleOAuthConfig | null = null;
 
 export class GoogleWorkspaceService {
   static getCachedAccessToken(): string | null {
@@ -168,48 +219,170 @@ export class GoogleWorkspaceService {
 
   static setCachedAccessToken(token: string | null) {
     inMemoryGoogleAccessToken = token;
+    if (inMemoryGoogleAuthConfig) {
+      inMemoryGoogleAuthConfig.accessToken = token || undefined;
+    }
   }
 
-  // Load persistent Google Account status & token from Firestore cloud database
+  // Load persistent Google Account status & token from Firestore cloud database + localStorage cache
   static async loadGoogleAuthConfig(): Promise<GoogleOAuthConfig> {
+    // 1. Check in-memory cache
+    if (inMemoryGoogleAuthConfig && inMemoryGoogleAuthConfig.isLinked) {
+      return inMemoryGoogleAuthConfig;
+    }
+
+    // 2. Check localStorage cache for instant availability
+    let localConfig: GoogleOAuthConfig | null = null;
+    try {
+      if (typeof window !== 'undefined') {
+        const stored = localStorage.getItem(LOCAL_STORAGE_OAUTH_KEY);
+        if (stored) {
+          localConfig = JSON.parse(stored) as GoogleOAuthConfig;
+          if (localConfig?.accessToken && !inMemoryGoogleAccessToken) {
+            inMemoryGoogleAccessToken = localConfig.accessToken;
+            inMemoryGoogleAuthConfig = localConfig;
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('Could not read google auth from localStorage:', e);
+    }
+
+    // 3. Check Firestore cloud database (Source of Truth)
     try {
       const snap = await getDoc(doc(db, 'settings', 'google_oauth'));
       if (snap.exists()) {
-        const data = snap.data() as GoogleOAuthConfig;
-        if (data.accessToken && !inMemoryGoogleAccessToken) {
-          inMemoryGoogleAccessToken = data.accessToken;
+        const cloudData = snap.data() as GoogleOAuthConfig;
+        if (cloudData.isLinked) {
+          if (cloudData.accessToken) {
+            inMemoryGoogleAccessToken = cloudData.accessToken;
+          }
+          inMemoryGoogleAuthConfig = cloudData;
+          // Sync to localStorage
+          try {
+            if (typeof window !== 'undefined') {
+              localStorage.setItem(LOCAL_STORAGE_OAUTH_KEY, JSON.stringify(cloudData));
+            }
+          } catch {
+            // Ignore local storage error
+          }
+          return cloudData;
         }
-        return data;
       }
     } catch (e) {
       console.warn('Could not load google auth config from Firestore:', e);
     }
+
+    if (localConfig && localConfig.isLinked) {
+      return localConfig;
+    }
+
     return { isLinked: false };
   }
 
-  // Save persistent Google Account status & token to Firestore cloud database forever
+  // Save persistent Google Account status & token to Firestore cloud database forever + localStorage
   static async saveGoogleAuthConfig(config: GoogleOAuthConfig): Promise<void> {
+    const configToSave: GoogleOAuthConfig = {
+      ...config,
+      savedInCloud: true,
+      lastSyncAt: new Date().toISOString(),
+      expiresAt: config.expiresAt || (Date.now() + 3500 * 1000)
+    };
+
+    inMemoryGoogleAuthConfig = configToSave;
+    if (configToSave.accessToken) {
+      inMemoryGoogleAccessToken = configToSave.accessToken;
+    }
+
+    // Save to localStorage immediately
+    try {
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(LOCAL_STORAGE_OAUTH_KEY, JSON.stringify(configToSave));
+      }
+    } catch (e) {
+      console.warn('Could not save to localStorage:', e);
+    }
+
+    // Save to Firestore cloud database forever
     try {
       await setDoc(doc(db, 'settings', 'google_oauth'), {
-        ...config,
-        savedInCloud: true,
+        ...configToSave,
         updatedAt: new Date().toISOString()
-      });
+      }, { merge: true });
     } catch (e) {
       console.error('Error saving google auth config to Firestore:', e);
     }
   }
 
-  // Retrieve valid access token from memory or persistent Firestore
-  static async getValidAccessToken(): Promise<string | null> {
-    if (inMemoryGoogleAccessToken) {
-      return inMemoryGoogleAccessToken;
-    }
+  // Silent Background Token Refresh (keeps Google Sheets connection active forever without showing popups)
+  static async silentRefreshToken(): Promise<string | null> {
+    if (typeof window === 'undefined' || !firebaseConfig.oAuthClientId) return null;
     const config = await this.loadGoogleAuthConfig();
+    if (!config.isLinked || !config.connectedEmail) return null;
+
+    try {
+      await loadGoogleGISScript();
+      if (!window.google?.accounts?.oauth2) return null;
+
+      const refreshRes = await silentRefreshTokenViaGIS(
+        firebaseConfig.oAuthClientId,
+        GOOGLE_SCOPES,
+        config.connectedEmail
+      );
+
+      if (refreshRes?.accessToken) {
+        inMemoryGoogleAccessToken = refreshRes.accessToken;
+        const updatedConfig: GoogleOAuthConfig = {
+          ...config,
+          accessToken: refreshRes.accessToken,
+          lastSyncAt: new Date().toISOString(),
+          savedInCloud: true,
+          expiresAt: Date.now() + 3500 * 1000
+        };
+        await this.saveGoogleAuthConfig(updatedConfig);
+        return refreshRes.accessToken;
+      }
+    } catch (err) {
+      console.warn('Silent refresh attempt notice:', err);
+    }
+    return null;
+  }
+
+  // Retrieve valid access token from memory or persistent Firestore + silent auto-refresh if close to expiry
+  static async getValidAccessToken(): Promise<string | null> {
+    const config = await this.loadGoogleAuthConfig();
+
+    // If we have an access token and it's not expired yet, return it
+    if (inMemoryGoogleAccessToken) {
+      const isExpired = config.expiresAt ? Date.now() >= config.expiresAt : false;
+      if (!isExpired) {
+        return inMemoryGoogleAccessToken;
+      }
+    }
+
+    // If config has token and not expired
     if (config.isLinked && config.accessToken) {
+      const isExpired = config.expiresAt ? Date.now() >= config.expiresAt : false;
+      if (!isExpired) {
+        inMemoryGoogleAccessToken = config.accessToken;
+        return config.accessToken;
+      }
+    }
+
+    // Token is missing or expired, attempt silent background refresh using Google GIS
+    if (config.isLinked && config.connectedEmail) {
+      const silentToken = await this.silentRefreshToken();
+      if (silentToken) {
+        return silentToken;
+      }
+    }
+
+    // If silent refresh failed but we still have the stored token, return it as fallback
+    if (config.accessToken) {
       inMemoryGoogleAccessToken = config.accessToken;
       return config.accessToken;
     }
+
     return null;
   }
 
@@ -224,7 +397,8 @@ export class GoogleWorkspaceService {
       isLinked: true,
       lastSyncAt: new Date().toISOString(),
       accessToken: cleanToken,
-      savedInCloud: true
+      savedInCloud: true,
+      expiresAt: Date.now() + 3500 * 1000
     };
     await this.saveGoogleAuthConfig(config);
   }

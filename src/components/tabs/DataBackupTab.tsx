@@ -51,6 +51,8 @@ export const DataBackupTab: React.FC<DataBackupTabProps> = ({
 }) => {
   const [isExporting, setIsExporting] = useState(false);
   const [isExportingDrive, setIsExportingDrive] = useState(false);
+  const [isExportingSheets, setIsExportingSheets] = useState(false);
+  const [sheetsExportResult, setSheetsExportResult] = useState<{ spreadsheetId: string; spreadsheetUrl: string } | null>(null);
   const [isImporting, setIsImporting] = useState(false);
   const [pendingRestore, setPendingRestore] = useState<FullBackupData | null>(null);
   const [driveExportResult, setDriveExportResult] = useState<{ fileName: string; folderName: string; webViewLink: string } | null>(null);
@@ -167,6 +169,40 @@ export const DataBackupTab: React.FC<DataBackupTabProps> = ({
       });
     } finally {
       setIsExportingDrive(false);
+    }
+  };
+
+  // Handle Full Export to Google Sheets (Saved persistently in Cloud & Multi-Tabbed)
+  const handleExportGoogleSheets = async () => {
+    setIsExportingSheets(true);
+    setStatusMsg(null);
+    setSheetsExportResult(null);
+
+    try {
+      let token = await GoogleWorkspaceService.getValidAccessToken();
+      if (!token) {
+        const linkRes = await GoogleWorkspaceService.linkGoogleAccount();
+        token = linkRes.accessToken;
+        if (onRefreshGoogleAuth) await onRefreshGoogleAuth();
+      }
+
+      const backupData = await OmranDataService.exportFullBackup();
+      const res = await GoogleWorkspaceService.exportFullPlatformBackupToGoogleSheet(backupData, token);
+      setSheetsExportResult(res);
+
+      setStatusMsg({
+        type: 'success',
+        text: 'تم إنشاء وتصدير النسخة الاحتياطية الشاملة إلى جداول Google Sheets بنجاح مع كافة التبويبات!',
+        linkUrl: res.spreadsheetUrl,
+        linkText: 'فتح جدول البيانات في Google Sheets ↗'
+      });
+    } catch (e: any) {
+      setStatusMsg({
+        type: 'error',
+        text: 'تعذر التصدير إلى Google Sheets: ' + (e.message || 'يرجى ربط حساب Google أولاً')
+      });
+    } finally {
+      setIsExportingSheets(false);
     }
   };
 
@@ -930,9 +966,59 @@ export const DataBackupTab: React.FC<DataBackupTabProps> = ({
           <span>النسخ الاحتياطي العام لكامل منصة عمران:</span>
         </h3>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Card 1: Google Drive Cloud Backup */}
-          <div className="bg-gradient-to-b from-[#064e3b]/80 to-[#022c22]/90 border-2 border-[#fbbf24]/40 rounded-[32px] p-6 sm:p-7 space-y-6 shadow-2xl backdrop-blur-md flex flex-col justify-between relative overflow-hidden">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
+          {/* Card 1: Google Sheets Interactive Cloud Backup */}
+          <div className="bg-gradient-to-b from-[#064e3b]/90 to-[#022c22]/95 border-2 border-[#34a853]/60 rounded-[32px] p-6 space-y-5 shadow-2xl backdrop-blur-md flex flex-col justify-between relative overflow-hidden">
+            <div className="space-y-3 relative z-10">
+              <div className="flex items-center justify-between">
+                <div className="w-12 h-12 rounded-2xl bg-[#022c22] border border-[#34a853] text-[#34a853] flex items-center justify-center shadow-lg">
+                  <Database className="w-6 h-6" />
+                </div>
+                <span className="text-[10px] px-2.5 py-1 rounded-full bg-[#34a853]/20 border border-[#34a853]/50 text-[#86efac] font-bold flex items-center gap-1">
+                  <ShieldCheck className="w-3 h-3" />
+                  Google Sheets
+                </span>
+              </div>
+              <h3 className="text-base font-bold font-heading text-white">
+                جداول Google Sheets السحابية
+              </h3>
+              <p className="text-xs text-[#86efac]/90 leading-relaxed">
+                تصدير نسخة حية وشاملة إلى جداول Google Sheets تضم تبويبات متعددة (الطلاب، الحضور، التسميع، الاختبارات، والتسليمات) مع حفظ دائم في السحابة.
+              </p>
+
+              {googleAuthConfig?.isLinked && googleAuthConfig.connectedEmail && (
+                <div className="p-2.5 rounded-xl bg-[#022c22]/90 border border-emerald-600/60 text-[11px] text-emerald-300">
+                  <div className="text-[10px] text-emerald-400 font-bold mb-0.5">الحساب المربوط سحابياً للأبد:</div>
+                  <span className="font-mono text-white break-all">{googleAuthConfig.connectedEmail}</span>
+                </div>
+              )}
+            </div>
+
+            <div className="space-y-2 relative z-10">
+              <button
+                onClick={handleExportGoogleSheets}
+                disabled={isExportingSheets}
+                className="w-full py-3.5 px-4 rounded-2xl bg-gradient-to-r from-[#34a853] to-emerald-600 hover:brightness-110 disabled:opacity-50 text-white font-black text-xs shadow-lg flex items-center justify-center gap-2 transition-all cursor-pointer"
+              >
+                <Database className="w-4 h-4" />
+                <span>{isExportingSheets ? 'جاري التصدير إلى Sheets...' : 'تصدير الآن إلى Google Sheets'}</span>
+              </button>
+
+              {sheetsExportResult && (
+                <a
+                  href={sheetsExportResult.spreadsheetUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="block text-center py-2 px-3 rounded-xl bg-[#022c22] border border-[#34a853]/40 text-[#86efac] text-xs font-bold hover:bg-[#064e3b] transition-all cursor-pointer"
+                >
+                  <span>فتح جدول Google Sheets ↗</span>
+                </a>
+              )}
+            </div>
+          </div>
+
+          {/* Card 2: Google Drive Cloud Backup */}
+          <div className="bg-gradient-to-b from-[#064e3b]/80 to-[#022c22]/90 border-2 border-[#fbbf24]/40 rounded-[32px] p-6 space-y-5 shadow-2xl backdrop-blur-md flex flex-col justify-between relative overflow-hidden">
             <div className="space-y-3 relative z-10">
               <div className="flex items-center justify-between">
                 <div className="w-12 h-12 rounded-2xl bg-[#022c22] border border-[#fbbf24] text-[#fbbf24] flex items-center justify-center shadow-lg">
@@ -940,19 +1026,20 @@ export const DataBackupTab: React.FC<DataBackupTabProps> = ({
                 </div>
                 <span className="text-[10px] px-2.5 py-1 rounded-full bg-[#fbbf24]/20 border border-[#fbbf24]/40 text-[#fbbf24] font-bold flex items-center gap-1">
                   <ShieldCheck className="w-3 h-3" />
-                  سحابي 100%
+                  Google Drive
                 </span>
               </div>
               <h3 className="text-base font-bold font-heading text-white">
-                نسخ احتياطي سحابي إلى Google Drive
+                نسخ احتياطي في Google Drive
               </h3>
               <p className="text-xs text-[#86efac]/90 leading-relaxed">
-                تصدير مباشر وكامل لقاعدة البيانات السحابية إلى مجلد <strong className="text-white">"نسخ منصة عمران القرآنية الاحتياطية"</strong> في Google Drive مع التوقيت والتوثيق الدقيق.
+                تصدير سحابي مباشر لقاعدة البيانات إلى مجلد <strong className="text-white">"نسخ منصة عمران القرآنية الاحتياطية"</strong> في Google Drive مع التوقيت الدقيق.
               </p>
 
               {googleAuthConfig?.isLinked && googleAuthConfig.connectedEmail && (
                 <div className="p-2.5 rounded-xl bg-[#022c22]/80 border border-emerald-700/60 text-[11px] text-emerald-300">
-                  الحساب المربوط: <span className="font-mono text-white">{googleAuthConfig.connectedEmail}</span>
+                  <div className="text-[10px] text-amber-400 font-bold mb-0.5">حساب Drive المتصل:</div>
+                  <span className="font-mono text-white break-all">{googleAuthConfig.connectedEmail}</span>
                 </div>
               )}
             </div>
@@ -961,10 +1048,10 @@ export const DataBackupTab: React.FC<DataBackupTabProps> = ({
               <button
                 onClick={handleExportGoogleDrive}
                 disabled={isExportingDrive}
-                className="w-full py-3.5 px-5 rounded-2xl bg-gradient-to-r from-[#fbbf24] to-amber-500 hover:brightness-110 disabled:opacity-50 text-[#064e3b] font-black text-xs sm:text-sm shadow-[0_0_20px_rgba(251,191,36,0.3)] flex items-center justify-center gap-2 transition-all cursor-pointer"
+                className="w-full py-3.5 px-4 rounded-2xl bg-gradient-to-r from-[#fbbf24] to-amber-500 hover:brightness-110 disabled:opacity-50 text-[#064e3b] font-black text-xs shadow-[0_0_20px_rgba(251,191,36,0.3)] flex items-center justify-center gap-2 transition-all cursor-pointer"
               >
                 <Cloud className="w-4 h-4 text-[#064e3b]" />
-                <span>{isExportingDrive ? 'جاري التصدير السحابي...' : 'تصدير الآن إلى Google Drive'}</span>
+                <span>{isExportingDrive ? 'جاري التصدير السحابي...' : 'تصدير إلى Google Drive'}</span>
               </button>
 
               {driveExportResult && (
@@ -980,47 +1067,47 @@ export const DataBackupTab: React.FC<DataBackupTabProps> = ({
             </div>
           </div>
 
-          {/* Card 2: Export Local JSON Card */}
-          <div className="bg-[#064e3b]/60 border border-[#065f46] rounded-[32px] p-6 sm:p-7 space-y-6 shadow-xl backdrop-blur-md flex flex-col justify-between">
+          {/* Card 3: Export Local JSON Card */}
+          <div className="bg-[#064e3b]/60 border border-[#065f46] rounded-[32px] p-6 space-y-5 shadow-xl backdrop-blur-md flex flex-col justify-between">
             <div className="space-y-3">
               <div className="w-12 h-12 rounded-2xl bg-[#022c22] border border-[#fbbf24]/40 text-[#fbbf24] flex items-center justify-center shadow-md">
                 <Download className="w-6 h-6" />
               </div>
               <h3 className="text-base font-bold font-heading text-white">
-                تنزيل نسخة احتياطية (JSON محلي)
+                تنزيل نسخة احتياطية (JSON)
               </h3>
               <p className="text-xs text-[#86efac]/80 leading-relaxed">
-                تحميل ملف بصيغة JSON على جهاز الكمبيوتر أو الهاتف يحتوي على جميع سجلات الطلاب والمجمعات والتقييمات والخطط القرآنية المحدثة.
+                تحميل ملف بصيغة JSON على جهاز الكمبيوتر أو الهاتف يحتوي على جميع سجلات الطلاب والمجمعات والتقييمات.
               </p>
             </div>
 
             <button
               onClick={handleExport}
               disabled={isExporting}
-              className="w-full py-3.5 px-5 rounded-2xl bg-[#022c22] hover:bg-[#065f46] border border-[#fbbf24]/50 disabled:opacity-50 text-[#fbbf24] font-bold text-xs sm:text-sm shadow-md flex items-center justify-center gap-2 transition-all cursor-pointer"
+              className="w-full py-3.5 px-4 rounded-2xl bg-[#022c22] hover:bg-[#065f46] border border-[#fbbf24]/50 disabled:opacity-50 text-[#fbbf24] font-bold text-xs shadow-md flex items-center justify-center gap-2 transition-all cursor-pointer"
             >
               <Download className="w-4 h-4 text-[#fbbf24]" />
-              <span>{isExporting ? 'جاري تجهيز النسخة...' : 'تنزيل ملف JSON على الجهاز'}</span>
+              <span>{isExporting ? 'جاري تجهيز النسخة...' : 'تنزيل ملف JSON'}</span>
             </button>
           </div>
 
-          {/* Card 3: Import Card */}
-          <div className="bg-[#064e3b]/60 border border-[#065f46] rounded-[32px] p-6 sm:p-7 space-y-6 shadow-xl backdrop-blur-md flex flex-col justify-between">
+          {/* Card 4: Import Card */}
+          <div className="bg-[#064e3b]/60 border border-[#065f46] rounded-[32px] p-6 space-y-5 shadow-xl backdrop-blur-md flex flex-col justify-between">
             <div className="space-y-3">
               <div className="w-12 h-12 rounded-2xl bg-[#022c22] border border-[#065f46] text-[#86efac] flex items-center justify-center shadow-md">
                 <Upload className="w-6 h-6" />
               </div>
               <h3 className="text-base font-bold font-heading text-white">
-                استعادة / استيراد بيانات سابقة
+                استعادة / استيراد بيانات
               </h3>
               <p className="text-xs text-[#86efac]/80 leading-relaxed">
-                اختر ملف نسخة احتياطية بصيغة JSON تم تصديره مسبقاً لاستعادة جميع الطلاب والمجمعات وسجلاتهم في قاعدة بيانات المنصة ومزامنتها فوراً.
+                اختر ملف نسخة احتياطية بصيغة JSON لاستعادة جميع السجلات في قاعدة بيانات المنصة ومزامنتها فوراً.
               </p>
             </div>
 
-            <label className="w-full py-3.5 px-5 rounded-2xl bg-[#022c22] hover:bg-[#065f46] border border-[#065f46] text-[#86efac] hover:text-white font-bold text-xs sm:text-sm shadow-lg flex items-center justify-center gap-2 transition-all cursor-pointer">
+            <label className="w-full py-3.5 px-4 rounded-2xl bg-[#022c22] hover:bg-[#065f46] border border-[#065f46] text-[#86efac] hover:text-white font-bold text-xs shadow-lg flex items-center justify-center gap-2 transition-all cursor-pointer">
               <Upload className="w-4 h-4 text-[#fbbf24]" />
-              <span>{isImporting ? 'جاري الاستيراد...' : 'اختر ملف النسخة (.json)'}</span>
+              <span>{isImporting ? 'جاري الاستيراد...' : 'اختر ملف (.json)'}</span>
               <input
                 type="file"
                 accept=".json"
@@ -1030,6 +1117,44 @@ export const DataBackupTab: React.FC<DataBackupTabProps> = ({
               />
             </label>
           </div>
+        </div>
+      </div>
+
+      {/* Google Developer / Verification Privacy Policy Box */}
+      <div className="bg-gradient-to-r from-[#064e3b] via-[#022c22] to-[#064e3b] border-2 border-amber-400/50 rounded-[28px] p-5 sm:p-6 shadow-2xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+        <div className="space-y-1">
+          <div className="flex items-center gap-2">
+            <ShieldCheck className="w-5 h-5 text-amber-400" />
+            <span className="font-bold text-white text-sm">رابط سياسة الخصوصية المعتمد لمنصة عمران (لمراجعة Google Console):</span>
+          </div>
+          <p className="text-xs text-[#86efac]/90 leading-relaxed">
+            صفحة رسمية ومستقلة تؤكد أن المنصة لا تجمع أو تشارك بيانات المستخدمين مع أي أطراف ثالثة ومخصصة لمراجعة تطبيق Google Workspace:
+          </p>
+          <div className="font-mono text-xs text-amber-300 font-bold bg-[#022c22]/90 px-3 py-1.5 rounded-xl border border-amber-400/30 inline-block" dir="ltr">
+            {typeof window !== 'undefined' ? `${window.location.origin}/privacy` : 'https://omran-platform.web.app/privacy'}
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2 w-full md:w-auto">
+          <button
+            type="button"
+            onClick={() => {
+              const url = typeof window !== 'undefined' ? `${window.location.origin}/privacy` : 'https://omran-platform.web.app/privacy';
+              navigator.clipboard?.writeText(url);
+              alert('تم نسخ رابط صفحة سياسة الخصوصية المعتمد بنجاح!');
+            }}
+            className="flex-1 md:flex-none py-2.5 px-4 rounded-xl bg-amber-400 hover:bg-amber-300 text-[#064e3b] font-black text-xs shadow-md transition-all cursor-pointer"
+          >
+            نسخ الرابط
+          </button>
+          <a
+            href="/privacy"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex-1 md:flex-none py-2.5 px-4 rounded-xl bg-[#022c22] hover:bg-[#064e3b] border border-amber-400/40 text-amber-300 font-bold text-xs shadow-md transition-all text-center cursor-pointer"
+          >
+            فتح الصفحة ↗
+          </a>
         </div>
       </div>
 

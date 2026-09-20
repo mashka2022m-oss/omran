@@ -601,11 +601,14 @@ export interface LeaderboardSettings {
 
 export interface GoogleOAuthConfig {
   connectedEmail?: string;
+  displayName?: string;
+  photoURL?: string | null;
   connectedAt?: string;
   isLinked: boolean;
   lastSyncAt?: string;
   accessToken?: string;
   savedInCloud?: boolean;
+  expiresAt?: number;
 }
 
 export interface SurahRecordingSegment {
