@@ -1358,6 +1358,7 @@ export function App() {
           onSwitchHalaqah={() => {}}
           onOpenTeacherManagement={() => setIsSettingsModalOpen(true)}
           onOpenSettings={() => setIsSettingsModalOpen(true)}
+          onOpenPrivacyPolicy={() => navigatePublic('privacy')}
         />
         <main className="max-w-4xl mx-auto px-4 py-8 relative">
           <UnassignedTeacherView
@@ -1418,6 +1419,7 @@ export function App() {
         onOpenTeacherManagement={() => setIsSettingsModalOpen(true)}
         onOpenSettings={() => setIsSettingsModalOpen(true)}
         onOpenComplexManagement={isDeveloper ? () => setIsComplexModalOpen(true) : undefined}
+        onOpenPrivacyPolicy={() => navigatePublic('privacy')}
       />
 
       <main className="max-w-7xl mx-auto px-4 lg:px-8 pt-6 relative space-y-6">

@@ -6,6 +6,7 @@ import {
   Calendar,
   Sparkles,
   ShieldAlert,
+  ShieldCheck,
   Moon,
   Clock,
   Users,
@@ -38,6 +39,7 @@ interface NavbarProps {
   onOpenTeacherManagement?: () => void;
   onOpenSettings?: () => void;
   onOpenComplexManagement?: () => void;
+  onOpenPrivacyPolicy?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -61,7 +63,8 @@ export const Navbar: React.FC<NavbarProps> = ({
   onSwitchHalaqah,
   onOpenTeacherManagement,
   onOpenSettings,
-  onOpenComplexManagement
+  onOpenComplexManagement,
+  onOpenPrivacyPolicy
 }) => {
   const todayArabic = new Intl.DateTimeFormat('ar-SA', {
     weekday: 'long',
@@ -250,6 +253,18 @@ export const Navbar: React.FC<NavbarProps> = ({
               <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-[#064e3b] text-[#86efac] font-mono font-bold">
                 {teachersCount}
               </span>
+            </button>
+          )}
+
+          {/* Privacy Policy Quick In-App Button */}
+          {onOpenPrivacyPolicy && (
+            <button
+              onClick={onOpenPrivacyPolicy}
+              title="سياسة الخصوصية وحماية البيانات (Privacy Policy)"
+              className="p-2 rounded-xl bg-[#022c22] hover:bg-[#065f46] border border-emerald-500/30 text-[#86efac] hover:text-white transition-all cursor-pointer shadow-sm flex items-center gap-1.5"
+            >
+              <ShieldCheck className="w-4 h-4 text-amber-400" />
+              <span className="hidden xl:inline text-xs font-bold">الخصوصية</span>
             </button>
           )}
 

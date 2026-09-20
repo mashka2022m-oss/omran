@@ -25,7 +25,8 @@ import {
   Link,
   Lock,
   Key,
-  Copy
+  Copy,
+  Mail
 } from 'lucide-react';
 import { OmranDataService, firebaseConfig, TARGET_FIRESTORE_DATABASE_ID } from '../../lib/firebase';
 import { GoogleWorkspaceService } from '../../lib/googleWorkspace';
@@ -927,6 +928,45 @@ export const DataBackupTab: React.FC<DataBackupTabProps> = ({
                 )}
               </button>
             </div>
+          </div>
+
+          {/* Box 5: Technical Support & Developer Contact Email (Google Console Requirement) */}
+          <div className="bg-[#022c22] border-2 border-amber-400/60 rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-xl">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <Mail className="w-5 h-5 text-amber-400" />
+                <span className="text-xs sm:text-sm font-black text-white">
+                  بريد الدعم الفني وتواصل المطور المعتمد (Support & Developer Email):
+                </span>
+                <span className="text-[10px] bg-amber-400 text-[#064e3b] font-bold px-2 py-0.5 rounded-full">
+                  مطلوب في Google Console
+                </span>
+              </div>
+              <p className="text-[11px] text-[#86efac]/90 leading-relaxed">
+                الصقه في خانتي <strong className="text-white">"User support email"</strong> و <strong className="text-white">"Developer contact information"</strong> في شاشة موافقة Google:
+              </p>
+              <div className="font-mono text-xs text-amber-300 font-bold bg-[#064e3b]/80 px-3 py-1 rounded-lg border border-amber-400/40 inline-block" dir="ltr">
+                fds421885@gmail.com
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => handleCopyText('fds421885@gmail.com', 'support_email')}
+              className="py-2.5 px-4 rounded-xl bg-amber-400 hover:bg-amber-300 text-[#064e3b] font-black text-xs shadow-md flex items-center justify-center gap-2 transition-all cursor-pointer shrink-0"
+            >
+              {copiedField === 'support_email' ? (
+                <>
+                  <Check className="w-4 h-4 text-[#064e3b]" />
+                  <span>تم نسخ بريد الدعم الفني! ✓</span>
+                </>
+              ) : (
+                <>
+                  <Copy className="w-4 h-4 text-[#064e3b]" />
+                  <span>نسخ البريد (fds421885@gmail.com)</span>
+                </>
+              )}
+            </button>
           </div>
         </div>
 
