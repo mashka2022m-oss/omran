@@ -1594,6 +1594,8 @@ export class OmranDataService {
       googleSpreadsheetId: raw?.googleSpreadsheetId,
       googleSpreadsheetUrl: raw?.googleSpreadsheetUrl,
       googleFormNameEntryId: raw?.googleFormNameEntryId,
+      complexId: raw?.complexId || undefined,
+      complexName: raw?.complexName || undefined,
       createdById: raw?.createdById || 'teacher-1',
       createdByName: raw?.createdByName || 'الشيخ المعلم',
       createdAt: raw?.createdAt || new Date().toISOString(),

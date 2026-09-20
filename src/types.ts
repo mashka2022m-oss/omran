@@ -537,6 +537,8 @@ export interface Exam {
   googleSpreadsheetId?: string; // معرف Google Sheets المرتبط
   googleSpreadsheetUrl?: string; // رابط جدول الردود
   googleFormNameEntryId?: string; // معرف حقل اسم الطالب في Google Form لتعبئته تلقائياً
+  complexId?: string; // معرف المجمع القرآني الذي ينتمي إليه الاختبار حصرياً
+  complexName?: string; // اسم المجمع القرآني
   createdById: string;
   createdByName: string;
   createdAt: string;
@@ -566,6 +568,8 @@ export interface ExamSubmission {
   googleUid?: string;
   halaqahId: string;
   halaqahName: string;
+  complexId?: string; // معرف المجمع القرآني
+  complexName?: string; // اسم المجمع القرآني
   attemptNumber: number; // رقم المحاولة
   answers: ExamSubmissionAnswer[];
   totalScoreEarned: number;

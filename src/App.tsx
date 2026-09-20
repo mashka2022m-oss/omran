@@ -657,16 +657,42 @@ export function App() {
     return violations.filter(v => displayedStudentIds.has(v.studentId));
   }, [activeHalaqahId, isSupervisor, violations, scopedStudentIds, displayedStudentIds]);
 
-  // Scoped exams & submissions strictly restricted to the complex
+  // Scoped exams & submissions strictly restricted to the Quran complex:
+  // Each complex has its own isolated exams. Teachers and supervisors cannot see exams from other complexes.
   const scopedExams = useMemo(() => {
     if (isDeveloper) return exams;
+    if (!activeComplex) return [];
+
+    const activeComplexId = activeComplex.id;
     const teacherIdSet = new Set(scopedTeachers.map(t => t.id));
+
     return exams.filter(e => {
-      if (e.createdById && teacherIdSet.has(e.createdById)) return true;
-      if (e.targetHalaqat && e.targetHalaqat.some(hid => hid === 'all' || scopedHalaqahIds.has(hid))) return true;
+      // 1. If exam has explicit complexId, it MUST match the active complex
+      if (e.complexId) {
+        return e.complexId === activeComplexId;
+      }
+
+      // 2. If legacy exam without complexId:
+      // If targets specific halaqat, all targeted halaqat must belong to the active complex
+      const targetsSpecificHalaqahs = e.targetHalaqat && e.targetHalaqat.length > 0 && !e.targetHalaqat.includes('all');
+      if (targetsSpecificHalaqahs) {
+        return e.targetHalaqat.some(hid => scopedHalaqahIds.has(hid));
+      }
+
+      // If created by a teacher in this complex
+      if (e.createdById && teacherIdSet.has(e.createdById)) {
+        return true;
+      }
+
+      // If legacy sample exam without complexId, assign to first complex only
+      const defaultComplexId = complexes[0]?.id;
+      if (defaultComplexId && activeComplexId === defaultComplexId) {
+        return true;
+      }
+
       return false;
     });
-  }, [isDeveloper, exams, scopedTeachers, scopedHalaqahIds]);
+  }, [isDeveloper, exams, activeComplex, scopedTeachers, scopedHalaqahIds, complexes]);
 
   const scopedSubmissions = useMemo(() => {
     if (isDeveloper) return submissions;
@@ -982,16 +1008,22 @@ export function App() {
 
   // 13. Exam Handlers
   const handleSaveExam = async (exam: Exam) => {
+    // Ensure exam is strictly linked to current active complex if not already set
+    const enrichedExam: Exam = {
+      ...exam,
+      complexId: exam.complexId || activeComplex?.id,
+      complexName: exam.complexName || activeComplex?.name
+    };
     setExams(prev => {
-      const idx = prev.findIndex(e => e.id === exam.id);
+      const idx = prev.findIndex(e => e.id === enrichedExam.id);
       if (idx >= 0) {
         const copy = [...prev];
-        copy[idx] = exam;
+        copy[idx] = enrichedExam;
         return copy;
       }
-      return [exam, ...prev];
+      return [enrichedExam, ...prev];
     });
-    await OmranDataService.saveExam(exam);
+    await OmranDataService.saveExam(enrichedExam);
   };
 
   const handleDeleteExam = async (id: string) => {
@@ -1000,16 +1032,26 @@ export function App() {
   };
 
   const handleSaveSubmission = async (sub: ExamSubmission) => {
+    // Enrich submission with complex info based on halaqah / active complex
+    const studentHalaqah = halaqahs.find(h => h.id === sub.halaqahId);
+    const subComplexId = sub.complexId || studentHalaqah?.complexId || activeComplex?.id;
+    const subComplex = subComplexId ? complexes.find(c => c.id === subComplexId) : null;
+    const enrichedSub: ExamSubmission = {
+      ...sub,
+      complexId: subComplexId,
+      complexName: sub.complexName || subComplex?.name || activeComplex?.name
+    };
+
     setSubmissions(prev => {
-      const idx = prev.findIndex(s => s.id === sub.id);
+      const idx = prev.findIndex(s => s.id === enrichedSub.id);
       if (idx >= 0) {
         const copy = [...prev];
-        copy[idx] = sub;
+        copy[idx] = enrichedSub;
         return copy;
       }
-      return [sub, ...prev];
+      return [enrichedSub, ...prev];
     });
-    await OmranDataService.saveSubmission(sub);
+    await OmranDataService.saveSubmission(enrichedSub);
   };
 
   const handleDeleteSubmission = async (submissionId: string) => {
