@@ -24,7 +24,8 @@ import {
   Globe,
   Link,
   Lock,
-  Key
+  Key,
+  Copy
 } from 'lucide-react';
 import { OmranDataService, firebaseConfig, TARGET_FIRESTORE_DATABASE_ID } from '../../lib/firebase';
 import { GoogleWorkspaceService } from '../../lib/googleWorkspace';
@@ -102,6 +103,40 @@ export const DataBackupTab: React.FC<DataBackupTabProps> = ({
     timestamp: string;
   } | null>(null);
   const [autoLinkError, setAutoLinkError] = useState<string | null>(null);
+
+  // Developer URL & Netlify Hosting Detection State
+  const [detectedOrigin, setDetectedOrigin] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      return window.location.origin;
+    }
+    return '';
+  });
+  const [customDomainInput, setCustomDomainInput] = useState<string>('');
+  const [copiedField, setCopiedField] = useState<string | null>(null);
+
+  // Compute active base URL: custom domain if entered, else detected origin, else fallback
+  const activeBaseUrl = (customDomainInput.trim()
+    ? (customDomainInput.trim().startsWith('http') ? customDomainInput.trim().replace(/\/+$/, '') : `https://${customDomainInput.trim().replace(/\/+$/, '')}`)
+    : (detectedOrigin || 'https://omran-quran.netlify.app')
+  );
+
+  const activePrivacyUrl = `${activeBaseUrl}/privacy`;
+  const activeHomeUrl = `${activeBaseUrl}/`;
+
+  let activeHostname = '';
+  try {
+    activeHostname = new URL(activeBaseUrl).hostname;
+  } catch {
+    activeHostname = activeBaseUrl.replace(/^https?:\/\//, '').split('/')[0];
+  }
+
+  const handleCopyText = (text: string, fieldId: string) => {
+    if (typeof navigator !== 'undefined' && navigator.clipboard) {
+      navigator.clipboard.writeText(text);
+      setCopiedField(fieldId);
+      setTimeout(() => setCopiedField(null), 2500);
+    }
+  };
 
   const activeComplex = complexes.find(c => c.id === selectedComplexId) || complexes[0];
 
@@ -641,6 +676,342 @@ export const DataBackupTab: React.FC<DataBackupTabProps> = ({
       </div>
 
       {/* ========================================================================= */}
+      {/* SECTION: DEVELOPER CONSOLE & NETLIFY HOSTING (قسم المبرمج: سياسة الخصوصية واستضافة Netlify) */}
+      {/* ========================================================================= */}
+      <div className="bg-gradient-to-br from-[#022c22] via-[#064e3b]/90 to-[#022c22] border-2 border-amber-400/60 rounded-[32px] p-6 sm:p-8 space-y-6 shadow-2xl relative overflow-hidden">
+        {/* Glowing badge */}
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-5 border-b border-[#065f46]">
+          <div className="flex items-start sm:items-center gap-3.5">
+            <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-amber-500 to-amber-300 text-[#064e3b] flex items-center justify-center shadow-lg shrink-0">
+              <ShieldCheck className="w-6 h-6 stroke-[2.5]" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h3 className="text-lg sm:text-xl font-black font-heading text-white">
+                  مركز تحكم المبرمج: سياسة الخصوصية واعتماد Google واستضافة Netlify
+                </h3>
+                <span className="text-[10px] px-3 py-0.5 rounded-full bg-amber-400 text-[#064e3b] font-black shadow-sm">
+                  خاص بالمبرمج (Developer)
+                </span>
+                <span className="text-[10px] px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-400/40 font-bold">
+                  مهيأ لـ Netlify
+                </span>
+              </div>
+              <p className="text-xs text-[#86efac] mt-1 leading-relaxed">
+                يتعرف النظام تلقائياً على رابط المنصة الحالي (Domain)، ويجهز كافة الروابط المطلوبة لاعتماد Google Cloud Console ومراجعة سياسة الخصوصية مع زر نسخ فوري، ويوفر ملفات الاستضافة المجهزة لـ Netlify.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Dynamic Domain Detection & Custom Override Bar */}
+        <div className="bg-[#022c22]/90 border border-amber-400/40 rounded-2xl p-4 sm:p-5 space-y-3 shadow-inner">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5">
+              <Globe className="w-5 h-5 text-amber-400 shrink-0" />
+              <div>
+                <span className="text-xs font-bold text-white block">رابط المنصة المكتشف تلقائياً (Detected Site Origin):</span>
+                <div className="flex items-center gap-2 mt-0.5">
+                  <span className="font-mono text-xs text-amber-300 font-bold bg-[#064e3b] px-2.5 py-1 rounded-lg border border-amber-400/30 inline-block" dir="ltr">
+                    {detectedOrigin || 'جاري التعرف على النطاق...'}
+                  </span>
+                  <span className="text-[10px] text-emerald-300 bg-emerald-950/80 border border-emerald-500/40 px-2 py-0.5 rounded-full flex items-center gap-1 font-bold">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                    تم التعرف عليه تلقائياً
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Custom domain input toggle */}
+            <div className="w-full md:w-auto">
+              <label className="block text-[11px] font-bold text-emerald-200 mb-1">
+                هل تريد توليد الروابط لنطاق Netlify أو نطاق مخصص آخر؟
+              </label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  placeholder="مثال: omran-quran.netlify.app"
+                  value={customDomainInput}
+                  onChange={(e) => setCustomDomainInput(e.target.value)}
+                  className="bg-[#064e3b] border border-amber-400/40 rounded-xl px-3 py-1.5 text-xs text-white font-mono placeholder:text-emerald-300/40 outline-none focus:border-amber-300 w-full sm:w-64"
+                  dir="ltr"
+                />
+                {customDomainInput && (
+                  <button
+                    type="button"
+                    onClick={() => setCustomDomainInput('')}
+                    className="px-2.5 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-xs text-amber-200 transition-colors shrink-0"
+                  >
+                    استعادة التلقائي
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* PRIMARY GOOGLE CONSOLE REQUIRED LINKS (GRID) */}
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h4 className="text-sm font-bold text-amber-300 flex items-center gap-2">
+              <Key className="w-4 h-4" />
+              <span>الروابط الجاهزة للنسخ إلى Google Cloud Console (شاشة موافقة OAuth):</span>
+            </h4>
+            <span className="text-[11px] text-[#86efac]/80">اضغط على زر النسخ بجانب أي حقل لنسخه فوراً</span>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {/* Box 1: Privacy Policy URL (Most Critical) */}
+            <div className="bg-[#064e3b]/80 border-2 border-amber-400 rounded-2xl p-4 space-y-3 shadow-xl flex flex-col justify-between">
+              <div>
+                <div className="flex items-center justify-between gap-2 mb-1.5">
+                  <span className="text-xs font-black text-amber-300 flex items-center gap-1.5">
+                    <ShieldCheck className="w-4 h-4 text-amber-400" />
+                    رابط سياسة الخصوصية المعتمد (Privacy Policy URL):
+                  </span>
+                  <span className="text-[10px] bg-amber-400/20 text-amber-300 font-bold px-2 py-0.5 rounded-full border border-amber-400/40">
+                    مطلوب للتحقق
+                  </span>
+                </div>
+                <p className="text-[11px] text-[#86efac]/90 leading-relaxed mb-2">
+                  الصقه في خانة <strong className="text-white">"Application privacy policy link"</strong> داخل Google Cloud Console.
+                </p>
+                <div className="p-2.5 rounded-xl bg-[#022c22] border border-amber-400/40 font-mono text-xs text-amber-300 font-bold break-all" dir="ltr">
+                  {activePrivacyUrl}
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 pt-2 border-t border-[#065f46]">
+                <button
+                  type="button"
+                  onClick={() => handleCopyText(activePrivacyUrl, 'privacy')}
+                  className="flex-1 py-2.5 px-4 rounded-xl bg-gradient-to-r from-amber-400 to-amber-500 hover:brightness-110 text-[#064e3b] font-black text-xs shadow-md flex items-center justify-center gap-2 transition-all cursor-pointer"
+                >
+                  {copiedField === 'privacy' ? (
+                    <>
+                      <Check className="w-4 h-4 text-[#064e3b]" />
+                      <span>تم نسخ رابط الخصوصية! ✓</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-4 h-4 text-[#064e3b]" />
+                      <span>نسخ رابط سياسة الخصوصية</span>
+                    </>
+                  )}
+                </button>
+                <a
+                  href={activePrivacyUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="py-2.5 px-3 rounded-xl bg-[#022c22] hover:bg-[#064e3b] border border-amber-400/40 text-amber-300 text-xs font-bold transition-colors cursor-pointer flex items-center gap-1"
+                >
+                  <span>معاينة</span>
+                  <ExternalLink className="w-3.5 h-3.5" />
+                </a>
+              </div>
+            </div>
+
+            {/* Box 2: Home Page URL */}
+            <div className="bg-[#064e3b]/60 border border-[#065f46] rounded-2xl p-4 space-y-3 shadow-lg flex flex-col justify-between">
+              <div>
+                <div className="flex items-center justify-between gap-2 mb-1.5">
+                  <span className="text-xs font-bold text-white flex items-center gap-1.5">
+                    <Globe className="w-4 h-4 text-emerald-400" />
+                    رابط الصفحة التعريفية للمنصة (Home Page URL):
+                  </span>
+                  <span className="text-[10px] bg-emerald-500/20 text-emerald-300 font-bold px-2 py-0.5 rounded-full">
+                    مطلوب
+                  </span>
+                </div>
+                <p className="text-[11px] text-[#86efac]/90 leading-relaxed mb-2">
+                  الصقه في خانة <strong className="text-white">"Application home page"</strong> في شاشة موافقة Google.
+                </p>
+                <div className="p-2.5 rounded-xl bg-[#022c22] border border-[#065f46] font-mono text-xs text-white font-bold break-all" dir="ltr">
+                  {activeHomeUrl}
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 pt-2 border-t border-[#065f46]">
+                <button
+                  type="button"
+                  onClick={() => handleCopyText(activeHomeUrl, 'home')}
+                  className="flex-1 py-2.5 px-4 rounded-xl bg-[#022c22] hover:bg-[#065f46] border border-emerald-400/40 text-emerald-300 hover:text-white font-bold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer"
+                >
+                  {copiedField === 'home' ? (
+                    <>
+                      <Check className="w-4 h-4 text-amber-400" />
+                      <span>تم نسخ الرابط الرئيسي! ✓</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-4 h-4" />
+                      <span>نسخ رابط الصفحة الرئيسية</span>
+                    </>
+                  )}
+                </button>
+                <a
+                  href={activeHomeUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="py-2.5 px-3 rounded-xl bg-[#022c22] hover:bg-[#064e3b] border border-[#065f46] text-slate-200 text-xs font-bold transition-colors cursor-pointer flex items-center gap-1"
+                >
+                  <span>معاينة</span>
+                  <ExternalLink className="w-3.5 h-3.5" />
+                </a>
+              </div>
+            </div>
+
+            {/* Box 3: Authorized Domain */}
+            <div className="bg-[#064e3b]/60 border border-[#065f46] rounded-2xl p-4 space-y-3 shadow-lg flex flex-col justify-between">
+              <div>
+                <span className="text-xs font-bold text-white block mb-1">
+                  النطاق المصرح به (Authorized Domain):
+                </span>
+                <p className="text-[11px] text-[#86efac]/90 leading-relaxed mb-2">
+                  الصقه في قائمة <strong className="text-white">"Authorized domains"</strong> في Google Cloud و Firebase Auth.
+                </p>
+                <div className="p-2.5 rounded-xl bg-[#022c22] border border-[#065f46] font-mono text-xs text-amber-200 font-bold" dir="ltr">
+                  {activeHostname}
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => handleCopyText(activeHostname, 'domain')}
+                className="w-full py-2.5 px-4 rounded-xl bg-[#022c22] hover:bg-[#065f46] border border-amber-400/30 text-amber-300 font-bold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer"
+              >
+                {copiedField === 'domain' ? (
+                  <>
+                    <Check className="w-4 h-4 text-amber-400" />
+                    <span>تم نسخ النطاق! ✓</span>
+                  </>
+                ) : (
+                  <>
+                    <Copy className="w-4 h-4" />
+                    <span>نسخ النطاق المصرح به</span>
+                  </>
+                )}
+              </button>
+            </div>
+
+            {/* Box 4: Authorized JavaScript Origin */}
+            <div className="bg-[#064e3b]/60 border border-[#065f46] rounded-2xl p-4 space-y-3 shadow-lg flex flex-col justify-between">
+              <div>
+                <span className="text-xs font-bold text-white block mb-1">
+                  أصل JavaScript المصرح به (Authorized JavaScript Origin):
+                </span>
+                <p className="text-[11px] text-[#86efac]/90 leading-relaxed mb-2">
+                  الصقه في <strong className="text-white">Credentials &gt; OAuth 2.0 Client &gt; Authorized JavaScript origins</strong>.
+                </p>
+                <div className="p-2.5 rounded-xl bg-[#022c22] border border-[#065f46] font-mono text-xs text-amber-200 font-bold" dir="ltr">
+                  {activeBaseUrl}
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => handleCopyText(activeBaseUrl, 'origin')}
+                className="w-full py-2.5 px-4 rounded-xl bg-[#022c22] hover:bg-[#065f46] border border-amber-400/30 text-amber-300 font-bold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer"
+              >
+                {copiedField === 'origin' ? (
+                  <>
+                    <Check className="w-4 h-4 text-amber-400" />
+                    <span>تم نسخ أصل JavaScript! ✓</span>
+                  </>
+                ) : (
+                  <>
+                    <Copy className="w-4 h-4" />
+                    <span>نسخ أصل JavaScript</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* NETLIFY HOSTING SETUP & READINESS STATUS */}
+        <div className="bg-gradient-to-r from-[#064e3b] via-[#022c22] to-[#064e3b] border-2 border-emerald-400/60 rounded-2xl p-5 sm:p-6 space-y-4 shadow-xl">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#065f46] pb-3">
+            <div className="flex items-center gap-2.5">
+              <div className="w-9 h-9 rounded-xl bg-emerald-500/20 text-emerald-300 flex items-center justify-center border border-emerald-400/40">
+                <Server className="w-5 h-5" />
+              </div>
+              <div>
+                <h4 className="text-sm font-black text-white flex items-center gap-2">
+                  <span>تهيئة وجاهزية الاستضافة على Netlify</span>
+                  <span className="text-[10px] bg-emerald-500 text-[#064e3b] font-black px-2 py-0.5 rounded-full">
+                    مضبوطة بنسبة 100% 🚀
+                  </span>
+                </h4>
+                <p className="text-[11px] text-[#86efac]">
+                  تم تضمين كافة الملفات والقواعد البرمجية لتعمل المنصة على Netlify بكفاءة عالية وبدون أخطاء 404
+                </p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => handleCopyText('Build command: npm run build\nPublish directory: dist\nNode version: 20', 'netlify_config')}
+              className="px-3 py-1.5 rounded-xl bg-[#022c22] border border-emerald-400/40 text-emerald-300 hover:text-white text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer shrink-0"
+            >
+              {copiedField === 'netlify_config' ? (
+                <>
+                  <Check className="w-3.5 h-3.5 text-amber-300" />
+                  <span>تم نسخ إعدادات Netlify!</span>
+                </>
+              ) : (
+                <>
+                  <Copy className="w-3.5 h-3.5" />
+                  <span>نسخ إعدادات بناء Netlify</span>
+                </>
+              )}
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+            <div className="p-3 rounded-xl bg-[#022c22]/90 border border-[#065f46] space-y-1">
+              <div className="flex items-center gap-1.5 text-emerald-300 font-bold">
+                <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                <span>ملف public/_redirects</span>
+              </div>
+              <p className="text-[11px] text-[#86efac]/80 font-mono">
+                /* /index.html 200
+              </p>
+              <p className="text-[10px] text-slate-300">
+                يضمن عدم ظهور خطأ 404 عند فتح رابط سياسة الخصوصية /privacy أو تسجيل الدخول أو تحديث الصفحة مباشرة على Netlify.
+              </p>
+            </div>
+
+            <div className="p-3 rounded-xl bg-[#022c22]/90 border border-[#065f46] space-y-1">
+              <div className="flex items-center gap-1.5 text-emerald-300 font-bold">
+                <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                <span>ملف netlify.toml</span>
+              </div>
+              <p className="text-[11px] text-[#86efac]/80 font-mono">
+                command = &quot;npm run build&quot;
+              </p>
+              <p className="text-[10px] text-slate-300">
+                يحدد مجلد النشر dist وترويسات الأمان ونسخة Node 20 تلقائياً بمجرد ربط المستودع.
+              </p>
+            </div>
+
+            <div className="p-3 rounded-xl bg-[#022c22]/90 border border-[#065f46] space-y-1">
+              <div className="flex items-center gap-1.5 text-emerald-300 font-bold">
+                <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                <span>إعدادات النشر على Netlify</span>
+              </div>
+              <div className="text-[10px] text-slate-300 space-y-0.5">
+                <div>• أمر البناء: <span className="font-mono text-amber-300">npm run build</span></div>
+                <div>• مجلد النشر: <span className="font-mono text-amber-300">dist</span></div>
+                <div>• بيئة التشغيل: <span className="font-mono text-emerald-300">Node v20</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ========================================================================= */}
       {/* SECTION 1: COMPLEX DATABASE SEPARATION & MANAGEMENT (المجمعات وقواعد البيانات) */}
       {/* ========================================================================= */}
       <div className="bg-[#022c22]/95 border-2 border-amber-500/40 rounded-[32px] p-6 sm:p-8 space-y-6 shadow-2xl">
@@ -1131,29 +1502,36 @@ export const DataBackupTab: React.FC<DataBackupTabProps> = ({
             صفحة رسمية ومستقلة تؤكد أن المنصة لا تجمع أو تشارك بيانات المستخدمين مع أي أطراف ثالثة ومخصصة لمراجعة تطبيق Google Workspace:
           </p>
           <div className="font-mono text-xs text-amber-300 font-bold bg-[#022c22]/90 px-3 py-1.5 rounded-xl border border-amber-400/30 inline-block" dir="ltr">
-            {typeof window !== 'undefined' ? `${window.location.origin}/privacy` : 'https://omran-platform.web.app/privacy'}
+            {activePrivacyUrl}
           </div>
         </div>
 
         <div className="flex items-center gap-2 w-full md:w-auto">
           <button
             type="button"
-            onClick={() => {
-              const url = typeof window !== 'undefined' ? `${window.location.origin}/privacy` : 'https://omran-platform.web.app/privacy';
-              navigator.clipboard?.writeText(url);
-              alert('تم نسخ رابط صفحة سياسة الخصوصية المعتمد بنجاح!');
-            }}
-            className="flex-1 md:flex-none py-2.5 px-4 rounded-xl bg-amber-400 hover:bg-amber-300 text-[#064e3b] font-black text-xs shadow-md transition-all cursor-pointer"
+            onClick={() => handleCopyText(activePrivacyUrl, 'bottom_privacy')}
+            className="flex-1 md:flex-none py-2.5 px-4 rounded-xl bg-amber-400 hover:bg-amber-300 text-[#064e3b] font-black text-xs shadow-md transition-all cursor-pointer flex items-center justify-center gap-1.5"
           >
-            نسخ الرابط
+            {copiedField === 'bottom_privacy' ? (
+              <>
+                <Check className="w-4 h-4" />
+                <span>تم النسخ! ✓</span>
+              </>
+            ) : (
+              <>
+                <Copy className="w-4 h-4" />
+                <span>نسخ الرابط</span>
+              </>
+            )}
           </button>
           <a
-            href="/privacy"
+            href={activePrivacyUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="flex-1 md:flex-none py-2.5 px-4 rounded-xl bg-[#022c22] hover:bg-[#064e3b] border border-amber-400/40 text-amber-300 font-bold text-xs shadow-md transition-all text-center cursor-pointer"
+            className="flex-1 md:flex-none py-2.5 px-4 rounded-xl bg-[#022c22] hover:bg-[#064e3b] border border-amber-400/40 text-amber-300 font-bold text-xs shadow-md transition-all text-center cursor-pointer flex items-center justify-center gap-1"
           >
-            فتح الصفحة ↗
+            <span>فتح الصفحة</span>
+            <ExternalLink className="w-3.5 h-3.5" />
           </a>
         </div>
       </div>
