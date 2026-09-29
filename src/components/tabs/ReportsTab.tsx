@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   Award,
   Calendar,
@@ -17,10 +17,20 @@ import {
   Phone,
   Layers,
   ClipboardList,
-  Share2
+  Share2,
+  TrendingUp
 } from 'lucide-react';
+import {
+  ResponsiveContainer,
+  AreaChart,
+  Area,
+  XAxis,
+  YAxis,
+  Tooltip as RechartsTooltip
+} from 'recharts';
 import { Student, AttendanceRecord, StudentEvaluation, AppSettings } from '../../types';
 import { formatQuranPortion, getSurahInfo } from '../../data/quranData';
+import { ReportsChartsView } from './ReportsChartsView';
 
 interface ReportsTabProps {
   students: Student[];
@@ -39,7 +49,7 @@ export const ReportsTab: React.FC<ReportsTabProps> = ({
   onUpdateSettings,
   teacherName
 }) => {
-  const [activeSubTab, setActiveSubTab] = useState<'individual' | 'all_students_summary'>('all_students_summary');
+  const [activeSubTab, setActiveSubTab] = useState<'charts' | 'all_students_summary' | 'individual'>('charts');
   const [selectedStudentId, setSelectedStudentId] = useState<string>(
     students.length > 0 ? students[0].id : ''
   );
@@ -51,6 +61,38 @@ export const ReportsTab: React.FC<ReportsTabProps> = ({
   const [isAllCopied, setIsAllCopied] = useState(false);
 
   const selectedStudent = students.find(s => s.id === selectedStudentId);
+
+  // Chart data for selected student's evaluation records in Firestore
+  const selectedStudentChartData = useMemo(() => {
+    if (!selectedStudent) return [];
+    return evaluations
+      .filter(e => e.studentId === selectedStudent.id)
+      .sort((a, b) => (a.date || '').localeCompare(b.date || ''))
+      .map(ev => {
+        const hasNew = Boolean(
+          ev.recitationDetails?.todayNewItem?.surahNumber ||
+          (ev.recitationDetails?.newMemorizationAchieved && !ev.recitationDetails.newMemorizationAchieved.includes('لم يسم'))
+        );
+        const hasRev = Boolean(
+          (ev.recitationDetails?.todayReviewItems && ev.recitationDetails.todayReviewItems.length > 0) ||
+          ev.recitationDetails?.todayReviewItem ||
+          (ev.recitationDetails?.reviewAchieved && !ev.recitationDetails.reviewAchieved.includes('لم يراجع'))
+        );
+
+        let dateLabel = ev.date;
+        try {
+          const parts = ev.date.split('-');
+          if (parts.length === 3) dateLabel = `${parseInt(parts[2], 10)}/${parseInt(parts[1], 10)}`;
+        } catch {}
+
+        return {
+          date: dateLabel,
+          newMemorization: hasNew ? (ev.recitationDetails?.pagesCompletedToday?.length || 1) : 0,
+          review: hasRev ? (ev.recitationDetails?.todayReviewItems?.length || 1) : 0,
+          points: ev.recitationDetails?.pointsEarnedToday || 0
+        };
+      });
+  }, [evaluations, selectedStudent]);
 
   // Helper: Extract student's latest recitation records for New Memorization and Review
   const getStudentLatestRecitations = (student: Student) => {
@@ -322,19 +364,35 @@ export const ReportsTab: React.FC<ReportsTabProps> = ({
         </div>
       </div>
 
-      {/* Main Mode Navigation Bar: "التقارير كاملة إلى الآن" vs "تقرير طالب فردي" */}
-      <div className="flex items-center gap-2 p-1.5 bg-[#022c22] border border-[#065f46] rounded-2xl">
+      {/* Main Mode Navigation Bar: "الرسوم البيانية وتطور الحفظ" vs "التقارير كاملة إلى الآن" vs "تقرير طالب فردي" */}
+      <div className="flex items-center gap-2 p-1.5 bg-[#022c22] border border-[#065f46] rounded-2xl flex-wrap sm:flex-nowrap">
+        <button
+          type="button"
+          onClick={() => setActiveSubTab('charts')}
+          className={`flex-1 min-w-[200px] py-3 px-4 rounded-xl text-xs sm:text-sm font-black flex items-center justify-center gap-2 transition-all cursor-pointer ${
+            activeSubTab === 'charts'
+              ? 'bg-[#fbbf24] text-[#064e3b] shadow-[0_0_15px_rgba(251,191,36,0.3)]'
+              : 'text-[#86efac]/70 hover:text-white hover:bg-[#064e3b]/30'
+          }`}
+        >
+          <BarChart3 className="w-4 h-4" />
+          <span>الرسوم البيانية وتطور الحفظ والمراجعة</span>
+          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#064e3b] text-[#fbbf24] border border-[#fbbf24]/30">
+            Recharts
+          </span>
+        </button>
+
         <button
           type="button"
           onClick={() => setActiveSubTab('all_students_summary')}
-          className={`flex-1 py-3 px-4 rounded-xl text-xs sm:text-sm font-black flex items-center justify-center gap-2 transition-all cursor-pointer ${
+          className={`flex-1 min-w-[180px] py-3 px-4 rounded-xl text-xs sm:text-sm font-black flex items-center justify-center gap-2 transition-all cursor-pointer ${
             activeSubTab === 'all_students_summary'
               ? 'bg-[#fbbf24] text-[#064e3b] shadow-[0_0_15px_rgba(251,191,36,0.3)]'
               : 'text-[#86efac]/70 hover:text-white hover:bg-[#064e3b]/30'
           }`}
         >
           <ClipboardList className="w-4 h-4" />
-          <span>التقارير كاملة إلى الآن (جميع الطلاب)</span>
+          <span>التقارير كاملة (جميع الطلاب)</span>
           <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#064e3b] text-[#fbbf24] border border-[#fbbf24]/30">
             {students.length}
           </span>
@@ -343,16 +401,29 @@ export const ReportsTab: React.FC<ReportsTabProps> = ({
         <button
           type="button"
           onClick={() => setActiveSubTab('individual')}
-          className={`flex-1 py-3 px-4 rounded-xl text-xs sm:text-sm font-black flex items-center justify-center gap-2 transition-all cursor-pointer ${
+          className={`flex-1 min-w-[180px] py-3 px-4 rounded-xl text-xs sm:text-sm font-black flex items-center justify-center gap-2 transition-all cursor-pointer ${
             activeSubTab === 'individual'
               ? 'bg-[#fbbf24] text-[#064e3b] shadow-[0_0_15px_rgba(251,191,36,0.3)]'
               : 'text-[#86efac]/70 hover:text-white hover:bg-[#064e3b]/30'
           }`}
         >
           <FileText className="w-4 h-4" />
-          <span>تقرير دوري لطالب محدد (أسبوعي / شهري)</span>
+          <span>تقرير دوري لطالب محدد</span>
         </button>
       </div>
+
+      {/* ========================================================================= */}
+      {/* SUB-TAB 0: INTERACTIVE RECHARTS PROGRESS & ANALYTICS                      */}
+      {/* ========================================================================= */}
+      {activeSubTab === 'charts' && (
+        <ReportsChartsView
+          students={students}
+          evaluations={evaluations}
+          attendance={attendance}
+          settings={settings}
+          selectedStudentId={selectedStudentId}
+        />
+      )}
 
       {/* ========================================================================= */}
       {/* SUB-TAB 1: ALL STUDENTS FULL REPORT TO DATE ("التقارير كاملة إلى الآن")   */}
@@ -641,6 +712,80 @@ export const ReportsTab: React.FC<ReportsTabProps> = ({
                     {selectedStudent.level}
                   </span>
                 </div>
+              </div>
+
+              {/* Interactive Recharts Progress Curve for Student in Report */}
+              <div className="p-5 rounded-2xl bg-[#022c22] border border-[#065f46] space-y-3">
+                <div className="flex items-center justify-between border-b border-[#065f46]/60 pb-2">
+                  <h4 className="font-bold text-[#fbbf24] flex items-center gap-2 text-xs sm:text-sm">
+                    <TrendingUp className="w-4 h-4 text-[#fbbf24]" />
+                    <span>المنحنى البياني لتطور الحفظ والمراجعة للطالب (Recharts)</span>
+                  </h4>
+                  <div className="flex items-center gap-3 text-[11px]">
+                    <span className="flex items-center gap-1 text-emerald-400 font-bold">
+                      <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 inline-block" />
+                      <span>الحفظ</span>
+                    </span>
+                    <span className="flex items-center gap-1 text-amber-300 font-bold">
+                      <span className="w-2.5 h-2.5 rounded-full bg-amber-400 inline-block" />
+                      <span>المراجعة</span>
+                    </span>
+                  </div>
+                </div>
+
+                {selectedStudentChartData.length === 0 ? (
+                  <div className="text-center py-6 text-xs text-[#86efac]/70">
+                    لا توجد سجلات تقييم بيانية مسجلة لهذا الطالب بعد في Firestore.
+                  </div>
+                ) : (
+                  <div className="h-56 w-full pt-1" dir="ltr">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <AreaChart
+                        data={selectedStudentChartData}
+                        margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
+                      >
+                        <defs>
+                          <linearGradient id="singleStudentNew" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#10b981" stopOpacity={0.8} />
+                            <stop offset="95%" stopColor="#10b981" stopOpacity={0.05} />
+                          </linearGradient>
+                          <linearGradient id="singleStudentReview" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#fbbf24" stopOpacity={0.8} />
+                            <stop offset="95%" stopColor="#fbbf24" stopOpacity={0.05} />
+                          </linearGradient>
+                        </defs>
+                        <XAxis dataKey="date" stroke="#86efac" fontSize={10} />
+                        <YAxis stroke="#86efac" fontSize={10} allowDecimals={false} />
+                        <RechartsTooltip
+                          contentStyle={{
+                            backgroundColor: '#022c22',
+                            borderColor: '#fbbf24',
+                            borderRadius: '12px',
+                            color: '#fff',
+                            fontSize: '11px',
+                            textAlign: 'right'
+                          }}
+                        />
+                        <Area
+                          type="monotone"
+                          dataKey="newMemorization"
+                          name="الحفظ الجديد"
+                          stroke="#10b981"
+                          strokeWidth={2}
+                          fill="url(#singleStudentNew)"
+                        />
+                        <Area
+                          type="monotone"
+                          dataKey="review"
+                          name="المراجعة"
+                          stroke="#fbbf24"
+                          strokeWidth={2}
+                          fill="url(#singleStudentReview)"
+                        />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  </div>
+                )}
               </div>
 
               {/* Report Content Sections */}
