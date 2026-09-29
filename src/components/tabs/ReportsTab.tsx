@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   Award,
   Calendar,
@@ -31,6 +31,7 @@ import {
 import { Student, AttendanceRecord, StudentEvaluation, AppSettings } from '../../types';
 import { formatQuranPortion, getSurahInfo } from '../../data/quranData';
 import { ReportsChartsView } from './ReportsChartsView';
+import { PrintableQuranicReport, ReportDocumentType } from '../reports/PrintableQuranicReport';
 
 interface ReportsTabProps {
   students: Student[];
@@ -53,12 +54,24 @@ export const ReportsTab: React.FC<ReportsTabProps> = ({
   const [selectedStudentId, setSelectedStudentId] = useState<string>(
     students.length > 0 ? students[0].id : ''
   );
+
+  // Instantly update selected student dropdown when students change (e.g. switching activeHalaqahId)
+  useEffect(() => {
+    if (students.length > 0) {
+      if (!selectedStudentId || !students.some(s => s.id === selectedStudentId)) {
+        setSelectedStudentId(students[0].id);
+      }
+    } else {
+      setSelectedStudentId('');
+    }
+  }, [students, selectedStudentId]);
   const [reportType, setReportType] = useState<'weekly' | 'monthly'>('weekly');
   const [workDays, setWorkDays] = useState<number>(settings.workDaysPerWeek || 5);
   const [isGenerating, setIsGenerating] = useState(false);
   const [reportData, setReportData] = useState<any>(null);
   const [isCopied, setIsCopied] = useState(false);
   const [isAllCopied, setIsAllCopied] = useState(false);
+  const [printDocumentType, setPrintDocumentType] = useState<ReportDocumentType | null>(null);
 
   const selectedStudent = students.find(s => s.id === selectedStudentId);
 
@@ -463,11 +476,12 @@ export const ReportsTab: React.FC<ReportsTabProps> = ({
 
               <button
                 type="button"
-                onClick={() => window.print()}
-                className="px-4 py-2.5 rounded-2xl bg-[#022c22] hover:bg-[#065f46] text-[#86efac] hover:text-white border border-[#065f46] text-xs sm:text-sm font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
+                onClick={() => setPrintDocumentType('all_students')}
+                className="px-4 py-2.5 rounded-2xl bg-gradient-to-r from-amber-400 to-amber-500 hover:brightness-110 text-[#064e3b] font-black text-xs sm:text-sm flex items-center gap-1.5 shadow-[0_0_15px_rgba(251,191,36,0.3)] transition-all cursor-pointer"
+                title="معاينة التقرير القرآني واستخراج PDF"
               >
-                <Printer className="w-4 h-4 text-[#fbbf24]" />
-                <span>طباعة</span>
+                <Printer className="w-4 h-4 text-[#064e3b]" />
+                <span>طباعة / استخراج PDF</span>
               </button>
             </div>
           </div>
@@ -599,13 +613,18 @@ export const ReportsTab: React.FC<ReportsTabProps> = ({
                 <select
                   value={selectedStudentId}
                   onChange={e => setSelectedStudentId(e.target.value)}
-                  className="w-full bg-[#022c22] border border-[#065f46] focus:border-[#fbbf24] rounded-2xl py-3 px-4 text-xs sm:text-sm text-[#f0f9f6] outline-none"
+                  disabled={students.length === 0}
+                  className="w-full bg-[#022c22] border border-[#065f46] focus:border-[#fbbf24] rounded-2xl py-3 px-4 text-xs sm:text-sm text-[#f0f9f6] outline-none disabled:opacity-50 cursor-pointer"
                 >
-                  {students.map(s => (
-                    <option key={s.id} value={s.id}>
-                      {s.name} (مستوى: {s.level})
-                    </option>
-                  ))}
+                  {students.length === 0 ? (
+                    <option value="">لا يوجد طلاب في هذه الحلقة</option>
+                  ) : (
+                    students.map(s => (
+                      <option key={s.id} value={s.id}>
+                        {s.name} (مستوى: {s.level})
+                      </option>
+                    ))
+                  )}
                 </select>
               </div>
 
@@ -677,11 +696,13 @@ export const ReportsTab: React.FC<ReportsTabProps> = ({
 
                 <div className="flex items-center gap-2">
                   <button
-                    onClick={() => window.print()}
-                    className="px-4 py-2 rounded-2xl bg-[#022c22] hover:bg-[#065f46] text-[#86efac] hover:text-white border border-[#065f46] text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
+                    type="button"
+                    onClick={() => setPrintDocumentType('individual')}
+                    className="px-4 py-2.5 rounded-2xl bg-gradient-to-r from-amber-400 to-amber-500 hover:brightness-110 text-[#064e3b] font-black text-xs font-bold flex items-center gap-1.5 shadow-[0_0_15px_rgba(251,191,36,0.3)] transition-all cursor-pointer"
+                    title="معاينة التقرير القرآني واستخراج PDF"
                   >
-                    <Printer className="w-4 h-4 text-[#fbbf24]" />
-                    <span>طباعة التقرير</span>
+                    <Printer className="w-4 h-4 text-[#064e3b]" />
+                    <span>طباعة / استخراج PDF</span>
                   </button>
                 </div>
               </div>
@@ -863,6 +884,20 @@ export const ReportsTab: React.FC<ReportsTabProps> = ({
           )}
         </div>
       )}
+      {/* Official Islamic Quranic Printable Document Modal */}
+      <PrintableQuranicReport
+        isOpen={Boolean(printDocumentType)}
+        onClose={() => setPrintDocumentType(null)}
+        documentType={printDocumentType || 'individual'}
+        students={students}
+        selectedStudent={selectedStudent}
+        attendance={attendance}
+        evaluations={evaluations}
+        settings={settings}
+        teacherName={teacherName || settings.teacherName}
+        reportType={reportType}
+        getStudentLatestRecitations={getStudentLatestRecitations}
+      />
     </div>
   );
 };

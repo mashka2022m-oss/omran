@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   AlertTriangle,
   ShieldAlert,
@@ -87,6 +87,19 @@ export const BehaviorTab: React.FC<BehaviorTabProps> = ({
   // Form State
   const [formId, setFormId] = useState<string | null>(null);
   const [formStudentId, setFormStudentId] = useState<string>(preselectedStudentId || (students[0]?.id || ''));
+
+  // Instantly update student dropdown when students change (e.g. switching activeHalaqahId)
+  useEffect(() => {
+    if (preselectedStudentId && students.some(s => s.id === preselectedStudentId)) {
+      setFormStudentId(preselectedStudentId);
+    } else if (students.length > 0) {
+      if (!formStudentId || !students.some(s => s.id === formStudentId)) {
+        setFormStudentId(students[0].id);
+      }
+    } else {
+      setFormStudentId('');
+    }
+  }, [students, preselectedStudentId, formStudentId]);
   const [formDate, setFormDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [formTime, setFormTime] = useState<string>(
     new Date().toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit', hour12: false })

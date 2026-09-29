@@ -11,20 +11,26 @@ import {
   AlertCircle,
   Search,
   History,
-  FileText
+  FileText,
+  Printer
 } from 'lucide-react';
-import { Student, AttendanceRecord, AttendanceStatus } from '../../types';
+import { Student, AttendanceRecord, AttendanceStatus, AppSettings } from '../../types';
+import { PrintableQuranicReport } from '../reports/PrintableQuranicReport';
 
 interface AttendanceTabProps {
   students: Student[];
   attendanceRecords: AttendanceRecord[];
   onSaveAttendance: (records: AttendanceRecord[]) => Promise<void>;
+  settings?: AppSettings;
+  teacherName?: string;
 }
 
 export const AttendanceTab: React.FC<AttendanceTabProps> = ({
   students,
   attendanceRecords,
-  onSaveAttendance
+  onSaveAttendance,
+  settings,
+  teacherName
 }) => {
   const [selectedDate, setSelectedDate] = useState<string>(
     new Date().toISOString().split('T')[0]
@@ -33,6 +39,7 @@ export const AttendanceTab: React.FC<AttendanceTabProps> = ({
   const [isSaving, setIsSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState('');
   const [showHistoryModal, setShowHistoryModal] = useState(false);
+  const [showPrintModal, setShowPrintModal] = useState(false);
 
   // Current working attendance state for selectedDate (studentId -> { status, note })
   const [statusMap, setStatusMap] = useState<Record<string, { status: AttendanceStatus; note: string }>>(() => {
@@ -170,6 +177,16 @@ export const AttendanceTab: React.FC<AttendanceTabProps> = ({
           >
             <History className="w-4 h-4" />
             <span>سجل الأيام السابقة</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setShowPrintModal(true)}
+            className="px-4 py-2.5 rounded-2xl bg-gradient-to-r from-amber-400 to-amber-500 hover:brightness-110 text-[#064e3b] text-xs font-black flex items-center gap-1.5 shadow-[0_0_15px_rgba(251,191,36,0.3)] transition-all cursor-pointer"
+            title="معاينة وطباعة كشف الحضور واستخراج PDF"
+          >
+            <Printer className="w-4 h-4 text-[#064e3b]" />
+            <span>طباعة كشف الحضور / PDF</span>
           </button>
         </div>
       </div>
@@ -422,6 +439,20 @@ export const AttendanceTab: React.FC<AttendanceTabProps> = ({
             </div>
           </div>
         </div>
+      )}
+      {/* Official Islamic Quranic Printable Attendance Sheet */}
+      {settings && (
+        <PrintableQuranicReport
+          isOpen={showPrintModal}
+          onClose={() => setShowPrintModal(false)}
+          documentType="attendance"
+          students={students}
+          attendance={attendanceRecords}
+          evaluations={[]}
+          settings={settings}
+          teacherName={teacherName || settings.teacherName}
+          selectedDate={selectedDate}
+        />
       )}
     </div>
   );

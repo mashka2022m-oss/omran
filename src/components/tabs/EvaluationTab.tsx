@@ -26,8 +26,13 @@ import {
   ArrowLeftRight,
   XCircle,
   Info,
-  ShieldAlert
+  ShieldAlert,
+  Trophy,
+  Flame,
+  TrendingUp,
+  Zap
 } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
 import confetti from 'canvas-confetti';
 import {
   Student,
@@ -85,6 +90,19 @@ export const EvaluationTab: React.FC<EvaluationTabProps> = ({
   const [activeStudentId, setActiveStudentId] = useState<string>(
     selectedStudentId || (students.length > 0 ? students[0].id : '')
   );
+
+  // Instantly update active student when students list changes (e.g. switching activeHalaqahId)
+  useEffect(() => {
+    if (selectedStudentId && students.some(s => s.id === selectedStudentId)) {
+      setActiveStudentId(selectedStudentId);
+    } else if (students.length > 0) {
+      if (!activeStudentId || !students.some(s => s.id === activeStudentId)) {
+        setActiveStudentId(students[0].id);
+      }
+    } else {
+      setActiveStudentId('');
+    }
+  }, [students, selectedStudentId, activeStudentId]);
 
   const activeStudent = students.find(s => s.id === activeStudentId);
 
@@ -1287,7 +1305,7 @@ export const EvaluationTab: React.FC<EvaluationTabProps> = ({
                       >
                         {student.name.charAt(0)}
                       </div>
-                      <div>
+                      <div className="flex-1 min-w-0">
                         <div className="font-bold text-xs line-clamp-1">{student.name}</div>
                         <div
                           className={`text-[10px] mt-0.5 ${
@@ -1296,6 +1314,32 @@ export const EvaluationTab: React.FC<EvaluationTabProps> = ({
                         >
                           سورة {student.currentSurahName || getSurahInfo(student.currentSurah || 78).name} (آية {student.currentAyah || 1})
                         </div>
+                        {/* Mini Surah Progress Bar */}
+                        {(() => {
+                          const sInfo = getSurahInfo(student.currentSurah || 78);
+                          const total = sInfo.numberOfAyahs || 1;
+                          const current = Math.min(Math.max(student.currentAyah || 1, 1), total);
+                          const pct = Math.min(100, Math.round((current / total) * 100));
+                          return (
+                            <div className="w-full mt-1.5 flex items-center gap-1.5">
+                              <div className={`h-1.5 flex-1 rounded-full overflow-hidden ${isSelected ? 'bg-[#064e3b]/30' : 'bg-[#064e3b]'}`}>
+                                <div
+                                  className={`h-full rounded-full transition-all ${
+                                    isSelected
+                                      ? 'bg-[#064e3b]'
+                                      : pct >= 80
+                                      ? 'bg-gradient-to-r from-amber-400 to-orange-400'
+                                      : 'bg-[#fbbf24]'
+                                  }`}
+                                  style={{ width: `${pct}%` }}
+                                />
+                              </div>
+                              <span className={`text-[9px] font-mono shrink-0 ${isSelected ? 'text-[#064e3b]/90 font-bold' : 'text-[#86efac]/80'}`}>
+                                {pct}%
+                              </span>
+                            </div>
+                          );
+                        })()}
                       </div>
                     </div>
 
@@ -1369,6 +1413,213 @@ export const EvaluationTab: React.FC<EvaluationTabProps> = ({
                   </div>
                 ) : null}
               </div>
+
+              {/* ============================================================ */}
+              {/* TOP MOTIVATIONAL SURAH PROGRESS BAR (شريط تقدم السورة الحالية) */}
+              {/* ============================================================ */}
+              {(() => {
+                const sNumber = activeStudent.currentSurah || 78;
+                const sInfo = getSurahInfo(sNumber);
+                const totalAyahs = sInfo.numberOfAyahs || 1;
+                const currentAyah = Math.min(Math.max(activeStudent.currentAyah || 1, 1), totalAyahs);
+                const percent = Math.min(100, Math.round((currentAyah / totalAyahs) * 100));
+                const remainingAyahs = Math.max(0, totalAyahs - currentAyah);
+                const isCompleted = currentAyah >= totalAyahs;
+                const isNearing = percent >= 75 && !isCompleted;
+                const isHalfway = percent >= 50 && percent < 75;
+
+                const triggerCelebrationConfetti = () => {
+                  try {
+                    confetti({
+                      particleCount: 80,
+                      spread: 70,
+                      origin: { y: 0.6 }
+                    });
+                  } catch (e) {}
+                };
+
+                return (
+                  <motion.div
+                    key={`surah-prog-${activeStudent.id}-${sNumber}-${currentAyah}`}
+                    initial={{ opacity: 0, y: -8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
+                    className={`p-4 sm:p-5 rounded-3xl border transition-all shadow-lg backdrop-blur-md relative overflow-hidden ${
+                      isCompleted
+                        ? 'bg-gradient-to-r from-emerald-950/70 via-[#064e3b] to-emerald-900/60 border-amber-400/50 shadow-[0_0_20px_rgba(251,191,36,0.15)]'
+                        : isNearing
+                        ? 'bg-gradient-to-r from-[#022c22] via-[#064e3b]/80 to-[#022c22] border-amber-400/40 shadow-[0_0_15px_rgba(251,191,36,0.1)]'
+                        : 'bg-[#022c22]/90 border-[#065f46]'
+                    }`}
+                  >
+                    {/* Background subtle glow decoration */}
+                    <div className="absolute -top-12 -left-12 w-32 h-32 bg-[#fbbf24]/5 rounded-full blur-2xl pointer-events-none" />
+
+                    {/* Progress Bar Header Info */}
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3 relative z-10">
+                      <div className="flex items-center gap-3">
+                        <div
+                          className={`w-10 h-10 rounded-2xl flex items-center justify-center text-lg font-bold shrink-0 border shadow-sm ${
+                            isCompleted
+                              ? 'bg-amber-400 text-[#064e3b] border-amber-300'
+                              : isNearing
+                              ? 'bg-amber-500/20 text-[#fbbf24] border-amber-400/40'
+                              : 'bg-emerald-500/20 text-[#86efac] border-emerald-500/30'
+                          }`}
+                        >
+                          {isCompleted ? (
+                            <Trophy className="w-5 h-5 text-[#064e3b]" />
+                          ) : isNearing ? (
+                            <Flame className="w-5 h-5 text-orange-400 animate-pulse" />
+                          ) : (
+                            <Award className="w-5 h-5 text-[#fbbf24]" />
+                          )}
+                        </div>
+
+                        <div>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-xs text-[#86efac] font-bold">
+                              التقدم في سورة {sInfo.name}:
+                            </span>
+                            <span className="text-[11px] px-2 py-0.2 rounded-full bg-[#064e3b] text-slate-300 border border-[#065f46]">
+                              {sInfo.revelationType || 'مكية'}
+                            </span>
+
+                            {isCompleted ? (
+                              <span className="text-[11px] px-2.5 py-0.5 rounded-full bg-amber-400/20 text-[#fbbf24] font-black border border-amber-400/40 flex items-center gap-1 shadow-sm">
+                                <Sparkles className="w-3 h-3 text-amber-300" />
+                                <span>مكتملة بحمد الله</span>
+                              </span>
+                            ) : isNearing ? (
+                              <span className="text-[11px] px-2.5 py-0.5 rounded-full bg-gradient-to-r from-amber-500/20 to-orange-500/20 text-[#fbbf24] font-black border border-amber-400/50 flex items-center gap-1 shadow-sm">
+                                <Flame className="w-3 h-3 text-orange-400 animate-bounce" />
+                                <span>على وشك الختام!</span>
+                              </span>
+                            ) : null}
+                          </div>
+
+                          <div className="text-xs font-bold text-white mt-1 flex items-center gap-2 flex-wrap">
+                            <span>
+                              أنجز الآية <span className="text-[#fbbf24] font-extrabold text-sm font-mono">{currentAyah}</span> من أصل <span className="font-mono text-slate-300 font-bold">{totalAyahs}</span> آية
+                            </span>
+                            {!isCompleted && (
+                              <span className="text-[#86efac] font-medium text-[11px]">
+                                (متبقٍ <strong className="text-[#fbbf24]">{remainingAyahs}</strong> {remainingAyahs === 1 ? 'آية واحدة' : remainingAyahs === 2 ? 'آيتان' : remainingAyahs <= 10 ? 'آيات' : 'آية'} للإتمام)
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Percentage & Quick Action */}
+                      <div className="flex items-center gap-3 self-end sm:self-center">
+                        <div className="text-left">
+                          <div className="text-xl sm:text-2xl font-black text-[#fbbf24] font-mono tracking-tight flex items-center gap-1.5 justify-end">
+                            <span>{percent}%</span>
+                            {isCompleted ? (
+                              <Sparkles className="w-5 h-5 text-amber-300" />
+                            ) : (
+                              <TrendingUp className="w-4 h-4 text-emerald-400" />
+                            )}
+                          </div>
+                          <div className="text-[10px] text-[#86efac] font-medium text-left">
+                            {isCompleted ? 'إتمام مبارك 🎉' : isNearing ? 'اقترب الختام 🌟' : 'مسيرة الحفظ'}
+                          </div>
+                        </div>
+
+                        {isCompleted ? (
+                          <button
+                            type="button"
+                            onClick={triggerCelebrationConfetti}
+                            className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-amber-400 to-amber-500 hover:brightness-110 text-[#064e3b] text-xs font-black transition-all cursor-pointer shadow-md flex items-center gap-1.5"
+                            title="إطلاق ألعاب نارية احتفالاً بالطالب"
+                          >
+                            <Sparkles className="w-3.5 h-3.5" />
+                            <span>احتفال 🎉</span>
+                          </button>
+                        ) : isNearing ? (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setTodayNewSurah(sNumber);
+                              setTodayNewToSurah(sNumber);
+                              setTodayNewFromAyah(Math.min(currentAyah + 1, totalAyahs));
+                              setTodayNewToAyah(totalAyahs);
+                            }}
+                            className="px-2.5 py-1.5 rounded-xl bg-amber-400/20 hover:bg-amber-400/30 text-[#fbbf24] border border-amber-400/40 text-[11px] font-bold transition-all cursor-pointer flex items-center gap-1"
+                            title="تحديد نهاية السورة لتسميع اليوم لختمها الآن"
+                          >
+                            <Zap className="w-3 h-3 text-amber-300" />
+                            <span>ختم السورة اليوم</span>
+                          </button>
+                        ) : null}
+                      </div>
+                    </div>
+
+                    {/* The Visual Progress Bar Track */}
+                    <div className="space-y-1 relative z-10">
+                      <div className="h-3.5 sm:h-4 w-full bg-[#064e3b] border border-[#065f46] rounded-full p-0.5 relative overflow-hidden shadow-inner">
+                        <motion.div
+                          initial={{ width: 0 }}
+                          animate={{ width: `${percent}%` }}
+                          transition={{ duration: 0.9, ease: [0.16, 1, 0.3, 1] }}
+                          className={`h-full rounded-full relative overflow-hidden transition-all ${
+                            isCompleted
+                              ? 'bg-gradient-to-r from-emerald-500 via-amber-300 to-[#fbbf24] shadow-[0_0_15px_rgba(251,191,36,0.6)]'
+                              : isNearing
+                              ? 'bg-gradient-to-r from-emerald-500 via-amber-400 to-orange-400 shadow-[0_0_12px_rgba(251,191,36,0.4)]'
+                              : 'bg-gradient-to-r from-emerald-600 via-emerald-400 to-[#fbbf24]'
+                          }`}
+                        >
+                          {/* Shimmer light sweep */}
+                          <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent skew-x-12 animate-[pulse_2s_infinite]" />
+                        </motion.div>
+                      </div>
+
+                      {/* Milestone Indicators under progress bar */}
+                      <div className="flex items-center justify-between text-[10px] text-[#86efac]/70 px-1 font-mono">
+                        <span>بداية السورة (آية 1)</span>
+                        <span className="hidden sm:inline">نصف السورة ({Math.round(totalAyahs / 2)})</span>
+                        <span className={isCompleted ? 'text-amber-300 font-bold' : ''}>
+                          ختام السورة (آية {totalAyahs})
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Motivational Encouragement Banner */}
+                    <div className="mt-2.5 pt-2.5 border-t border-[#065f46]/60 flex items-center justify-between gap-2 flex-wrap">
+                      <div className="flex items-center gap-2 text-xs">
+                        {isCompleted ? (
+                          <p className="text-amber-300 font-bold flex items-center gap-1.5">
+                            <Sparkles className="w-4 h-4 text-[#fbbf24] shrink-0" />
+                            <span>مبارك للطالب {activeStudent.name}! أتم سورة {sInfo.name} بالكامل بحفظ متقن ومبارك، هنيئاً له هذا الشرف العظيم! 🎉</span>
+                          </p>
+                        ) : isNearing ? (
+                          <p className="text-amber-200 font-bold flex items-center gap-1.5">
+                            <Flame className="w-4 h-4 text-orange-400 shrink-0 animate-bounce" />
+                            <span>همّة وثبات يا بطل! اقتربت جداً من ختام سورة {sInfo.name}؛ بقيت {remainingAyahs} آيات فقط لتتوج بإتمامها! 🌟</span>
+                          </p>
+                        ) : isHalfway ? (
+                          <p className="text-emerald-200 font-medium flex items-center gap-1.5">
+                            <TrendingUp className="w-4 h-4 text-emerald-400 shrink-0" />
+                            <span>رائع! تجاوزت منتصف سورة {sInfo.name}، استمر بنفس العزيمة نحو إتمام السورة بإذن الله! 🚀</span>
+                          </p>
+                        ) : (
+                          <p className="text-emerald-200/80 font-medium flex items-center gap-1.5">
+                            <BookOpen className="w-4 h-4 text-[#fbbf24] shrink-0" />
+                            <span>بداية مباركة في سورة {sInfo.name}، كل آية تحفظها نور في صدرك ورفعة لدرجاتك في الجنة. 📖</span>
+                          </p>
+                        )}
+                      </div>
+
+                      {/* Surah Verses Counter Chip */}
+                      <div className="text-[11px] font-mono text-[#86efac]/90 bg-[#064e3b]/80 px-2 py-0.5 rounded-lg border border-[#065f46] shrink-0 hidden sm:block">
+                        السورة {sNumber} من 114
+                      </div>
+                    </div>
+                  </motion.div>
+                );
+              })()}
 
               {/* ============================================================ */}
               {/* SECTION 1: TODAY'S RECITATION (ما تم تسميعه بالتفصيل) */}

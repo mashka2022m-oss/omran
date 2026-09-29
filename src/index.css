@@ -53,3 +53,53 @@
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(251, 191, 36, 0.6);
 }
+
+/* ========================================================================= */
+/* Print & PDF Export Rules: Pristine Islamic Quranic Document               */
+/* ========================================================================= */
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 10mm 8mm 10mm 8mm;
+  }
+
+  html, body {
+    background: #ffffff !important;
+    color: #0f172a !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Hide screen elements */
+  body * {
+    visibility: hidden;
+  }
+
+  /* Make only the official Quranic printable document visible */
+  .omran-printable-document,
+  .omran-printable-document * {
+    visibility: visible !important;
+  }
+
+  .omran-printable-document {
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+    background: #ffffff !important;
+  }
+
+  .no-print,
+  .no-print-overlay,
+  .no-print * {
+    display: none !important;
+    visibility: hidden !important;
+  }
+}

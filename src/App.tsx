@@ -1436,88 +1436,78 @@ export function App() {
       />
 
       <main className="max-w-7xl mx-auto px-4 lg:px-8 pt-6 relative space-y-6">
-        {/* Active Halaqah Header & Switcher Banner */}
-        <div className="bg-gradient-to-r from-[#064e3b] via-[#022c22] to-[#064e3b] p-3.5 sm:p-4 rounded-2xl border border-[#065f46] shadow-md flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-[#fbbf24]/20 border border-[#fbbf24]/40 text-[#fbbf24] flex items-center justify-center shrink-0 shadow-sm">
-              <Layers className="w-5 h-5" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-xs text-[#86efac] font-bold">الحلقة الحالية:</span>
-                <span className="text-sm sm:text-base font-extrabold text-white font-heading">
-                  {activeHalaqahId === 'all'
-                    ? (isDeveloper
-                        ? `جميع الحلقات لكافة المجمعات (${displayedStudents.length} طالباً)`
-                        : `جميع حلقات ${supervisedComplex?.name || 'المجمع'} (${displayedStudents.length} طالباً)`)
-                    : scopedHalaqahs.find(h => h.id === activeHalaqahId)?.name || 'الحلقة المختارة'}
-                </span>
-                {activeHalaqahId !== 'all' && (
-                  <span className="text-[11px] px-2.5 py-0.5 rounded-full bg-[#fbbf24]/15 text-[#fbbf24] border border-[#fbbf24]/30 font-bold">
-                    {displayedStudents.length} طلاب
-                  </span>
-                )}
+        {/* Active Halaqah Header & Switcher Banner with smooth motion.div workspace transition */}
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={activeHalaqahId || 'default'}
+            initial={{ opacity: 0, y: 10, scale: 0.99 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -8, scale: 0.99 }}
+            transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+            className="bg-gradient-to-r from-[#064e3b] via-[#022c22] to-[#064e3b] p-3.5 sm:p-4 rounded-2xl border border-[#065f46] shadow-md flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 relative overflow-hidden"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-[#fbbf24]/20 border border-[#fbbf24]/40 text-[#fbbf24] flex items-center justify-center shrink-0 shadow-sm">
+                <Layers className="w-5 h-5" />
               </div>
-              <p className="text-[11px] text-slate-300 mt-0.5">
-                {isDeveloper
-                  ? 'أنت في وضع المشرف العام والمبرمج: يمكنك الإشراف على كافة المجمعات والحلقات وإدارتها بالكامل.'
-                  : isSupervisor
-                  ? `أنت في وضع مشرف المجمع (${supervisedComplex?.name || 'المجمع'}): يمكنك التصفح بين حلقات مجمعك وإدارتها بالكامل دون الاطلاع على المجمعات الأخرى.`
-                  : `أنت في وضع المعلم: يتم عرض طلاب وسجلات الحلقة المحددة فقط.`}
-              </p>
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-xs text-[#86efac] font-bold">الحلقة الحالية:</span>
+                  <span className="text-sm sm:text-base font-extrabold text-white font-heading">
+                    {activeHalaqahId === 'all'
+                      ? (isDeveloper
+                          ? `جميع الحلقات لكافة المجمعات (${displayedStudents.length} طالباً)`
+                          : `جميع حلقات ${supervisedComplex?.name || 'المجمع'} (${displayedStudents.length} طالباً)`)
+                      : scopedHalaqahs.find(h => h.id === activeHalaqahId)?.name || 'الحلقة المختارة'}
+                  </span>
+                  {activeHalaqahId !== 'all' && (
+                    <span className="text-[11px] px-2.5 py-0.5 rounded-full bg-[#fbbf24]/15 text-[#fbbf24] border border-[#fbbf24]/30 font-bold">
+                      {displayedStudents.length} طلاب
+                    </span>
+                  )}
+                </div>
+                <p className="text-[11px] text-slate-300 mt-0.5">
+                  {isDeveloper
+                    ? 'أنت في وضع المشرف العام والمبرمج: يمكنك الإشراف على كافة المجمعات والحلقات وإدارتها بالكامل.'
+                    : isSupervisor
+                    ? `أنت في وضع مشرف المجمع (${supervisedComplex?.name || 'المجمع'}): يمكنك التصفح بين حلقات مجمعك وإدارتها بالكامل دون الاطلاع على المجمعات الأخرى.`
+                    : `أنت في وضع المعلم: يتم عرض طلاب وسجلات الحلقة المحددة فقط.`}
+                </p>
+              </div>
             </div>
-          </div>
 
-          {/* Quick Switching Buttons */}
-          <div className="flex items-center gap-1.5 flex-wrap self-stretch sm:self-auto justify-end">
-            {canSwitchComplex && scopedComplexes.length > 1 && (
-              <button
-                type="button"
-                onClick={() => setIsMultiComplexModalOpen(true)}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-amber-500/20 to-amber-600/30 hover:from-amber-500/30 hover:to-amber-600/40 text-amber-300 border border-amber-400/40 text-xs font-bold transition-all cursor-pointer shadow-sm"
-                title="عرض بطاقات المجمعات والحلقات التابعة لك"
-              >
-                <Building2 className="w-3.5 h-3.5 text-[#fbbf24]" />
-                <span>مجمعاتي ({scopedComplexes.length})</span>
-                <Sparkles className="w-3 h-3 text-[#fbbf24]" />
-              </button>
-            )}
-
-            {isSupervisor ? (
-              <div className="flex items-center gap-1 bg-[#022c22] p-1 rounded-xl border border-[#065f46] flex-wrap">
+            {/* Quick Switching Buttons */}
+            <div className="flex items-center gap-1.5 flex-wrap self-stretch sm:self-auto justify-end">
+              {canSwitchComplex && scopedComplexes.length > 1 && (
                 <button
-                  onClick={() => setActiveHalaqahId('all')}
-                  className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                    activeHalaqahId === 'all'
-                      ? 'bg-[#fbbf24] text-[#064e3b] shadow-sm'
-                      : 'text-[#86efac] hover:text-white'
-                  }`}
+                  type="button"
+                  onClick={() => setIsMultiComplexModalOpen(true)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-amber-500/20 to-amber-600/30 hover:from-amber-500/30 hover:to-amber-600/40 text-amber-300 border border-amber-400/40 text-xs font-bold transition-all cursor-pointer shadow-sm"
+                  title="عرض بطاقات المجمعات والحلقات التابعة لك"
                 >
-                  الكل
+                  <Building2 className="w-3.5 h-3.5 text-[#fbbf24]" />
+                  <span>مجمعاتي ({scopedComplexes.length})</span>
+                  <Sparkles className="w-3 h-3 text-[#fbbf24]" />
                 </button>
-                {scopedHalaqahs.map(h => (
+              )}
+
+              {isSupervisor ? (
+                <div className="flex items-center gap-1 bg-[#022c22] p-1 rounded-xl border border-[#065f46] flex-wrap">
                   <button
-                    key={h.id}
-                    onClick={() => setActiveHalaqahId(h.id)}
+                    onClick={() => setActiveHalaqahId('all')}
                     className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                      activeHalaqahId === h.id
+                      activeHalaqahId === 'all'
                         ? 'bg-[#fbbf24] text-[#064e3b] shadow-sm'
                         : 'text-[#86efac] hover:text-white'
                     }`}
                   >
-                    {h.name}
+                    الكل
                   </button>
-                ))}
-              </div>
-            ) : (
-              assignedHalaqahs.length > 1 && (
-                <div className="flex items-center gap-1.5 bg-[#022c22] p-1 rounded-xl border border-[#065f46]">
-                  <span className="text-[10px] text-amber-300 font-bold px-1.5">تنقل بين حلقاتك:</span>
-                  {assignedHalaqahs.map(h => (
+                  {scopedHalaqahs.map(h => (
                     <button
                       key={h.id}
                       onClick={() => setActiveHalaqahId(h.id)}
-                      className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                      className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                         activeHalaqahId === h.id
                           ? 'bg-[#fbbf24] text-[#064e3b] shadow-sm'
                           : 'text-[#86efac] hover:text-white'
@@ -1527,10 +1517,29 @@ export function App() {
                     </button>
                   ))}
                 </div>
-              )
-            )}
-          </div>
-        </div>
+              ) : (
+                assignedHalaqahs.length > 1 && (
+                  <div className="flex items-center gap-1.5 bg-[#022c22] p-1 rounded-xl border border-[#065f46]">
+                    <span className="text-[10px] text-amber-300 font-bold px-1.5">تنقل بين حلقاتك:</span>
+                    {assignedHalaqahs.map(h => (
+                      <button
+                        key={h.id}
+                        onClick={() => setActiveHalaqahId(h.id)}
+                        className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                          activeHalaqahId === h.id
+                            ? 'bg-[#fbbf24] text-[#064e3b] shadow-sm'
+                            : 'text-[#86efac] hover:text-white'
+                        }`}
+                      >
+                        {h.name}
+                      </button>
+                    ))}
+                  </div>
+                )
+              )}
+            </div>
+          </motion.div>
+        </AnimatePresence>
 
         {/* Navigation Tabs Bar */}
         <motion.div
@@ -1624,6 +1633,8 @@ export function App() {
                 students={assignedDisplayedStudents}
                 attendanceRecords={displayedAttendance}
                 onSaveAttendance={handleSaveAttendance}
+                settings={scopedSettings}
+                teacherName={currentTeacher?.name || currentUser?.username || scopedSettings.teacherName}
               />
             )}
 

@@ -25,7 +25,7 @@ import {
   Eye,
   Languages
 } from 'lucide-react';
-import { motion } from 'motion/react';
+import { motion, AnimatePresence } from 'framer-motion';
 
 interface PublicLandingPageProps {
   onOpenLogin: () => void;
@@ -193,16 +193,18 @@ export const PublicLandingPage: React.FC<PublicLandingPageProps> = ({
         {/* Hero Section */}
         <section className="pt-8 sm:pt-14 px-4 sm:px-6 lg:px-8 max-w-5xl mx-auto text-center space-y-8">
           <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
+            initial={{ opacity: 0, y: 30 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: false, amount: 0.15 }}
             transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
             className="space-y-6 flex flex-col items-center"
           >
             {/* Complete Quranic Verse Banner */}
             <motion.div
-              initial={{ opacity: 0, scale: 0.92, y: -10 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              transition={{ duration: 0.7, delay: 0.1, ease: [0.16, 1, 0.3, 1] }}
+              initial={{ opacity: 0, scale: 0.94, y: 20 }}
+              whileInView={{ opacity: 1, scale: 1, y: 0 }}
+              viewport={{ once: false, amount: 0.15 }}
+              transition={{ duration: 0.65, delay: 0.08, ease: [0.16, 1, 0.3, 1] }}
               className="inline-flex items-center justify-center gap-3 px-5 py-2.5 rounded-full bg-gradient-to-r from-emerald-950/95 via-[#064e3b]/90 to-emerald-950/95 border border-amber-400/50 text-amber-200 text-xs sm:text-base font-quran shadow-[0_0_25px_rgba(251,191,36,0.18)] max-w-full flex-wrap"
             >
               <Sparkles className="w-4 h-4 text-amber-400 shrink-0 animate-pulse" />
@@ -216,9 +218,10 @@ export const PublicLandingPage: React.FC<PublicLandingPageProps> = ({
 
             {/* Main Headline */}
             <motion.h2
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6, delay: 0.2, ease: [0.16, 1, 0.3, 1] }}
+              initial={{ opacity: 0, y: 25 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: false, amount: 0.15 }}
+              transition={{ duration: 0.6, delay: 0.16, ease: [0.16, 1, 0.3, 1] }}
               className="text-3xl sm:text-5xl font-black font-heading text-white leading-tight tracking-tight"
             >
               المنظومة الرقمية الشاملة لإدارة
@@ -230,8 +233,9 @@ export const PublicLandingPage: React.FC<PublicLandingPageProps> = ({
             {/* Description */}
             <motion.p
               initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6, delay: 0.3, ease: [0.16, 1, 0.3, 1] }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: false, amount: 0.15 }}
+              transition={{ duration: 0.6, delay: 0.24, ease: [0.16, 1, 0.3, 1] }}
               className="text-sm sm:text-base text-[#86efac]/90 max-w-3xl mx-auto leading-relaxed"
             >
               منصة تعليمية وتربوية رائدة تمكّن المشرفين والمعلمين والطلاب وأولياء الأمور من متابعة الحفظ والتسميع المتقن، رصد الحضور اليومي، أداء الاختبارات التفاعلية، والمزامنة السحابية الدائمة والموثوقة عبر خدمات Google Workspace وقواعد البيانات المركزية.
@@ -240,8 +244,9 @@ export const PublicLandingPage: React.FC<PublicLandingPageProps> = ({
             {/* CTA Buttons */}
             <motion.div
               initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6, delay: 0.4, ease: [0.16, 1, 0.3, 1] }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: false, amount: 0.15 }}
+              transition={{ duration: 0.6, delay: 0.32, ease: [0.16, 1, 0.3, 1] }}
               className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-4 w-full"
             >
               <button
@@ -624,8 +629,14 @@ export const PublicLandingPage: React.FC<PublicLandingPageProps> = ({
         </section>
       </main>
 
-      {/* Footer */}
-      <footer className="border-t border-[#065f46]/60 bg-[#011c16] py-10 px-4 sm:px-6 lg:px-8 text-xs text-slate-400">
+      {/* Footer with Framer Motion scroll animation */}
+      <motion.footer
+        initial={{ opacity: 0, y: 30 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: false, amount: 0.15 }}
+        transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
+        className="border-t border-[#065f46]/60 bg-[#011c16] py-10 px-4 sm:px-6 lg:px-8 text-xs text-slate-400"
+      >
         <div className="max-w-7xl mx-auto space-y-6">
           <div className="flex flex-col md:flex-row items-center justify-between gap-6 text-center md:text-right">
             <div className="space-y-1.5">
@@ -674,7 +685,7 @@ export const PublicLandingPage: React.FC<PublicLandingPageProps> = ({
             <span>Omran Quran Platform • Hosted on verified domain • All Google API terms strictly respected.</span>
           </div>
         </div>
-      </footer>
+      </motion.footer>
     </div>
   );
 };

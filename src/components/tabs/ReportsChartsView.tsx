@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   ResponsiveContainer,
   AreaChart,
@@ -53,6 +53,17 @@ export const ReportsChartsView: React.FC<ReportsChartsViewProps> = ({
   const [selectedStudentForChart, setSelectedStudentForChart] = useState<string>(
     initialStudentId || (students[0]?.id || '')
   );
+
+  // Instantly update selected student when students list changes (e.g. activeHalaqahId switch)
+  useEffect(() => {
+    if (students.length > 0) {
+      if (!selectedStudentForChart || !students.some(s => s.id === selectedStudentForChart)) {
+        setSelectedStudentForChart(students[0].id);
+      }
+    } else {
+      setSelectedStudentForChart('');
+    }
+  }, [students, selectedStudentForChart]);
 
   // Filter evaluations by time range
   const filteredEvaluations = useMemo(() => {
@@ -758,14 +769,19 @@ export const ReportsChartsView: React.FC<ReportsChartsViewProps> = ({
               <select
                 value={selectedStudentForChart}
                 onChange={e => setSelectedStudentForChart(e.target.value)}
-                className="bg-[#022c22] border-2 border-amber-400/50 text-amber-200 text-xs sm:text-sm font-bold rounded-2xl py-2.5 px-4 outline-none focus:border-amber-400 cursor-pointer"
+                disabled={students.length === 0}
+                className="bg-[#022c22] border-2 border-amber-400/50 text-amber-200 text-xs sm:text-sm font-bold rounded-2xl py-2.5 px-4 outline-none focus:border-amber-400 cursor-pointer disabled:opacity-50"
                 dir="rtl"
               >
-                {students.map(s => (
-                  <option key={s.id} value={s.id} className="bg-[#022c22] text-white">
-                    {s.name} (مستوى {s.level})
-                  </option>
-                ))}
+                {students.length === 0 ? (
+                  <option value="">لا يوجد طلاب في هذه الحلقة</option>
+                ) : (
+                  students.map(s => (
+                    <option key={s.id} value={s.id} className="bg-[#022c22] text-white">
+                      {s.name} (مستوى {s.level})
+                    </option>
+                  ))
+                )}
               </select>
             </div>
           </div>

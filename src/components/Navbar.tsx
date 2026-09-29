@@ -13,8 +13,10 @@ import {
   Settings,
   Layers,
   ChevronDown,
-  Building2
+  Building2,
+  Workflow
 } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
 import { UserRole, AppSettings, Halaqah, QuranComplex } from '../types';
 
 interface NavbarProps {
@@ -80,7 +82,7 @@ export const Navbar: React.FC<NavbarProps> = ({
 
   return (
     <header className="sticky top-0 z-30 bg-[#064e3b]/95 backdrop-blur-xl border-b border-[#065f46] px-4 lg:px-8 py-3.5 shadow-2xl transition-all">
-      <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
+      <div className="max-w-7xl mx-auto flex items-center justify-between gap-2 sm:gap-4">
         {/* Brand & Logo */}
         <div className="flex items-center gap-3.5">
           <div className="relative flex items-center justify-center w-11 h-11 rounded-xl bg-[#fbbf24] text-[#064e3b] shadow-[0_0_20px_rgba(251,191,36,0.35)] border border-[#fbbf24]">
@@ -127,69 +129,93 @@ export const Navbar: React.FC<NavbarProps> = ({
               )}
             </div>
 
-            {/* Halaqah selector / label */}
+            {/* Halaqah selector / label with smooth motion.div switching */}
             {currentUser?.role === 'admin' && (
-              <div className="flex items-center gap-1.5 mt-0.5">
-                {isSupervisor ? (
-                  /* Supervisor Selector: Can view all halaqahs combined or filter to a specific halaqah */
-                  halaqahs.length > 0 && onSwitchHalaqah ? (
-                    <div className="flex items-center gap-1">
-                      <span className="text-[10px] text-amber-300/80 font-bold hidden sm:inline">الحلقة:</span>
-                      <select
-                        value={activeHalaqahId || 'all'}
-                        onChange={e => onSwitchHalaqah(e.target.value)}
-                        className="text-xs text-[#86efac] font-medium bg-[#022c22] border border-[#065f46] rounded-lg px-2 py-0.5 cursor-pointer focus:border-[#fbbf24] focus:outline-none"
-                      >
-                        <option value="all">
-                          {isDeveloper ? 'جميع الحلقات لكافة المجمعات' : `جميع حلقات ${complexName || 'المجمع'}`} ({studentsCount} طالب)
-                        </option>
-                        {halaqahs.map(h => (
-                          <option key={h.id} value={h.id}>
-                            {h.name}
+              <AnimatePresence mode="wait">
+                <motion.div
+                  key={activeHalaqahId || 'default'}
+                  initial={{ opacity: 0, x: -6, scale: 0.96 }}
+                  animate={{ opacity: 1, x: 0, scale: 1 }}
+                  exit={{ opacity: 0, x: 6, scale: 0.96 }}
+                  transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
+                  className="flex items-center gap-1.5 mt-0.5"
+                >
+                  {isSupervisor ? (
+                    /* Supervisor Selector: Can view all halaqahs combined or filter to a specific halaqah */
+                    halaqahs.length > 0 && onSwitchHalaqah ? (
+                      <div className="flex items-center gap-1.5 bg-[#022c22]/90 border border-emerald-500/40 rounded-xl px-2 py-0.5 shadow-[0_0_12px_rgba(16,185,129,0.12)]">
+                        <span className="relative flex h-2 w-2 shrink-0">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75" />
+                          <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-400" />
+                        </span>
+                        <span className="text-[10px] text-amber-300 font-bold hidden xs:inline">مساحة الحلقة:</span>
+                        <select
+                          value={activeHalaqahId || 'all'}
+                          onChange={e => onSwitchHalaqah(e.target.value)}
+                          className="text-xs text-[#86efac] font-bold bg-transparent border-none cursor-pointer focus:outline-none max-w-[150px] sm:max-w-[210px] truncate"
+                          title="التبديل بين حلقات العمل"
+                        >
+                          <option value="all" className="bg-[#064e3b] text-white">
+                            {isDeveloper ? 'جميع الحلقات لكافة المجمعات' : `جميع حلقات ${complexName || 'المجمع'}`} ({studentsCount} طالب)
                           </option>
-                        ))}
-                      </select>
-                    </div>
+                          {halaqahs.map(h => (
+                            <option key={h.id} value={h.id} className="bg-[#064e3b] text-white">
+                              {h.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    ) : (
+                      <p className="text-xs text-[#86efac]/90 font-medium line-clamp-1">
+                        {displayHalaqahName}
+                      </p>
+                    )
                   ) : (
-                    <p className="text-xs text-[#86efac]/90 font-medium line-clamp-1">
-                      {displayHalaqahName}
-                    </p>
-                  )
-                ) : (
-                  /* Teacher View: restricted to assigned halaqahs only */
-                  assignedHalaqahs.length > 1 && onSwitchHalaqah ? (
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-[10px] text-amber-300 font-bold">التبديل بين حلقاتك:</span>
-                      <select
-                        value={activeHalaqahId || assignedHalaqahs[0]?.id || ''}
-                        onChange={e => onSwitchHalaqah(e.target.value)}
-                        className="text-xs text-[#fbbf24] font-bold bg-[#022c22] border border-[#fbbf24]/50 rounded-lg px-2 py-0.5 cursor-pointer focus:border-[#fbbf24] focus:outline-none"
-                      >
-                        {assignedHalaqahs.map(h => (
-                          <option key={h.id} value={h.id}>
-                            {h.name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  ) : assignedHalaqahs.length === 1 ? (
-                    <div className="inline-flex items-center gap-1 text-xs text-[#86efac] font-semibold bg-[#022c22] px-2 py-0.5 rounded-lg border border-[#065f46]">
-                      <span className="text-[#fbbf24]">الحلقة:</span>
-                      <span className="line-clamp-1">{assignedHalaqahs[0].name}</span>
-                    </div>
-                  ) : (
-                    <span className="text-[11px] text-amber-300 font-bold bg-amber-950/60 border border-amber-500/40 px-2 py-0.5 rounded-lg">
-                      لم يتم تعيينك في حلقة بعد
-                    </span>
-                  )
-                )}
-              </div>
+                    /* Teacher View: restricted to assigned halaqahs only */
+                    assignedHalaqahs.length > 1 && onSwitchHalaqah ? (
+                      <div className="flex items-center gap-1.5 bg-[#022c22]/90 border border-amber-400/40 rounded-xl px-2 py-0.5 shadow-[0_0_12px_rgba(251,191,36,0.15)]">
+                        <span className="relative flex h-2 w-2 shrink-0">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75" />
+                          <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-400" />
+                        </span>
+                        <span className="text-[10px] text-amber-300 font-bold hidden xs:inline">الحلقة:</span>
+                        <select
+                          value={activeHalaqahId || assignedHalaqahs[0]?.id || ''}
+                          onChange={e => onSwitchHalaqah(e.target.value)}
+                          className="text-xs text-[#fbbf24] font-bold bg-transparent border-none cursor-pointer focus:outline-none max-w-[140px] sm:max-w-[190px] truncate"
+                          title="التبديل بين مساحات حلقاتك المخصصة"
+                        >
+                          {assignedHalaqahs.map(h => (
+                            <option key={h.id} value={h.id} className="bg-[#064e3b] text-white">
+                              {h.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    ) : assignedHalaqahs.length === 1 ? (
+                      <div className="inline-flex items-center gap-1.5 text-xs text-[#86efac] font-semibold bg-[#022c22]/90 px-2.5 py-0.5 rounded-xl border border-[#065f46] shadow-sm">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                        <span className="text-[#fbbf24] font-bold">الحلقة:</span>
+                        <span className="line-clamp-1">{assignedHalaqahs[0].name}</span>
+                      </div>
+                    ) : (
+                      <span className="text-[11px] text-amber-300 font-bold bg-amber-950/60 border border-amber-500/40 px-2 py-0.5 rounded-lg">
+                        لم يتم تعيينك في حلقة بعد
+                      </span>
+                    )
+                  )}
+                </motion.div>
+              </AnimatePresence>
             )}
 
             {currentUser?.role === 'student' && (
-              <p className="text-xs text-[#86efac]/90 font-medium line-clamp-1">
+              <motion.p
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="text-xs text-[#86efac]/90 font-medium line-clamp-1"
+              >
                 {displayHalaqahName}
-              </p>
+              </motion.p>
             )}
           </div>
         </div>
@@ -273,7 +299,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               <div className="w-8 h-8 rounded-xl bg-emerald-500/20 text-[#fbbf24] flex items-center justify-center text-sm font-bold border border-emerald-500/30">
                 {currentUser.username.charAt(0)}
               </div>
-              <div className="text-right">
+              <div className="text-right hidden sm:block">
                 <div className="text-xs font-bold text-white flex items-center gap-1">
                   {currentUser.username}
                 </div>
