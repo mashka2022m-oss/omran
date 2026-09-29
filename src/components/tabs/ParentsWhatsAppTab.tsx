@@ -11,8 +11,10 @@ import {
   Search,
   BookOpen,
   Sparkles,
-  Award
+  Award,
+  UserCheck
 } from 'lucide-react';
+import { motion } from 'motion/react';
 import { Student, AttendanceRecord, StudentEvaluation, AppSettings } from '../../types';
 import { calculateRealisticQuranAssignment, formatQuranPortion, getSurahInfo } from '../../data/quranData';
 
@@ -22,6 +24,8 @@ interface ParentsWhatsAppTabProps {
   evaluations: StudentEvaluation[];
   settings: AppSettings;
   preselectedStudentId?: string;
+  senderAccountName?: string;
+  currentUserName?: string;
 }
 
 export const ParentsWhatsAppTab: React.FC<ParentsWhatsAppTabProps> = ({
@@ -29,11 +33,24 @@ export const ParentsWhatsAppTab: React.FC<ParentsWhatsAppTabProps> = ({
   attendance,
   evaluations,
   settings,
-  preselectedStudentId
+  preselectedStudentId,
+  senderAccountName,
+  currentUserName
 }) => {
   const todayStr = new Date().toISOString().split('T')[0];
   const [searchTerm, setSearchTerm] = useState('');
   const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  // Dynamic sender name based on active logged-in teacher account (e.g. محمد، أنس)
+  const initialSender = currentUserName || senderAccountName || settings.teacherName || 'معلم ومحفظ الحلقة';
+  const [senderName, setSenderName] = useState<string>(initialSender);
+  const [isEditingSender, setIsEditingSender] = useState(false);
+
+  useEffect(() => {
+    if (currentUserName || senderAccountName) {
+      setSenderName(currentUserName || senderAccountName || settings.teacherName || 'معلم ومحفظ الحلقة');
+    }
+  }, [currentUserName, senderAccountName, settings.teacherName]);
 
   // Messages map: studentId -> message string
   const [messagesMap, setMessagesMap] = useState<Record<string, string>>({});
@@ -44,7 +61,8 @@ export const ParentsWhatsAppTab: React.FC<ParentsWhatsAppTabProps> = ({
   const buildComprehensiveMessage = (
     student: Student,
     status: string,
-    evalData?: StudentEvaluation
+    evalData?: StudentEvaluation,
+    customSender?: string
   ): string => {
     let baseUrl = '';
     if (typeof window !== 'undefined') {
@@ -167,6 +185,8 @@ export const ParentsWhatsAppTab: React.FC<ParentsWhatsAppTabProps> = ({
       student.aiPlan?.currentDailyAssignment?.dailyNote ||
       realisticAssignment.dailyNote;
 
+    const effectiveSender = customSender || senderName;
+
     // Construct clean, formatted WhatsApp message
     let msg = `السلام عليكم ورحمة الله وبركاته 🌿\n`;
     msg += `المكرم ولي أمر الطالب العزيز / *${student.name}* حفظه الله ورعاه\n`;
@@ -192,12 +212,12 @@ export const ParentsWhatsAppTab: React.FC<ParentsWhatsAppTabProps> = ({
     msg += `🔗 *لمتابعة ملف الطالب وخطة حفظه وسجل درجاته مباشرة عبر البوابة الحية، اضغط على الرابط:* \n`;
     msg += `${portalUrl}\n\n`;
     msg += `جزاكم الله خيراً ونفع بكم وبأبنائنا الكرام 🤲\n`;
-    msg += `معلم ومحفظ الحلقة: *${settings.teacherName || 'معلم الحلقة'}*`;
+    msg += `معلم ومحفظ الحلقة: *${effectiveSender}*`;
 
     return msg;
   };
 
-  // Re-sync messages whenever students, evaluations, or attendance change
+  // Re-sync messages whenever students, evaluations, attendance, or senderName change
   useEffect(() => {
     const updatedMap: Record<string, string> = {};
     students.forEach(student => {
@@ -209,11 +229,28 @@ export const ParentsWhatsAppTab: React.FC<ParentsWhatsAppTabProps> = ({
         e => e.date === todayStr && e.studentId === student.id
       );
 
-      updatedMap[student.id] = buildComprehensiveMessage(student, status, evalData);
+      updatedMap[student.id] = buildComprehensiveMessage(student, status, evalData, senderName);
     });
 
     setMessagesMap(updatedMap);
-  }, [students, attendance, evaluations, settings]);
+  }, [students, attendance, evaluations, settings, senderName]);
+
+  const handleUpdateSenderName = (newName: string) => {
+    setSenderName(newName);
+    const updatedMap: Record<string, string> = {};
+    students.forEach(student => {
+      const todayAtt = attendance.find(
+        a => a.date === todayStr && a.studentId === student.id
+      );
+      const status = todayAtt?.status || 'حاضر';
+      const evalData = evaluations.find(
+        e => e.date === todayStr && e.studentId === student.id
+      );
+
+      updatedMap[student.id] = buildComprehensiveMessage(student, status, evalData, newName);
+    });
+    setMessagesMap(updatedMap);
+  };
 
   const handleRefreshStudentMessage = (student: Student) => {
     const todayAtt = attendance.find(
@@ -224,7 +261,7 @@ export const ParentsWhatsAppTab: React.FC<ParentsWhatsAppTabProps> = ({
       e => e.date === todayStr && e.studentId === student.id
     );
 
-    const freshMsg = buildComprehensiveMessage(student, status, evalData);
+    const freshMsg = buildComprehensiveMessage(student, status, evalData, senderName);
     setMessagesMap(prev => ({
       ...prev,
       [student.id]: freshMsg
@@ -279,11 +316,89 @@ export const ParentsWhatsAppTab: React.FC<ParentsWhatsAppTabProps> = ({
           </p>
         </div>
 
-        <div className="flex items-center gap-2 text-xs text-[#fbbf24] bg-[#022c22] px-4 py-2 rounded-2xl border border-[#065f46]">
-          <BookOpen className="w-4 h-4 text-[#fbbf24]" />
-          <span>تُحدّث الرسائل تلقائياً وفورياً عند حفظ التسميع</span>
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
+          {/* Active Sender Account Badge & Modifier */}
+          <div className="flex items-center gap-2 text-xs bg-[#022c22] px-3.5 py-2 rounded-2xl border border-amber-400/40 shadow-inner">
+            <UserCheck className="w-4 h-4 text-amber-400 shrink-0" />
+            <span className="text-[#86efac]">الحساب المُرسل منه:</span>
+            <span className="font-bold text-amber-300 font-mono bg-amber-400/15 px-2.5 py-0.5 rounded-lg border border-amber-400/30">
+              {senderName}
+            </span>
+            <button
+              type="button"
+              onClick={() => setIsEditingSender(!isEditingSender)}
+              className="text-[11px] text-amber-300 hover:text-white underline cursor-pointer mr-1.5 font-bold"
+            >
+              {isEditingSender ? 'إغلاق' : 'تغيير'}
+            </button>
+          </div>
+
+          <div className="hidden lg:flex items-center gap-2 text-xs text-[#fbbf24] bg-[#022c22] px-3.5 py-2 rounded-2xl border border-[#065f46]">
+            <BookOpen className="w-4 h-4 text-[#fbbf24]" />
+            <span>تُحدّث فورياً بحسب الحساب المُرسل</span>
+          </div>
         </div>
       </div>
+
+      {/* Account Sender Customization Panel */}
+      {isEditingSender && (
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -10 }}
+          className="bg-gradient-to-r from-[#022c22] via-[#064e3b] to-[#022c22] border-2 border-amber-400/70 rounded-2xl p-4 shadow-xl space-y-3"
+        >
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+            <div className="space-y-1">
+              <span className="text-xs font-bold text-white flex items-center gap-2">
+                <UserCheck className="w-4 h-4 text-amber-400" />
+                <span>تحديد الحساب أو المعلم الذي يُكتب اسمه في تذييل رسالة الواتساب:</span>
+              </span>
+              <p className="text-[11px] text-[#86efac]/80">
+                سواء كنت مسجلاً باسمك (مثل محمد أو أنس) أو كمعلم للحلقة، يمكنك تثبيت اسم الحساب المرسل منه بدقة.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2 flex-wrap w-full sm:w-auto">
+              {currentUserName && currentUserName !== senderName && (
+                <button
+                  type="button"
+                  onClick={() => handleUpdateSenderName(currentUserName)}
+                  className="px-3 py-1.5 rounded-xl bg-amber-400/20 hover:bg-amber-400/30 text-amber-300 text-xs font-bold border border-amber-400/30 transition-all cursor-pointer"
+                >
+                  استخدام اسم حسابي ({currentUserName})
+                </button>
+              )}
+              {senderAccountName && senderAccountName !== senderName && (
+                <button
+                  type="button"
+                  onClick={() => handleUpdateSenderName(senderAccountName)}
+                  className="px-3 py-1.5 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 text-xs font-bold border border-emerald-500/30 transition-all cursor-pointer"
+                >
+                  استخدام اسم المعلم ({senderAccountName})
+                </button>
+              )}
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <input
+              type="text"
+              value={senderName}
+              onChange={e => handleUpdateSenderName(e.target.value)}
+              placeholder="اكتب اسم الحساب أو المعلم المرسل هنا..."
+              className="w-full bg-[#022c22] border border-amber-400/40 text-amber-200 text-xs font-bold rounded-xl py-2 px-3 focus:border-amber-400 outline-none"
+            />
+            <button
+              type="button"
+              onClick={() => setIsEditingSender(false)}
+              className="px-4 py-2 rounded-xl bg-amber-400 text-[#064e3b] text-xs font-black shrink-0 hover:bg-amber-300 cursor-pointer transition-all"
+            >
+              تم
+            </button>
+          </div>
+        </motion.div>
+      )}
 
       {/* Search Filter */}
       <div className="relative">
@@ -305,7 +420,7 @@ export const ParentsWhatsAppTab: React.FC<ParentsWhatsAppTabProps> = ({
             لا يوجد طلاب مطابقون.
           </div>
         ) : (
-          filteredStudents.map(student => {
+          filteredStudents.map((student, sIdx) => {
             const todayAtt = attendance.find(
               a => a.date === todayStr && a.studentId === student.id
             );
@@ -313,12 +428,15 @@ export const ParentsWhatsAppTab: React.FC<ParentsWhatsAppTabProps> = ({
             const evalData = evaluations.find(
               e => e.date === todayStr && e.studentId === student.id
             );
-            const msg = messagesMap[student.id] || buildComprehensiveMessage(student, status, evalData);
+            const msg = messagesMap[student.id] || buildComprehensiveMessage(student, status, evalData, senderName);
             const isCopied = copiedId === student.id;
 
             return (
-              <div
+              <motion.div
                 key={student.id}
+                initial={{ opacity: 0, y: 16 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.35, delay: Math.min(sIdx * 0.04, 0.4) }}
                 className="bg-[#064e3b]/60 border border-[#065f46] hover:border-[#fbbf24]/50 rounded-[32px] p-6 transition-all shadow-xl backdrop-blur-md"
               >
                 <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-5">
@@ -476,7 +594,7 @@ export const ParentsWhatsAppTab: React.FC<ParentsWhatsAppTabProps> = ({
                     </div>
                   </div>
                 </div>
-              </div>
+              </motion.div>
             );
           })
         )}

@@ -69,6 +69,20 @@ export const db = (() => {
 })();
 export const auth = getAuth(app);
 
+// Validate Connection to Firestore on boot
+async function testConnection() {
+  try {
+    await getDocFromServer(doc(db, 'test', 'connection'));
+  } catch (error) {
+    if (error instanceof Error && error.message.includes('the client is offline')) {
+      console.error("Please check your Firebase configuration.");
+    }
+  }
+}
+if (typeof window !== 'undefined') {
+  testConnection();
+}
+
 // Safe Analytics Initialization
 export let analytics: ReturnType<typeof getAnalytics> | null = null;
 if (typeof window !== 'undefined') {

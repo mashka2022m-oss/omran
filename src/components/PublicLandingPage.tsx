@@ -195,74 +195,109 @@ export const PublicLandingPage: React.FC<PublicLandingPageProps> = ({
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5 }}
-            className="space-y-6"
+            transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
+            className="space-y-6 flex flex-col items-center"
           >
-            {/* Quranic Verse Banner */}
-            <div className="inline-flex items-center gap-2.5 px-4 py-2 rounded-full bg-emerald-950/80 border border-emerald-500/30 text-emerald-200 text-xs sm:text-sm font-arabic shadow-inner">
-              <Sparkles className="w-4 h-4 text-amber-400 shrink-0" />
-              <span>﴿ إِنَّ هَٰذَا الْقُرْآنَ يَهْدِي لِلَّتِي هِيَ أَقْوَمُ وَيُبَشِّرُ الْمُؤْمِنِينَ ﴾</span>
-            </div>
+            {/* Complete Quranic Verse Banner */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.92, y: -10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              transition={{ duration: 0.7, delay: 0.1, ease: [0.16, 1, 0.3, 1] }}
+              className="inline-flex items-center justify-center gap-3 px-5 py-2.5 rounded-full bg-gradient-to-r from-emerald-950/95 via-[#064e3b]/90 to-emerald-950/95 border border-amber-400/50 text-amber-200 text-xs sm:text-base font-quran shadow-[0_0_25px_rgba(251,191,36,0.18)] max-w-full flex-wrap"
+            >
+              <Sparkles className="w-4 h-4 text-amber-400 shrink-0 animate-pulse" />
+              <span className="text-center font-bold tracking-wide leading-relaxed">
+                ﴿ إِنَّ هَٰذَا الْقُرْآنَ يَهْدِي لِلَّتِي هِيَ أَقْوَمُ وَيُبَشِّرُ الْمُؤْمِنِينَ الَّذِينَ يَعْمَلُونَ الصَّالِحَاتِ أَنَّ لَهُمْ أَجْرًا كَبِيرًا ﴾
+              </span>
+              <span className="text-[11px] font-sans px-2.5 py-0.5 rounded-full bg-amber-400/20 text-amber-300 font-bold border border-amber-400/40 shrink-0">
+                سورة الإسراء: ٩
+              </span>
+            </motion.div>
 
             {/* Main Headline */}
-            <h2 className="text-3xl sm:text-5xl font-black font-heading text-white leading-tight tracking-tight">
+            <motion.h2
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, delay: 0.2, ease: [0.16, 1, 0.3, 1] }}
+              className="text-3xl sm:text-5xl font-black font-heading text-white leading-tight tracking-tight"
+            >
               المنظومة الرقمية الشاملة لإدارة
               <span className="block text-transparent bg-clip-text bg-gradient-to-r from-amber-300 via-amber-400 to-amber-200 mt-2">
                 حلقات ومجمعات القرآن الكريم
               </span>
-            </h2>
+            </motion.h2>
 
             {/* Description */}
-            <p className="text-sm sm:text-base text-[#86efac]/90 max-w-3xl mx-auto leading-relaxed">
+            <motion.p
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, delay: 0.3, ease: [0.16, 1, 0.3, 1] }}
+              className="text-sm sm:text-base text-[#86efac]/90 max-w-3xl mx-auto leading-relaxed"
+            >
               منصة تعليمية وتربوية رائدة تمكّن المشرفين والمعلمين والطلاب وأولياء الأمور من متابعة الحفظ والتسميع المتقن، رصد الحضور اليومي، أداء الاختبارات التفاعلية، والمزامنة السحابية الدائمة والموثوقة عبر خدمات Google Workspace وقواعد البيانات المركزية.
-            </p>
+            </motion.p>
 
             {/* CTA Buttons */}
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-4">
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, delay: 0.4, ease: [0.16, 1, 0.3, 1] }}
+              className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-4 w-full"
+            >
               <button
                 type="button"
                 onClick={onOpenLogin}
-                className="w-full sm:w-auto px-8 py-4 rounded-2xl bg-gradient-to-r from-amber-400 via-amber-500 to-amber-400 hover:brightness-110 text-[#064e3b] text-base font-black shadow-[0_0_30px_rgba(251,191,36,0.3)] flex items-center justify-center gap-3 transition-all cursor-pointer group"
+                className="w-full sm:w-auto px-8 py-4 rounded-2xl bg-gradient-to-r from-amber-400 via-amber-500 to-amber-400 hover:brightness-110 text-[#064e3b] text-base font-black shadow-[0_0_30px_rgba(251,191,36,0.3)] flex items-center justify-center gap-3 transition-all cursor-pointer group hover:scale-[1.02] active:scale-[0.98]"
               >
                 <span>الدخول إلى لوحة تحكم المنظومة</span>
-                <ArrowLeft className="w-5 h-5 group-hover:-translate-x-1 transition-transform" />
+                <ArrowLeft className="w-5 h-5 group-hover:-translate-x-1.5 transition-transform" />
               </button>
 
               <button
                 type="button"
                 onClick={onOpenPrivacyPolicy}
-                className="w-full sm:w-auto px-7 py-4 rounded-2xl bg-[#064e3b]/80 hover:bg-[#064e3b] border border-amber-400/40 hover:border-amber-400 text-white text-sm font-bold flex items-center justify-center gap-2.5 transition-all cursor-pointer shadow-md"
+                className="w-full sm:w-auto px-7 py-4 rounded-2xl bg-[#064e3b]/80 hover:bg-[#064e3b] border border-amber-400/40 hover:border-amber-400 text-white text-sm font-bold flex items-center justify-center gap-2.5 transition-all cursor-pointer shadow-md hover:scale-[1.02] active:scale-[0.98]"
               >
                 <ShieldCheck className="w-5 h-5 text-amber-400" />
                 <span>وثيقة سياسة الخصوصية (Privacy Policy)</span>
               </button>
-            </div>
+            </motion.div>
           </motion.div>
 
-          {/* Quick Metrics / Pillars */}
+          {/* Quick Metrics / Pillars with Bidirectional Scroll Animation */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3.5 sm:gap-5 pt-8 text-right">
-            <div className="bg-[#064e3b]/40 border border-[#065f46] rounded-2xl p-4 sm:p-5 backdrop-blur-sm">
-              <div className="text-amber-400 text-xl sm:text-2xl font-black font-heading mb-1">متعدد المجمعات</div>
-              <div className="text-xs text-slate-300">إدارة مركزية مستقلة لكل مجمع</div>
-            </div>
-            <div className="bg-[#064e3b]/40 border border-[#065f46] rounded-2xl p-4 sm:p-5 backdrop-blur-sm">
-              <div className="text-emerald-400 text-xl sm:text-2xl font-black font-heading mb-1">مزامنة سحابية</div>
-              <div className="text-xs text-slate-300">Google Sheets & Google Drive</div>
-            </div>
-            <div className="bg-[#064e3b]/40 border border-[#065f46] rounded-2xl p-4 sm:p-5 backdrop-blur-sm">
-              <div className="text-blue-400 text-xl sm:text-2xl font-black font-heading mb-1">بنك الاختبارات</div>
-              <div className="text-xs text-slate-300">نماذج Google Forms وتصحيح ذكي</div>
-            </div>
-            <div className="bg-[#064e3b]/40 border border-[#065f46] rounded-2xl p-4 sm:p-5 backdrop-blur-sm">
-              <div className="text-amber-300 text-xl sm:text-2xl font-black font-heading mb-1">تقارير فورية</div>
-              <div className="text-xs text-slate-300">متابعة يومية لأولياء الأمور بالواتساب</div>
-            </div>
+            {[
+              { title: 'متعدد المجمعات', desc: 'إدارة مركزية مستقلة لكل مجمع', color: 'text-amber-400' },
+              { title: 'مزامنة سحابية', desc: 'Google Sheets & Google Drive', color: 'text-emerald-400' },
+              { title: 'بنك الاختبارات', desc: 'نماذج Google Forms وتصحيح ذكي', color: 'text-blue-400' },
+              { title: 'تقارير فورية', desc: 'متابعة يومية لأولياء الأمور بالواتساب', color: 'text-amber-300' }
+            ].map((pillar, i) => (
+              <motion.div
+                key={pillar.title}
+                initial={{ opacity: 0, y: 30, scale: 0.95 }}
+                whileInView={{ opacity: 1, y: 0, scale: 1 }}
+                viewport={{ once: false, amount: 0.2 }}
+                transition={{ duration: 0.5, delay: i * 0.08, ease: [0.16, 1, 0.3, 1] }}
+                className="bg-[#064e3b]/40 border border-[#065f46] hover:border-amber-400/40 rounded-2xl p-4 sm:p-5 backdrop-blur-sm transition-all hover:bg-[#064e3b]/60 shadow-lg"
+              >
+                <div className={`${pillar.color} text-xl sm:text-2xl font-black font-heading mb-1`}>
+                  {pillar.title}
+                </div>
+                <div className="text-xs text-slate-300">{pillar.desc}</div>
+              </motion.div>
+            ))}
           </div>
         </section>
 
-        {/* SECTION: TRANSPARENT DATA USAGE & GOOGLE WORKSPACE DISCLOSURE (معيار جوجل الصارم للشفافية) */}
+        {/* SECTION: TRANSPARENT DATA USAGE & GOOGLE WORKSPACE DISCLOSURE with Bidirectional Scroll Animation */}
         <section className="px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
-          <div className="bg-gradient-to-br from-[#022c22] via-[#064e3b]/90 to-[#022c22] border-2 border-amber-400/80 rounded-[32px] p-6 sm:p-10 space-y-6 shadow-2xl relative overflow-hidden">
+          <motion.div
+            initial={{ opacity: 0, y: 40, scale: 0.97 }}
+            whileInView={{ opacity: 1, y: 0, scale: 1 }}
+            viewport={{ once: false, amount: 0.15 }}
+            transition={{ duration: 0.65, ease: [0.16, 1, 0.3, 1] }}
+            className="bg-gradient-to-br from-[#022c22] via-[#064e3b]/90 to-[#022c22] border-2 border-amber-400/80 rounded-[32px] p-6 sm:p-10 space-y-6 shadow-2xl relative overflow-hidden"
+          >
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-[#065f46] pb-5">
               <div className="flex items-center gap-3">
                 <div className="w-12 h-12 rounded-2xl bg-amber-400 text-[#064e3b] flex items-center justify-center font-black shadow-lg shrink-0">
@@ -295,7 +330,13 @@ export const PublicLandingPage: React.FC<PublicLandingPageProps> = ({
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
               {/* Google Sheets Card */}
-              <div className="p-5 rounded-2xl bg-[#022c22]/90 border border-amber-400/30 space-y-3 shadow-inner">
+              <motion.div
+                initial={{ opacity: 0, y: 25, scale: 0.95 }}
+                whileInView={{ opacity: 1, y: 0, scale: 1 }}
+                viewport={{ once: false, amount: 0.2 }}
+                transition={{ duration: 0.5, delay: 0.05, ease: [0.16, 1, 0.3, 1] }}
+                className="p-5 rounded-2xl bg-[#022c22]/90 border border-amber-400/30 space-y-3 shadow-inner hover:border-amber-400/60 transition-colors"
+              >
                 <div className="flex items-center gap-2.5 text-emerald-400">
                   <FileSpreadsheet className="w-6 h-6" />
                   <h4 className="text-base font-bold text-white font-heading">
@@ -311,10 +352,16 @@ export const PublicLandingPage: React.FC<PublicLandingPageProps> = ({
                     ✓ لا يتم القراءة أو الوصول إلى أي جداول أخرى خارج نطاق ما ينشئه المستخدم عبر المنظومة.
                   </p>
                 </div>
-              </div>
+              </motion.div>
 
               {/* Google Forms Card */}
-              <div className="p-5 rounded-2xl bg-[#022c22]/90 border border-amber-400/30 space-y-3 shadow-inner">
+              <motion.div
+                initial={{ opacity: 0, y: 25, scale: 0.95 }}
+                whileInView={{ opacity: 1, y: 0, scale: 1 }}
+                viewport={{ once: false, amount: 0.2 }}
+                transition={{ duration: 0.5, delay: 0.12, ease: [0.16, 1, 0.3, 1] }}
+                className="p-5 rounded-2xl bg-[#022c22]/90 border border-amber-400/30 space-y-3 shadow-inner hover:border-amber-400/60 transition-colors"
+              >
                 <div className="flex items-center gap-2.5 text-blue-400">
                   <FileText className="w-6 h-6" />
                   <h4 className="text-base font-bold text-white font-heading">
@@ -330,10 +377,16 @@ export const PublicLandingPage: React.FC<PublicLandingPageProps> = ({
                     ✓ يقتصر الوصول على النماذج التي يصممها المعلم خصيصاً لاختبارات حلقته القرآنية.
                   </p>
                 </div>
-              </div>
+              </motion.div>
 
               {/* Google Drive Card */}
-              <div className="p-5 rounded-2xl bg-[#022c22]/90 border border-amber-400/30 space-y-3 shadow-inner">
+              <motion.div
+                initial={{ opacity: 0, y: 25, scale: 0.95 }}
+                whileInView={{ opacity: 1, y: 0, scale: 1 }}
+                viewport={{ once: false, amount: 0.2 }}
+                transition={{ duration: 0.5, delay: 0.19, ease: [0.16, 1, 0.3, 1] }}
+                className="p-5 rounded-2xl bg-[#022c22]/90 border border-amber-400/30 space-y-3 shadow-inner hover:border-amber-400/60 transition-colors"
+              >
                 <div className="flex items-center gap-2.5 text-amber-400">
                   <HardDrive className="w-6 h-6" />
                   <h4 className="text-base font-bold text-white font-heading">
@@ -349,11 +402,17 @@ export const PublicLandingPage: React.FC<PublicLandingPageProps> = ({
                     ✓ نستخدم النطاق المقيد (drive.file) دون أي إمكانية للاطلاع على أي ملفات أخرى في Drive.
                   </p>
                 </div>
-              </div>
+              </motion.div>
             </div>
 
             {/* Crucial Zero-Sharing Affirmation */}
-            <div className="bg-[#064e3b]/80 border border-emerald-400/50 rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: false, amount: 0.2 }}
+              transition={{ duration: 0.5, delay: 0.15 }}
+              className="bg-[#064e3b]/80 border border-emerald-400/50 rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4"
+            >
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-emerald-500/20 text-emerald-300 flex items-center justify-center shrink-0 border border-emerald-400/40">
                   <CheckCircle2 className="w-5 h-5" />
@@ -371,155 +430,173 @@ export const PublicLandingPage: React.FC<PublicLandingPageProps> = ({
               >
                 قراءة بنود الاستخدام المحدود (Limited Use)
               </button>
-            </div>
-          </div>
+            </motion.div>
+          </motion.div>
         </section>
 
         {/* Feature Grid Section (Detailed App Functionality Description) */}
         <section className="px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto space-y-8">
-          <div className="text-center space-y-2 max-w-2xl mx-auto">
+          <motion.div
+            initial={{ opacity: 0, y: 25 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: false, amount: 0.2 }}
+            transition={{ duration: 0.55, ease: [0.16, 1, 0.3, 1] }}
+            className="text-center space-y-2 max-w-2xl mx-auto"
+          >
             <h3 className="text-2xl sm:text-3xl font-black font-heading text-white">
               الوظائف الشاملة لمنظومة عُمْرَان
             </h3>
             <p className="text-xs sm:text-sm text-[#86efac]/80">
               صُممت المنظومة لتغطي كافة الاحتياجات الإدارية والتربوية والقرآنية بدقة وسهولة
             </p>
-          </div>
+          </motion.div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {/* Feature 1 */}
-            <div className="bg-[#064e3b]/50 border border-[#065f46] hover:border-amber-400/50 rounded-3xl p-6 sm:p-7 space-y-4 transition-all group">
-              <div className="w-12 h-12 rounded-2xl bg-[#022c22] border border-amber-400/40 text-amber-400 flex items-center justify-center group-hover:scale-110 transition-transform">
-                <BookOpen className="w-6 h-6" />
-              </div>
-              <h4 className="text-lg font-bold text-white font-heading">
-                سجل التسميع والحفظ والمراجعة
-              </h4>
-              <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
-                رصد دقيق لمقدار الحفظ الجديد، المراجعة الصغرى، والمراجعة الكبرى مع تقييم أحكام التجويد والطلاقة، وتدوين الملاحظات التوجيهية لكل طالب.
-              </p>
-            </div>
-
-            {/* Feature 2 */}
-            <div className="bg-[#064e3b]/50 border border-[#065f46] hover:border-amber-400/50 rounded-3xl p-6 sm:p-7 space-y-4 transition-all group">
-              <div className="w-12 h-12 rounded-2xl bg-[#022c22] border border-emerald-400/40 text-emerald-400 flex items-center justify-center group-hover:scale-110 transition-transform">
-                <Users className="w-6 h-6" />
-              </div>
-              <h4 className="text-lg font-bold text-white font-heading">
-                إدارة المجمعات والحلقات والمعلمين
-              </h4>
-              <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
-                هيكلة تنظيمية مرنة تتيح توزيع الطلاب على الحلقات، تعيين المعلمين، وتحديد أدوار المشرفين مع إمكانية عزل أو مشاركة قواعد البيانات بين المجمعات.
-              </p>
-            </div>
-
-            {/* Feature 3 */}
-            <div className="bg-[#064e3b]/50 border border-[#065f46] hover:border-amber-400/50 rounded-3xl p-6 sm:p-7 space-y-4 transition-all group">
-              <div className="w-12 h-12 rounded-2xl bg-[#022c22] border border-blue-400/40 text-blue-400 flex items-center justify-center group-hover:scale-110 transition-transform">
-                <Calendar className="w-6 h-6" />
-              </div>
-              <h4 className="text-lg font-bold text-white font-heading">
-                الحضور والغياب والتنبيهات الذكية
-              </h4>
-              <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
-                تسجيل حضور وغياب وتأخر واستئذان الطلاب بضغطة واحدة، مع توليد رسائل إخطار مجهزة للإرسال الفوري لولي الأمر عبر الواتساب.
-              </p>
-            </div>
-
-            {/* Feature 4 */}
-            <div className="bg-[#064e3b]/50 border border-[#065f46] hover:border-amber-400/50 rounded-3xl p-6 sm:p-7 space-y-4 transition-all group">
-              <div className="w-12 h-12 rounded-2xl bg-[#022c22] border border-amber-400/40 text-amber-400 flex items-center justify-center group-hover:scale-110 transition-transform">
-                <Award className="w-6 h-6" />
-              </div>
-              <h4 className="text-lg font-bold text-white font-heading">
-                بنك الاختبارات ولوحة المتصدرين
-              </h4>
-              <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
-                إنشاء اختبارات قرآنية متقدمة مع دعم التكامل المباشر مع نماذج Google Forms، واحتساب النقاط تلقائياً لتكريم الطلاب في لوحة الشرف.
-              </p>
-            </div>
-
-            {/* Feature 5 */}
-            <div className="bg-[#064e3b]/50 border border-[#065f46] hover:border-amber-400/50 rounded-3xl p-6 sm:p-7 space-y-4 transition-all group">
-              <div className="w-12 h-12 rounded-2xl bg-[#022c22] border border-emerald-400/40 text-emerald-400 flex items-center justify-center group-hover:scale-110 transition-transform">
-                <FileSpreadsheet className="w-6 h-6" />
-              </div>
-              <h4 className="text-lg font-bold text-white font-heading">
-                الربط السحابي الدائم مع Google Workspace
-              </h4>
-              <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
-                تصدير السجلات الشاملة ونتائج الاختبارات والغياب تلقائياً إلى جداول Google Sheets ومجلدات Google Drive لحفظ بيانات المجمع للأبد.
-              </p>
-            </div>
-
-            {/* Feature 6 */}
-            <div className="bg-[#064e3b]/50 border border-[#065f46] hover:border-amber-400/50 rounded-3xl p-6 sm:p-7 space-y-4 transition-all group">
-              <div className="w-12 h-12 rounded-2xl bg-[#022c22] border border-teal-400/40 text-teal-400 flex items-center justify-center group-hover:scale-110 transition-transform">
-                <GraduationCap className="w-6 h-6" />
-              </div>
-              <h4 className="text-lg font-bold text-white font-heading">
-                بوابة الطالب ومتابعة ولي الأمر
-              </h4>
-              <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
-                نافذة خاصة تتيح لولي الأمر والطالب استعراض مستوى الإنجاز الأسبوعي والشهري، والاطلاع على الخطة القرآنية الحالية ونتائج الاختبارات.
-              </p>
-            </div>
+            {[
+              {
+                icon: BookOpen,
+                iconColor: 'text-amber-400',
+                borderColor: 'border-amber-400/40',
+                title: 'سجل التسميع والحفظ والمراجعة',
+                desc: 'رصد دقيق لمقدار الحفظ الجديد، المراجعة الصغرى، والمراجعة الكبرى مع تقييم أحكام التجويد والطلاقة، وتدوين الملاحظات التوجيهية لكل طالب.'
+              },
+              {
+                icon: Users,
+                iconColor: 'text-emerald-400',
+                borderColor: 'border-emerald-400/40',
+                title: 'إدارة المجمعات والحلقات والمعلمين',
+                desc: 'هيكلة تنظيمية مرنة تتيح توزيع الطلاب على الحلقات، تعيين المعلمين، وتحديد أدوار المشرفين مع إمكانية عزل أو مشاركة قواعد البيانات بين المجمعات.'
+              },
+              {
+                icon: Calendar,
+                iconColor: 'text-blue-400',
+                borderColor: 'border-blue-400/40',
+                title: 'الحضور والغياب والتنبيهات الذكية',
+                desc: 'تسجيل حضور وغياب وتأخر واستئذان الطلاب بضغطة واحدة، مع توليد رسائل إخطار مجهزة للإرسال الفوري لولي الأمر عبر الواتساب.'
+              },
+              {
+                icon: Award,
+                iconColor: 'text-amber-400',
+                borderColor: 'border-amber-400/40',
+                title: 'بنك الاختبارات ولوحة المتصدرين',
+                desc: 'إنشاء اختبارات قرآنية متقدمة مع دعم التكامل المباشر مع نماذج Google Forms، واحتساب النقاط تلقائياً لتكريم الطلاب في لوحة الشرف.'
+              },
+              {
+                icon: FileSpreadsheet,
+                iconColor: 'text-emerald-400',
+                borderColor: 'border-emerald-400/40',
+                title: 'الربط السحابي الدائم مع Google Workspace',
+                desc: 'تصدير السجلات الشاملة ونتائج الاختبارات والغياب تلقائياً إلى جداول Google Sheets ومجلدات Google Drive لحفظ بيانات المجمع للأبد.'
+              },
+              {
+                icon: GraduationCap,
+                iconColor: 'text-teal-400',
+                borderColor: 'border-teal-400/40',
+                title: 'بوابة الطالب ومتابعة ولي الأمر',
+                desc: 'نافذة خاصة تتيح لولي الأمر والطالب استعراض مستوى الإنجاز الأسبوعي والشهري، والاطلاع على الخطة القرآنية الحالية ونتائج الاختبارات.'
+              }
+            ].map((feat, idx) => {
+              const IconComp = feat.icon;
+              return (
+                <motion.div
+                  key={feat.title}
+                  initial={{ opacity: 0, y: 35, scale: 0.96 }}
+                  whileInView={{ opacity: 1, y: 0, scale: 1 }}
+                  viewport={{ once: false, amount: 0.2 }}
+                  transition={{ duration: 0.55, delay: (idx % 3) * 0.08, ease: [0.16, 1, 0.3, 1] }}
+                  className="bg-[#064e3b]/50 border border-[#065f46] hover:border-amber-400/50 rounded-3xl p-6 sm:p-7 space-y-4 transition-all group hover:bg-[#064e3b]/70 shadow-lg"
+                >
+                  <div className={`w-12 h-12 rounded-2xl bg-[#022c22] border ${feat.borderColor} ${feat.iconColor} flex items-center justify-center group-hover:scale-110 transition-transform shadow-inner`}>
+                    <IconComp className="w-6 h-6" />
+                  </div>
+                  <h4 className="text-lg font-bold text-white font-heading">
+                    {feat.title}
+                  </h4>
+                  <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
+                    {feat.desc}
+                  </p>
+                </motion.div>
+              );
+            })}
           </div>
         </section>
 
-        {/* User Roles & Target Audience Section */}
+        {/* User Roles & Target Audience Section with Bidirectional Animation */}
         <section className="px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
-          <div className="bg-[#064e3b]/40 border border-[#065f46] rounded-[32px] p-6 sm:p-8 space-y-6">
+          <motion.div
+            initial={{ opacity: 0, y: 35, scale: 0.98 }}
+            whileInView={{ opacity: 1, y: 0, scale: 1 }}
+            viewport={{ once: false, amount: 0.15 }}
+            transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
+            className="bg-[#064e3b]/40 border border-[#065f46] rounded-[32px] p-6 sm:p-8 space-y-6"
+          >
             <h3 className="text-xl font-bold font-heading text-white text-center">
               الفئات المستفيدة ومستويات الصلاحيات في المنظومة
             </h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-xs">
-              <div className="p-4 rounded-2xl bg-[#022c22] border border-amber-400/30 space-y-1.5">
-                <div className="flex items-center gap-2 text-amber-300 font-bold">
-                  <Users className="w-4 h-4" />
-                  <span>المشرف العام والمبرمج</span>
-                </div>
-                <p className="text-slate-300 leading-relaxed">
-                  إدارة المجمعات والحلقات، تعيين المعلمين، ضبط إعدادات الربط السحابي ومراقبة الجودة الشاملة.
-                </p>
-              </div>
-
-              <div className="p-4 rounded-2xl bg-[#022c22] border border-emerald-400/30 space-y-1.5">
-                <div className="flex items-center gap-2 text-emerald-300 font-bold">
-                  <BookOpen className="w-4 h-4" />
-                  <span>معلمو الحلقات</span>
-                </div>
-                <p className="text-slate-300 leading-relaxed">
-                  تسجيل الحفظ اليومي، رصد الحضور والتسميع، إصدار تقارير الواتساب، وتصدير الدرجات لجداول Google Sheets.
-                </p>
-              </div>
-
-              <div className="p-4 rounded-2xl bg-[#022c22] border border-blue-400/30 space-y-1.5">
-                <div className="flex items-center gap-2 text-blue-300 font-bold">
-                  <GraduationCap className="w-4 h-4" />
-                  <span>الطلاب</span>
-                </div>
-                <p className="text-slate-300 leading-relaxed">
-                  متابعة الإنجاز القرآني، خوض الاختبارات الذكية، استعراض لوحة الشرف، والاستماع للتلاوات المتقنة.
-                </p>
-              </div>
-
-              <div className="p-4 rounded-2xl bg-[#022c22] border border-teal-400/30 space-y-1.5">
-                <div className="flex items-center gap-2 text-teal-300 font-bold">
-                  <HeartHandshake className="w-4 h-4" />
-                  <span>أولياء الأمور</span>
-                </div>
-                <p className="text-slate-300 leading-relaxed">
-                  الاطلاع الفوري على تقارير الأبناء، متابعة الحضور والغياب، واستلام رسائل الإنجاز الدورية.
-                </p>
-              </div>
+              {[
+                {
+                  icon: Users,
+                  color: 'text-amber-300',
+                  border: 'border-amber-400/30',
+                  title: 'المشرف العام والمبرمج',
+                  desc: 'إدارة المجمعات والحلقات، تعيين المعلمين، ضبط إعدادات الربط السحابي ومراقبة الجودة الشاملة.'
+                },
+                {
+                  icon: BookOpen,
+                  color: 'text-emerald-300',
+                  border: 'border-emerald-400/30',
+                  title: 'معلمو الحلقات',
+                  desc: 'تسجيل الحفظ اليومي، رصد الحضور والتسميع، إصدار تقارير الواتساب، وتصدير الدرجات لجداول Google Sheets.'
+                },
+                {
+                  icon: GraduationCap,
+                  color: 'text-blue-300',
+                  border: 'border-blue-400/30',
+                  title: 'الطلاب',
+                  desc: 'متابعة الإنجاز القرآني، خوض الاختبارات الذكية، استعراض لوحة الشرف، والاستماع للتلاوات المتقنة.'
+                },
+                {
+                  icon: HeartHandshake,
+                  color: 'text-teal-300',
+                  border: 'border-teal-400/30',
+                  title: 'أولياء الأمور',
+                  desc: 'الاطلاع الفوري على تقارير الأبناء، متابعة الحضور والغياب، واستلام رسائل الإنجاز الدورية.'
+                }
+              ].map((role, rIdx) => {
+                const RoleIcon = role.icon;
+                return (
+                  <motion.div
+                    key={role.title}
+                    initial={{ opacity: 0, y: 25, scale: 0.95 }}
+                    whileInView={{ opacity: 1, y: 0, scale: 1 }}
+                    viewport={{ once: false, amount: 0.2 }}
+                    transition={{ duration: 0.5, delay: rIdx * 0.08, ease: [0.16, 1, 0.3, 1] }}
+                    className={`p-4 rounded-2xl bg-[#022c22] border ${role.border} space-y-1.5 hover:border-amber-400/60 transition-colors shadow-md`}
+                  >
+                    <div className={`flex items-center gap-2 ${role.color} font-bold`}>
+                      <RoleIcon className="w-4 h-4" />
+                      <span>{role.title}</span>
+                    </div>
+                    <p className="text-slate-300 leading-relaxed">
+                      {role.desc}
+                    </p>
+                  </motion.div>
+                );
+              })}
             </div>
-          </div>
+          </motion.div>
         </section>
 
-        {/* Dedicated Privacy Policy Call-to-Action Box */}
+        {/* Dedicated Privacy Policy Call-to-Action Box with Bidirectional Animation */}
         <section className="px-4 sm:px-6 lg:px-8 max-w-5xl mx-auto">
-          <div className="bg-gradient-to-r from-[#064e3b] via-[#022c22] to-[#064e3b] border-2 border-amber-400 rounded-[32px] p-6 sm:p-8 space-y-4 text-center sm:text-right flex flex-col sm:flex-row sm:items-center justify-between gap-6 shadow-2xl">
+          <motion.div
+            initial={{ opacity: 0, y: 35, scale: 0.98 }}
+            whileInView={{ opacity: 1, y: 0, scale: 1 }}
+            viewport={{ once: false, amount: 0.2 }}
+            transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
+            className="bg-gradient-to-r from-[#064e3b] via-[#022c22] to-[#064e3b] border-2 border-amber-400 rounded-[32px] p-6 sm:p-8 space-y-4 text-center sm:text-right flex flex-col sm:flex-row sm:items-center justify-between gap-6 shadow-2xl"
+          >
             <div className="space-y-2">
               <div className="flex items-center justify-center sm:justify-start gap-2 text-amber-300 font-bold text-xs">
                 <ShieldCheck className="w-5 h-5 text-amber-400" />
@@ -537,13 +614,13 @@ export const PublicLandingPage: React.FC<PublicLandingPageProps> = ({
               <button
                 type="button"
                 onClick={onOpenPrivacyPolicy}
-                className="w-full sm:w-auto px-6 py-3.5 rounded-2xl bg-amber-400 hover:bg-amber-300 text-[#064e3b] text-xs sm:text-sm font-black transition-all cursor-pointer shadow-lg flex items-center justify-center gap-2"
+                className="w-full sm:w-auto px-6 py-3.5 rounded-2xl bg-amber-400 hover:bg-amber-300 text-[#064e3b] text-xs sm:text-sm font-black transition-all cursor-pointer shadow-lg flex items-center justify-center gap-2 hover:scale-[1.02] active:scale-[0.98]"
               >
                 <span>فتح صفحة سياسة الخصوصية</span>
                 <ExternalLink className="w-4 h-4" />
               </button>
             </div>
-          </div>
+          </motion.div>
         </section>
       </main>
 

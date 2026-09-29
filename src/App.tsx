@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
 import {
   Home,
   Users,
@@ -1219,13 +1220,19 @@ export function App() {
       return (
         <div className="min-h-screen bg-[#022c22] text-[#f0f9f6] font-sans selection:bg-[#fbbf24] selection:text-[#064e3b]" dir="rtl">
           <AnimatedBackground />
-          <UnassignedStudentView
-            studentName={activePortalStudent.name}
-            studentPhone={activePortalStudent.phone}
-            onRefresh={loadAllData}
-            onLogout={handleLogout}
-            settings={portalSettings}
-          />
+          <motion.div
+            initial={{ opacity: 0, scale: 0.97, y: 15 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
+          >
+            <UnassignedStudentView
+              studentName={activePortalStudent.name}
+              studentPhone={activePortalStudent.phone}
+              onRefresh={loadAllData}
+              onLogout={handleLogout}
+              settings={portalSettings}
+            />
+          </motion.div>
         </div>
       );
     }
@@ -1233,23 +1240,29 @@ export function App() {
     return (
       <div className="min-h-screen bg-[#022c22] text-[#f0f9f6] font-sans selection:bg-[#fbbf24] selection:text-[#064e3b]" dir="rtl">
         <AnimatedBackground />
-        <ParentPortalView
-          student={activePortalStudent}
-          attendance={attendance}
-          evaluations={evaluations}
-          settings={portalSettings}
-          violations={violations}
-          exams={exams}
-          submissions={submissions}
-          students={students}
-          halaqahs={halaqahs}
-          leaderboardSettings={leaderboardSettings || undefined}
-          recordings={recordings}
-          recordingsConfig={recordingsConfig}
-          isLoggedInStudent={!!currentUser}
-          onLogout={handleLogout}
-          onSaveSubmission={handleSaveSubmission}
-        />
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
+        >
+          <ParentPortalView
+            student={activePortalStudent}
+            attendance={attendance}
+            evaluations={evaluations}
+            settings={portalSettings}
+            violations={violations}
+            exams={exams}
+            submissions={submissions}
+            students={students}
+            halaqahs={halaqahs}
+            leaderboardSettings={leaderboardSettings || undefined}
+            recordings={recordings}
+            recordingsConfig={recordingsConfig}
+            isLoggedInStudent={!!currentUser}
+            onLogout={handleLogout}
+            onSaveSubmission={handleSaveSubmission}
+          />
+        </motion.div>
       </div>
     );
   }
@@ -1520,7 +1533,12 @@ export function App() {
         </div>
 
         {/* Navigation Tabs Bar */}
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-2 scrollbar-none bg-[#064e3b]/80 p-1.5 rounded-2xl border border-[#065f46] backdrop-blur-md shadow-lg">
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
+          className="flex items-center gap-1.5 overflow-x-auto pb-2 scrollbar-none bg-[#064e3b]/80 p-1.5 rounded-2xl border border-[#065f46] backdrop-blur-md shadow-lg relative"
+        >
           {navItems.map(item => {
             const Icon = item.icon;
             const isActive = activeTab === item.id;
@@ -1529,169 +1547,192 @@ export function App() {
               <button
                 key={item.id}
                 onClick={() => setActiveTab(item.id)}
-                className={`flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-bold whitespace-nowrap transition-all cursor-pointer ${
+                className={`relative flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-bold whitespace-nowrap transition-colors cursor-pointer select-none ${
                   isActive
-                    ? 'bg-[#fbbf24] text-[#064e3b] shadow-lg shadow-amber-950/40 font-black'
+                    ? 'text-[#064e3b] font-black'
                     : 'text-[#86efac]/80 hover:text-white hover:bg-[#022c22]/60'
                 }`}
               >
-                <Icon className={`w-4 h-4 ${isActive ? 'text-[#064e3b]' : 'text-[#86efac]'}`} />
-                <span>{item.label}</span>
-                {item.badge !== undefined && (
-                  <span
-                    className={`text-[10px] px-1.5 py-0.5 rounded-full font-mono ${
-                      isActive ? 'bg-[#064e3b]/20 text-[#064e3b] font-black' : 'bg-[#022c22] text-[#86efac]'
-                    }`}
-                  >
-                    {item.badge}
-                  </span>
+                {isActive && (
+                  <motion.div
+                    layoutId="activeTabIndicator"
+                    className="absolute inset-0 bg-[#fbbf24] rounded-xl shadow-lg shadow-amber-950/40 z-0"
+                    transition={{ type: 'spring', stiffness: 450, damping: 35 }}
+                  />
                 )}
+                <span className="relative z-10 flex items-center gap-2">
+                  <Icon className={`w-4 h-4 ${isActive ? 'text-[#064e3b]' : 'text-[#86efac]'}`} />
+                  <span>{item.label}</span>
+                  {item.badge !== undefined && (
+                    <span
+                      className={`text-[10px] px-1.5 py-0.5 rounded-full font-mono ${
+                        isActive ? 'bg-[#064e3b]/20 text-[#064e3b] font-black' : 'bg-[#022c22] text-[#86efac]'
+                      }`}
+                    >
+                      {item.badge}
+                    </span>
+                  )}
+                </span>
               </button>
             );
           })}
-        </div>
+        </motion.div>
 
-        {/* Tab Views */}
-        {activeTab === 'home' && (
-          <HomeTab
-            students={displayedStudents}
-            attendance={displayedAttendance}
-            evaluations={displayedEvaluations}
-            settings={scopedSettings}
-            teachers={scopedTeachers}
-            currentUserName={currentUser?.username || scopedSettings.teacherName}
-            onNavigateTab={handleNavigateTab}
-            onSelectStudentForEval={handleSelectStudentForEval}
-            onOpenTeacherManagement={() => setIsSettingsModalOpen(true)}
-          />
-        )}
+        {/* Tab Views with Buttery Smooth Animated Transitions */}
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={activeTab}
+            initial={{ opacity: 0, y: 14, scale: 0.995 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -10, scale: 0.995 }}
+            transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
+            className="w-full space-y-6"
+          >
+            {activeTab === 'home' && (
+              <HomeTab
+                students={displayedStudents}
+                attendance={displayedAttendance}
+                evaluations={displayedEvaluations}
+                settings={scopedSettings}
+                teachers={scopedTeachers}
+                currentUserName={currentUser?.username || scopedSettings.teacherName}
+                onNavigateTab={handleNavigateTab}
+                onSelectStudentForEval={handleSelectStudentForEval}
+                onOpenTeacherManagement={() => setIsSettingsModalOpen(true)}
+              />
+            )}
 
-        {activeTab === 'students' && (
-          <StudentsTab
-            students={displayedStudents}
-            settings={scopedSettings}
-            halaqahs={scopedHalaqahs}
-            activeHalaqahId={activeHalaqahId}
-            isSupervisor={isSupervisor}
-            onAddStudent={handleAddStudent}
-            onUpdateStudent={handleUpdateStudent}
-            onDeleteStudent={handleDeleteStudent}
-            onToggleRegistration={handleToggleRegistration}
-            onTriggerAIPlan={handleTriggerAIPlan}
-            onTransferStudent={handleTransferStudent}
-            onBatchTransferStudents={handleBatchTransferStudents}
-          />
-        )}
+            {activeTab === 'students' && (
+              <StudentsTab
+                students={displayedStudents}
+                settings={scopedSettings}
+                halaqahs={scopedHalaqahs}
+                activeHalaqahId={activeHalaqahId}
+                isSupervisor={isSupervisor}
+                onAddStudent={handleAddStudent}
+                onUpdateStudent={handleUpdateStudent}
+                onDeleteStudent={handleDeleteStudent}
+                onToggleRegistration={handleToggleRegistration}
+                onTriggerAIPlan={handleTriggerAIPlan}
+                onTransferStudent={handleTransferStudent}
+                onBatchTransferStudents={handleBatchTransferStudents}
+              />
+            )}
 
-        {activeTab === 'attendance' && (
-          <AttendanceTab
-            students={assignedDisplayedStudents}
-            attendanceRecords={displayedAttendance}
-            onSaveAttendance={handleSaveAttendance}
-          />
-        )}
+            {activeTab === 'attendance' && (
+              <AttendanceTab
+                students={assignedDisplayedStudents}
+                attendanceRecords={displayedAttendance}
+                onSaveAttendance={handleSaveAttendance}
+              />
+            )}
 
-        {activeTab === 'evaluation' && (
-          <EvaluationTab
-            students={assignedDisplayedStudents}
-            attendance={displayedAttendance}
-            evaluations={displayedEvaluations}
-            criteria={criteria}
-            selectedStudentId={targetStudentForEval}
-            onSaveEvaluation={handleSaveEvaluation}
-            onSaveCriteria={handleSaveCriteria}
-            onDeleteCriteria={handleDeleteCriteria}
-            onUpdateStudentAIPlan={handleUpdateStudentAIPlan}
-            onNavigateToWhatsApp={handleNavigateToWhatsApp}
-            onNavigateToBehavior={handleNavigateToBehavior}
-          />
-        )}
+            {activeTab === 'evaluation' && (
+              <EvaluationTab
+                students={assignedDisplayedStudents}
+                attendance={displayedAttendance}
+                evaluations={displayedEvaluations}
+                criteria={criteria}
+                selectedStudentId={targetStudentForEval}
+                onSaveEvaluation={handleSaveEvaluation}
+                onSaveCriteria={handleSaveCriteria}
+                onDeleteCriteria={handleDeleteCriteria}
+                onUpdateStudentAIPlan={handleUpdateStudentAIPlan}
+                onNavigateToWhatsApp={handleNavigateToWhatsApp}
+                onNavigateToBehavior={handleNavigateToBehavior}
+              />
+            )}
 
-        {activeTab === 'exams' && (
-          <ExamsTab
-            exams={scopedExams}
-            submissions={scopedSubmissions}
-            students={scopedStudents}
-            halaqahs={scopedHalaqahs}
-            currentUserId={currentUser?.teacherId || currentUser?.studentId || 'admin'}
-            currentUserName={currentUser?.username || scopedSettings.teacherName}
-            isSupervisor={isSupervisor}
-            googleAuthConfig={googleAuthConfig}
-            leaderboardSettings={leaderboardSettings || undefined}
-            onSaveExam={handleSaveExam}
-            onDeleteExam={handleDeleteExam}
-            onSaveSubmission={handleSaveSubmission}
-            onDeleteSubmission={handleDeleteSubmission}
-            onSaveLeaderboardSettings={handleSaveLeaderboardSettings}
-            onRefreshGoogleAuth={handleRefreshGoogleAuth}
-          />
-        )}
+            {activeTab === 'exams' && (
+              <ExamsTab
+                exams={scopedExams}
+                submissions={scopedSubmissions}
+                students={scopedStudents}
+                halaqahs={scopedHalaqahs}
+                currentUserId={currentUser?.teacherId || currentUser?.studentId || 'admin'}
+                currentUserName={currentUser?.username || scopedSettings.teacherName}
+                isSupervisor={isSupervisor}
+                googleAuthConfig={googleAuthConfig}
+                leaderboardSettings={leaderboardSettings || undefined}
+                onSaveExam={handleSaveExam}
+                onDeleteExam={handleDeleteExam}
+                onSaveSubmission={handleSaveSubmission}
+                onDeleteSubmission={handleDeleteSubmission}
+                onSaveLeaderboardSettings={handleSaveLeaderboardSettings}
+                onRefreshGoogleAuth={handleRefreshGoogleAuth}
+              />
+            )}
 
-        {activeTab === 'recordings' && isDeveloper && (
-          <RecordingsTab
-            recordings={recordings}
-            recordingsConfig={recordingsConfig}
-            onSaveRecording={handleSaveRecording}
-            onDeleteRecording={handleDeleteRecording}
-            onSaveConfig={handleSaveRecordingsConfig}
-          />
-        )}
+            {activeTab === 'recordings' && isDeveloper && (
+              <RecordingsTab
+                recordings={recordings}
+                recordingsConfig={recordingsConfig}
+                onSaveRecording={handleSaveRecording}
+                onDeleteRecording={handleDeleteRecording}
+                onSaveConfig={handleSaveRecordingsConfig}
+              />
+            )}
 
-        {activeTab === 'accounts' && isDeveloper && (
-          <AccountsTab
-            teachers={teachers}
-            students={students}
-            halaqahs={halaqahs}
-            complexes={complexes}
-            onSaveTeacher={handleSaveTeacher}
-            onDeleteTeacher={handleDeleteTeacher}
-            onUpdateStudent={handleUpdateStudent}
-          />
-        )}
+            {activeTab === 'accounts' && isDeveloper && (
+              <AccountsTab
+                teachers={teachers}
+                students={students}
+                halaqahs={halaqahs}
+                complexes={complexes}
+                onSaveTeacher={handleSaveTeacher}
+                onDeleteTeacher={handleDeleteTeacher}
+                onUpdateStudent={handleUpdateStudent}
+              />
+            )}
 
-        {activeTab === 'behavior' && (
-          <BehaviorTab
-            students={assignedDisplayedStudents}
-            violations={displayedViolations}
-            settings={scopedSettings}
-            teacherName={currentUser?.username || scopedSettings.teacherName}
-            onSaveViolation={handleSaveViolation}
-            onDeleteViolation={handleDeleteViolation}
-            preselectedStudentId={targetStudentForBehavior}
-          />
-        )}
+            {activeTab === 'behavior' && (
+              <BehaviorTab
+                students={assignedDisplayedStudents}
+                violations={displayedViolations}
+                settings={scopedSettings}
+                teacherName={currentUser?.username || scopedSettings.teacherName}
+                onSaveViolation={handleSaveViolation}
+                onDeleteViolation={handleDeleteViolation}
+                preselectedStudentId={targetStudentForBehavior}
+              />
+            )}
 
-        {activeTab === 'parents' && (
-          <ParentsWhatsAppTab
-            students={assignedDisplayedStudents}
-            attendance={displayedAttendance}
-            evaluations={displayedEvaluations}
-            settings={scopedSettings}
-            preselectedStudentId={targetStudentForWhatsApp}
-          />
-        )}
+            {activeTab === 'parents' && (
+              <ParentsWhatsAppTab
+                students={assignedDisplayedStudents}
+                attendance={displayedAttendance}
+                evaluations={displayedEvaluations}
+                settings={scopedSettings}
+                preselectedStudentId={targetStudentForWhatsApp}
+                senderAccountName={currentTeacher?.name || currentUser?.username || scopedSettings.teacherName}
+                currentUserName={currentUser?.username}
+              />
+            )}
 
-        {activeTab === 'reports' && (
-          <ReportsTab
-            students={assignedDisplayedStudents}
-            attendance={displayedAttendance}
-            evaluations={displayedEvaluations}
-            settings={scopedSettings}
-            onUpdateSettings={handleUpdateSettings}
-          />
-        )}
+            {activeTab === 'reports' && (
+              <ReportsTab
+                students={assignedDisplayedStudents}
+                attendance={displayedAttendance}
+                evaluations={displayedEvaluations}
+                settings={scopedSettings}
+                onUpdateSettings={handleUpdateSettings}
+                teacherName={currentTeacher?.name || currentUser?.username || scopedSettings.teacherName}
+              />
+            )}
 
-        {activeTab === 'backup' && isDeveloper && (
-          <DataBackupTab
-            onRefreshAllData={loadAllData}
-            googleAuthConfig={googleAuthConfig}
-            onRefreshGoogleAuth={handleRefreshGoogleAuth}
-            isSupervisor={isSupervisor}
-            isDeveloper={isDeveloper}
-            complexes={complexes}
-            onSaveComplex={handleSaveComplex}
-          />
-        )}
+            {activeTab === 'backup' && isDeveloper && (
+              <DataBackupTab
+                onRefreshAllData={loadAllData}
+                googleAuthConfig={googleAuthConfig}
+                onRefreshGoogleAuth={handleRefreshGoogleAuth}
+                isSupervisor={isSupervisor}
+                isDeveloper={isDeveloper}
+                complexes={complexes}
+                onSaveComplex={handleSaveComplex}
+              />
+            )}
+          </motion.div>
+        </AnimatePresence>
       </main>
 
       {/* Platform Global Footer */}
