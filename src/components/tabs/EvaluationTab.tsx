@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Star,
   BookOpen,
@@ -49,6 +49,8 @@ import {
   getSurahInfo,
   formatQuranPortion
 } from '../../data/quranData';
+import { KingFahdQuranModal, QuranHighlightItem } from '../quran/KingFahdQuranModal';
+import { getPageOfAyah } from '../../data/quranPagesData';
 
 interface EvaluationTabProps {
   students: Student[];
@@ -191,6 +193,20 @@ export const EvaluationTab: React.FC<EvaluationTabProps> = ({
   const [newCritType, setNewCritType] = useState<CriteriaType>('score');
   const [newCritMaxScore, setNewCritMaxScore] = useState<number>(10);
   const [newCritOptions, setNewCritOptions] = useState<string>('ممتاز, جيد جدا, جيد, ضعيف');
+  const [newCritPointsWeight, setNewCritPointsWeight] = useState<number>(10);
+
+  // King Fahd Mushaf Viewer Modal State
+  const [isMushafOpen, setIsMushafOpen] = useState<boolean>(false);
+  const [mushafInitialSurah, setMushafInitialSurah] = useState<number>(78);
+  const [mushafInitialAyah, setMushafInitialAyah] = useState<number>(1);
+  const [mushafActiveItemId, setMushafActiveItemId] = useState<string>('new_today');
+
+  const openMushafReader = (surah: number, ayah: number, itemId?: string) => {
+    setMushafInitialSurah(surah);
+    setMushafInitialAyah(ayah);
+    if (itemId) setMushafActiveItemId(itemId);
+    setIsMushafOpen(true);
+  };
 
   // Attendance status of active student on the selected date
   const selectedDateAtt = attendance.find(
@@ -209,6 +225,70 @@ export const EvaluationTab: React.FC<EvaluationTabProps> = ({
   const firstTomRev = tomReviews[0];
   const startTomRevSurahInfo = getSurahInfo(firstTomRev?.surahNumber || 79);
   const endTomRevSurahInfo = getSurahInfo(firstTomRev?.toSurahNumber || firstTomRev?.surahNumber || 79);
+
+  // Dynamic King Fahd Mushaf Highlight Items for the current student & recitation state
+  const mushafHighlightItems: QuranHighlightItem[] = useMemo(() => {
+    const items: QuranHighlightItem[] = [];
+
+    // 1. Today's New
+    items.push({
+      id: 'new_today',
+      title: `الحفظ الجديد (${startTodaySurahInfo.name} ${todayNewFromAyah}-${todayNewToAyah})`,
+      surahNumber: todayNewSurah,
+      fromAyah: todayNewFromAyah,
+      toSurahNumber: todayNewToSurah,
+      toAyah: todayNewToAyah
+    });
+
+    // 2. Today's Reviews
+    todayReviews.forEach(r => {
+      items.push({
+        id: r.id,
+        title: `${r.type} (${r.surahName || getSurahInfo(r.surahNumber).name} ${r.fromAyah}-${r.toAyah})`,
+        surahNumber: r.surahNumber,
+        fromAyah: r.fromAyah,
+        toSurahNumber: r.toSurahNumber || r.surahNumber,
+        toAyah: r.toAyah
+      });
+    });
+
+    // 3. Tomorrow's New
+    items.push({
+      id: 'new_tomorrow',
+      title: `مقرر الغد جديد (${startTomNewSurahInfo.name} ${tomNewFromAyah}-${tomNewToAyah})`,
+      surahNumber: tomNewSurah,
+      fromAyah: tomNewFromAyah,
+      toSurahNumber: tomNewToSurah,
+      toAyah: tomNewToAyah
+    });
+
+    // 4. Tomorrow's Reviews
+    tomReviews.forEach(r => {
+      items.push({
+        id: r.id,
+        title: `مقرر غد (${r.surahName || getSurahInfo(r.surahNumber).name} ${r.fromAyah}-${r.toAyah})`,
+        surahNumber: r.surahNumber,
+        fromAyah: r.fromAyah,
+        toSurahNumber: r.toSurahNumber || r.surahNumber,
+        toAyah: r.toAyah
+      });
+    });
+
+    return items;
+  }, [
+    todayNewSurah,
+    todayNewFromAyah,
+    todayNewToSurah,
+    todayNewToAyah,
+    startTodaySurahInfo.name,
+    todayReviews,
+    tomNewSurah,
+    tomNewFromAyah,
+    tomNewToSurah,
+    tomNewToAyah,
+    startTomNewSurahInfo.name,
+    tomReviews
+  ]);
 
   // All evaluations for the currently active student (sorted latest first)
   const studentEvaluationsHistory = evaluations
@@ -898,6 +978,30 @@ export const EvaluationTab: React.FC<EvaluationTabProps> = ({
         isFullSurah: tomNewSurah === tomNewToSurah && tomNewFromAyah === 1 && tomNewToAyah >= tomStartSurahInfo.numberOfAyahs
       };
 
+      // Calculate points earned from criteria based on supervisor configuration
+      let calculatedCriteriaPoints = 0;
+      criteria.forEach(crit => {
+        const val = criteriaValues[crit.id];
+        const weight = typeof crit.pointsWeight === 'number' ? crit.pointsWeight : 10;
+        if (val !== undefined && val !== null && val !== '') {
+          if (crit.type === 'stars') {
+            const stars = Number(val) || 0;
+            calculatedCriteriaPoints += Math.round((stars / 5) * weight);
+          } else if (crit.type === 'score') {
+            const score = Number(val) || 0;
+            const maxScore = crit.maxScore || 10;
+            calculatedCriteriaPoints += Math.round((score / maxScore) * weight);
+          } else if (crit.type === 'options') {
+            const opts = crit.options || [];
+            const idx = opts.indexOf(String(val));
+            if (idx === 0) calculatedCriteriaPoints += weight;
+            else if (idx === 1) calculatedCriteriaPoints += Math.round(weight * 0.75);
+            else if (idx === 2) calculatedCriteriaPoints += Math.round(weight * 0.5);
+            else if (idx >= 3) calculatedCriteriaPoints += Math.round(weight * 0.25);
+          }
+        }
+      });
+
       const fullEvaluation: StudentEvaluation = {
         id: `eval_${selectedDate}_${activeStudent.id}`,
         date: selectedDate,
@@ -915,7 +1019,8 @@ export const EvaluationTab: React.FC<EvaluationTabProps> = ({
           tomorrowReviewItem: tomReviews[0] || null,
           tomorrowReviewItems: tomReviews || [],
           tomorrowSuggestedSheikh: selectedSheikh || '',
-          tomorrowDailyNote: dailyHomeNote || ''
+          tomorrowDailyNote: dailyHomeNote || '',
+          criteriaPointsEarnedToday: calculatedCriteriaPoints
         },
         evaluatedAt: new Date().toISOString()
       };
@@ -974,6 +1079,7 @@ export const EvaluationTab: React.FC<EvaluationTabProps> = ({
     setNewCritType('score');
     setNewCritMaxScore(10);
     setNewCritOptions('ممتاز, جيد جدا, جيد, ضعيف');
+    setNewCritPointsWeight(10);
     setIsCriteriaModalOpen(true);
   };
 
@@ -983,6 +1089,7 @@ export const EvaluationTab: React.FC<EvaluationTabProps> = ({
     setNewCritType(crit.type);
     setNewCritMaxScore(crit.maxScore || 10);
     setNewCritOptions(crit.options ? crit.options.join(', ') : '');
+    setNewCritPointsWeight(crit.pointsWeight ?? 10);
     setIsCriteriaModalOpen(true);
   };
 
@@ -1008,7 +1115,9 @@ export const EvaluationTab: React.FC<EvaluationTabProps> = ({
               name: newCritName.trim(),
               type: newCritType,
               maxScore: newCritType === 'score' ? newCritMaxScore : undefined,
-              options: optionsArray
+              options: optionsArray,
+              pointsWeight: newCritPointsWeight,
+              hasPoints: true
             }
           : c
       );
@@ -1019,6 +1128,8 @@ export const EvaluationTab: React.FC<EvaluationTabProps> = ({
         type: newCritType,
         maxScore: newCritType === 'score' ? newCritMaxScore : undefined,
         options: optionsArray,
+        pointsWeight: newCritPointsWeight,
+        hasPoints: true,
         complexId: activeComplexId || undefined,
         isDefault: false
       };
@@ -1044,6 +1155,16 @@ export const EvaluationTab: React.FC<EvaluationTabProps> = ({
         </div>
 
         <div className="flex items-center gap-2.5 flex-wrap">
+          <button
+            type="button"
+            onClick={() => openMushafReader(todayNewSurah, todayNewFromAyah, 'new_today')}
+            className="px-3.5 py-2 rounded-2xl bg-gradient-to-r from-emerald-600/40 via-emerald-700/50 to-emerald-600/40 hover:from-emerald-600/60 hover:to-emerald-700/70 border border-emerald-500/50 text-[#fbbf24] text-xs font-black flex items-center gap-1.5 cursor-pointer transition-all shadow-md"
+            title="فتح مصحف مجمع الملك فهد كاملاً"
+          >
+            <BookOpen className="w-4 h-4 text-[#fbbf24]" />
+            <span>المصحف الشريف (طبعة الملك فهد)</span>
+          </button>
+
           <button
             onClick={() => setShowHistoryDrawer(!showHistoryDrawer)}
             className={`px-3.5 py-2 rounded-2xl border text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-all ${
@@ -1781,6 +1902,16 @@ export const EvaluationTab: React.FC<EvaluationTabProps> = ({
                     </span>
                   </div>
 
+                  {/* Read in King Fahd Mushaf Button */}
+                  <button
+                    type="button"
+                    onClick={() => openMushafReader(todayNewSurah, todayNewFromAyah, 'new_today')}
+                    className="w-full py-2.5 px-4 rounded-2xl bg-gradient-to-r from-emerald-600/30 via-[#064e3b] to-emerald-600/30 hover:from-emerald-600/50 hover:to-emerald-600/50 border border-emerald-500/40 text-emerald-200 hover:text-white font-bold text-xs flex items-center justify-center gap-2 cursor-pointer transition-all shadow-sm group"
+                  >
+                    <BookOpen className="w-4 h-4 text-[#fbbf24] group-hover:scale-110 transition-transform" />
+                    <span>قراءة ومتابعة في مصحف مجمع الملك فهد (سورة {startTodaySurahInfo.name} - الآيات {todayNewFromAyah} إلى {todayNewToAyah} - الوجه {getPageOfAyah(todayNewSurah, todayNewFromAyah)})</span>
+                  </button>
+
                   {/* Did not recite toggle */}
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 rounded-2xl bg-[#022c22]/90 border border-[#065f46]">
                     <label className="flex items-center gap-2 cursor-pointer text-xs font-bold select-none">
@@ -1985,7 +2116,7 @@ export const EvaluationTab: React.FC<EvaluationTabProps> = ({
                                   onChange={e => handleUpdateReviewItem(rev.id, { toAyah: Number(e.target.value) })}
                                   className="w-full bg-[#022c22] border border-[#065f46] focus:border-[#fbbf24] rounded-xl py-1.5 px-2 text-xs text-white outline-none"
                                 >
-                                  {Array.from({ length: revEndSurahInfo.numberOfAyahs }, (_, i) => i + 1)
+                                   {Array.from({ length: revEndSurahInfo.numberOfAyahs }, (_, i) => i + 1)
                                     .filter(ayahNum => (rev.toSurahNumber || rev.surahNumber) !== rev.surahNumber || ayahNum >= rev.fromAyah)
                                     .map(ayahNum => (
                                       <option key={ayahNum} value={ayahNum}>
@@ -2007,6 +2138,15 @@ export const EvaluationTab: React.FC<EvaluationTabProps> = ({
                                 revEndSurahInfo.numberOfAyahs
                               )}
                             </div>
+
+                            <button
+                              type="button"
+                              onClick={() => openMushafReader(rev.surahNumber, rev.fromAyah, rev.id)}
+                              className="w-full py-2 px-3 rounded-xl bg-[#064e3b]/50 hover:bg-[#064e3b] border border-[#065f46] text-[#86efac] hover:text-white text-xs font-bold flex items-center justify-center gap-2 cursor-pointer transition-colors"
+                            >
+                              <BookOpen className="w-3.5 h-3.5 text-[#fbbf24]" />
+                              <span>قراءة في المصحف ({revStartSurahInfo.name} {rev.fromAyah}-{rev.toAyah} • الوجه {getPageOfAyah(rev.surahNumber, rev.fromAyah)})</span>
+                            </button>
                           </div>
                         );
                       })}
@@ -2159,6 +2299,16 @@ export const EvaluationTab: React.FC<EvaluationTabProps> = ({
                       )}
                     </span>
                   </div>
+
+                  {/* Read in King Fahd Mushaf Button */}
+                  <button
+                    type="button"
+                    onClick={() => openMushafReader(tomNewSurah, tomNewFromAyah, 'new_tomorrow')}
+                    className="w-full py-2.5 px-4 rounded-2xl bg-gradient-to-r from-emerald-600/30 via-[#064e3b] to-emerald-600/30 hover:from-emerald-600/50 hover:to-emerald-600/50 border border-emerald-500/40 text-emerald-200 hover:text-white font-bold text-xs flex items-center justify-center gap-2 cursor-pointer transition-all shadow-sm group"
+                  >
+                    <BookOpen className="w-4 h-4 text-[#fbbf24] group-hover:scale-110 transition-transform" />
+                    <span>قراءة في مصحف الملك فهد (سورة {startTomNewSurahInfo.name} - الآيات {tomNewFromAyah} إلى {tomNewToAyah} - الوجه {getPageOfAyah(tomNewSurah, tomNewFromAyah)})</span>
+                  </button>
                 </div>
 
                 {/* 2.2 Tomorrow's Reviews (Multi-item) */}
@@ -2335,6 +2485,15 @@ export const EvaluationTab: React.FC<EvaluationTabProps> = ({
                                 revEndSurahInfo.numberOfAyahs
                               )}
                             </div>
+
+                            <button
+                              type="button"
+                              onClick={() => openMushafReader(rev.surahNumber, rev.fromAyah, rev.id)}
+                              className="w-full py-2 px-3 rounded-xl bg-[#064e3b]/50 hover:bg-[#064e3b] border border-[#065f46] text-[#86efac] hover:text-white text-xs font-bold flex items-center justify-center gap-2 cursor-pointer transition-colors"
+                            >
+                              <BookOpen className="w-3.5 h-3.5 text-[#fbbf24]" />
+                              <span>قراءة في المصحف ({revStartSurahInfo.name} {rev.fromAyah}-{rev.toAyah} • الوجه {getPageOfAyah(rev.surahNumber, rev.fromAyah)})</span>
+                            </button>
                           </div>
                         );
                       })}
@@ -2470,82 +2629,6 @@ export const EvaluationTab: React.FC<EvaluationTabProps> = ({
                                 <span className="text-xs text-[#86efac] font-bold">
                                   من {maxScore} درجات
                                 </span>
-                              </div>
-
-                              {/* Instant Quick-Select Buttons */}
-                              <div className="flex items-center gap-1.5 flex-wrap">
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    setCriteriaValues(prev => ({
-                                      ...prev,
-                                      [crit.id]: maxScore
-                                    }))
-                                  }
-                                  className={`px-2.5 py-1 rounded-xl text-[11px] font-bold border transition-all cursor-pointer ${
-                                    currentScore === maxScore
-                                      ? 'bg-emerald-500 text-[#064e3b] border-emerald-400 font-black shadow-sm'
-                                      : 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30 hover:bg-emerald-500/25'
-                                  }`}
-                                  title="إعطاء الدرجة الكاملة"
-                                >
-                                  كاملة ({maxScore})
-                                </button>
-                                {maxScore > 1 && (
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      setCriteriaValues(prev => ({
-                                        ...prev,
-                                        [crit.id]: Math.max(0, maxScore - 1)
-                                      }))
-                                    }
-                                    className={`px-2 py-1 rounded-xl text-[11px] font-bold border transition-all cursor-pointer ${
-                                      currentScore === maxScore - 1
-                                        ? 'bg-amber-400 text-[#064e3b] border-amber-300 font-black shadow-sm'
-                                        : 'bg-amber-500/15 text-amber-300 border-amber-500/30 hover:bg-amber-500/25'
-                                    }`}
-                                    title="حسم درجة واحدة"
-                                  >
-                                    -1 ({maxScore - 1})
-                                  </button>
-                                )}
-                                {maxScore > 2 && (
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      setCriteriaValues(prev => ({
-                                        ...prev,
-                                        [crit.id]: Math.max(0, maxScore - 2)
-                                      }))
-                                    }
-                                    className={`px-2 py-1 rounded-xl text-[11px] font-bold border transition-all cursor-pointer ${
-                                      currentScore === maxScore - 2
-                                        ? 'bg-amber-400 text-[#064e3b] border-amber-300 font-black shadow-sm'
-                                        : 'bg-amber-500/15 text-amber-300 border-amber-500/30 hover:bg-amber-500/25'
-                                    }`}
-                                    title="حسم درجتين"
-                                  >
-                                    -2 ({maxScore - 2})
-                                  </button>
-                                )}
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    setCriteriaValues(prev => ({
-                                      ...prev,
-                                      [crit.id]: 0
-                                    }))
-                                  }
-                                  className={`px-2 py-1 rounded-xl text-[11px] font-bold border transition-all cursor-pointer ${
-                                    currentScore === 0
-                                      ? 'bg-red-500 text-white border-red-400 font-black shadow-sm'
-                                      : 'bg-red-500/15 text-red-300 border-red-500/30 hover:bg-red-500/25'
-                                  }`}
-                                  title="صفر"
-                                >
-                                  صفر
-                                </button>
                               </div>
                             </div>
                           );
@@ -2869,6 +2952,26 @@ export const EvaluationTab: React.FC<EvaluationTabProps> = ({
                     />
                   </div>
                 )}
+
+                <div>
+                  <label className="block text-xs font-semibold text-[#86efac] mb-1.5 text-right">
+                    النقاط المكتسبة لهذا المعيار (عند الدرجة الكاملة أو 5 نجوم)
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      min={0}
+                      max={100}
+                      value={newCritPointsWeight}
+                      onChange={e => setNewCritPointsWeight(Number(e.target.value))}
+                      className="w-full bg-[#022c22] border border-[#065f46] focus:border-[#fbbf24] rounded-2xl py-2.5 px-3.5 text-xs text-[#fbbf24] font-black outline-none"
+                    />
+                    <span className="text-xs text-[#86efac] shrink-0 font-bold">نقاط</span>
+                  </div>
+                  <p className="text-[11px] text-[#86efac]/70 mt-1">
+                    خاص بالمشرف: تحدد كم نقطة يستحقها الطالب عند نيل 5 نجوم أو الدرجة الكاملة في هذا المعيار (مثلاً: 10 أو 5 نقاط).
+                  </p>
+                </div>
               </div>
 
               <div className="flex justify-end gap-2.5 p-4 sm:p-5 border-t border-[#065f46] shrink-0 bg-[#022c22]/95">
@@ -2929,6 +3032,16 @@ export const EvaluationTab: React.FC<EvaluationTabProps> = ({
           </div>
         </div>
       )}
+
+      {/* King Fahd Holy Quran Modal Reader */}
+      <KingFahdQuranModal
+        isOpen={isMushafOpen}
+        onClose={() => setIsMushafOpen(false)}
+        initialSurah={mushafInitialSurah}
+        initialAyah={mushafInitialAyah}
+        highlightItems={mushafHighlightItems}
+        activeItemId={mushafActiveItemId}
+      />
     </div>
   );
 };

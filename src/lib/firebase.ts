@@ -163,6 +163,8 @@ export const DEFAULT_CRITERIA: EvaluationCriteria[] = [
     name: 'حفظ الورد الجديد',
     type: 'score',
     maxScore: 10,
+    pointsWeight: 10,
+    hasPoints: true,
     isDefault: true
   },
   {
@@ -170,12 +172,16 @@ export const DEFAULT_CRITERIA: EvaluationCriteria[] = [
     name: 'مراجعة الماضي',
     type: 'score',
     maxScore: 10,
+    pointsWeight: 10,
+    hasPoints: true,
     isDefault: true
   },
   {
     id: 'crit-tajweed',
     name: 'التجويد ومخارج الحروف',
     type: 'stars',
+    pointsWeight: 10,
+    hasPoints: true,
     isDefault: false
   },
   {
@@ -183,6 +189,7 @@ export const DEFAULT_CRITERIA: EvaluationCriteria[] = [
     name: 'الآداب وحسن الاستماع',
     type: 'options',
     options: ['متميز ومؤدب', 'جيد ومتعاون', 'يحتاج إلى تنبيه'],
+    hasPoints: false,
     isDefault: false
   }
 ];
@@ -216,7 +223,10 @@ export const DEFAULT_SETTINGS: AppSettings = {
   workDaysPerWeek: 5,
   workDaysNames: ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس'],
   halaqahName: 'حلقة القرآن الكريم',
-  teacherName: 'معلم ومحفظ الحلقة'
+  teacherName: 'معلم ومحفظ الحلقة',
+  newPagePoints: 5,
+  reviewPagePoints: 1,
+  dailyListeningPoints: 5
 };
 
 // Initial Registered Teachers (Default Teacher Accounts)
@@ -1148,13 +1158,67 @@ export class OmranDataService {
     }
   }
 
-  // Delete Student directly from Firestore and local cache
+  // Delete Student directly from Firestore and local cache, cleanly unlinking and deleting any Google account
   static async deleteStudent(studentId: string): Promise<void> {
     const local = getLocalCache<Student[]>(OMRAN_CACHE_KEYS.STUDENTS, []);
+    const student = local.find(s => s.id === studentId);
     setLocalCache(OMRAN_CACHE_KEYS.STUDENTS, local.filter(s => s.id !== studentId));
 
+    // Clear active session and google tokens if this student was logged in
     try {
+      if (typeof window !== 'undefined') {
+        const savedSession = localStorage.getItem('omran_session');
+        if (savedSession) {
+          const parsed = JSON.parse(savedSession);
+          if (parsed?.studentId === studentId || (student?.googleEmail && parsed?.googleEmail === student.googleEmail)) {
+            localStorage.removeItem('omran_session');
+          }
+        }
+        if (student?.googleEmail) {
+          localStorage.removeItem(`omran_google_user_${student.googleEmail}`);
+        }
+      }
+    } catch {}
+
+    try {
+      // 1. Delete student document
       await deleteDoc(doc(db, 'students', studentId));
+
+      // 2. Cleanly detach & delete linked Google account documents if present
+      if (student?.googleEmail || student?.googleUid || student?.isGoogleLinked) {
+        if (student?.googleUid) {
+          deleteDoc(doc(db, 'google_accounts', student.googleUid)).catch(() => {});
+          deleteDoc(doc(db, 'users', student.googleUid)).catch(() => {});
+        }
+        if (student?.googleEmail) {
+          deleteDoc(doc(db, 'google_accounts', student.googleEmail.replace(/[@.]/g, '_'))).catch(() => {});
+          deleteDoc(doc(db, 'student_accounts', student.googleEmail.replace(/[@.]/g, '_'))).catch(() => {});
+        }
+      }
+
+      // 3. Cascade delete student attendance
+      const attLocal = getLocalCache<AttendanceRecord[]>(OMRAN_CACHE_KEYS.ATTENDANCE, []);
+      const attToDelete = attLocal.filter(a => a.studentId === studentId);
+      setLocalCache(OMRAN_CACHE_KEYS.ATTENDANCE, attLocal.filter(a => a.studentId !== studentId));
+      for (const a of attToDelete) {
+        deleteDoc(doc(db, 'attendance', a.id)).catch(() => {});
+      }
+
+      // 4. Cascade delete student evaluations
+      const evalLocal = getLocalCache<StudentEvaluation[]>(OMRAN_CACHE_KEYS.EVALUATIONS, []);
+      const evalsToDelete = evalLocal.filter(e => e.studentId === studentId);
+      setLocalCache(OMRAN_CACHE_KEYS.EVALUATIONS, evalLocal.filter(e => e.studentId !== studentId));
+      for (const ev of evalsToDelete) {
+        deleteDoc(doc(db, 'evaluations', ev.id)).catch(() => {});
+      }
+
+      // 5. Cascade delete student violations
+      const violLocal = getLocalCache<BehaviorViolation[]>(OMRAN_CACHE_KEYS.VIOLATIONS, []);
+      const violsToDelete = violLocal.filter(v => v.studentId === studentId);
+      setLocalCache(OMRAN_CACHE_KEYS.VIOLATIONS, violLocal.filter(v => v.studentId !== studentId));
+      for (const v of violsToDelete) {
+        deleteDoc(doc(db, 'violations', v.id)).catch(() => {});
+      }
     } catch (e) {
       handleFirestoreError(e, OperationType.DELETE, `students/${studentId}`);
     }

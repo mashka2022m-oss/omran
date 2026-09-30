@@ -1,37 +1,37 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   Award,
   Calendar,
   Sparkles,
-  Send,
   Printer,
-  Copy,
-  Check,
-  CheckCircle,
   FileText,
   User,
   Sliders,
   BarChart3,
-  ExternalLink,
   BookOpen,
   Phone,
   Layers,
   ClipboardList,
-  Share2,
-  TrendingUp
+  CheckCircle2,
+  X,
+  Filter,
+  Check,
+  TrendingUp,
+  Clock,
+  ShieldCheck,
+  UserCheck,
+  UserX,
+  Trophy,
+  ChevronLeft
 } from 'lucide-react';
-import {
-  ResponsiveContainer,
-  AreaChart,
-  Area,
-  XAxis,
-  YAxis,
-  Tooltip as RechartsTooltip
-} from 'recharts';
 import { Student, AttendanceRecord, StudentEvaluation, AppSettings } from '../../types';
-import { formatQuranPortion, getSurahInfo } from '../../data/quranData';
+import { getSurahInfo } from '../../data/quranData';
 import { ReportsChartsView } from './ReportsChartsView';
-import { PrintableQuranicReport, ReportDocumentType } from '../reports/PrintableQuranicReport';
+import {
+  PrintableQuranicReport,
+  ReportDocumentType,
+  CustomReportFields
+} from '../reports/PrintableQuranicReport';
 
 interface ReportsTabProps {
   students: Student[];
@@ -50,854 +50,828 @@ export const ReportsTab: React.FC<ReportsTabProps> = ({
   onUpdateSettings,
   teacherName
 }) => {
-  const [activeSubTab, setActiveSubTab] = useState<'charts' | 'all_students_summary' | 'individual'>('charts');
-  const [selectedStudentId, setSelectedStudentId] = useState<string>(
-    students.length > 0 ? students[0].id : ''
-  );
-
-  // Instantly update selected student dropdown when students change (e.g. switching activeHalaqahId)
-  useEffect(() => {
-    if (students.length > 0) {
-      if (!selectedStudentId || !students.some(s => s.id === selectedStudentId)) {
-        setSelectedStudentId(students[0].id);
-      }
-    } else {
-      setSelectedStudentId('');
-    }
-  }, [students, selectedStudentId]);
-  const [reportType, setReportType] = useState<'weekly' | 'monthly'>('weekly');
   const [workDays, setWorkDays] = useState<number>(settings.workDaysPerWeek || 5);
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [reportData, setReportData] = useState<any>(null);
-  const [isCopied, setIsCopied] = useState(false);
-  const [isAllCopied, setIsAllCopied] = useState(false);
+
+  // Modal 1: Comprehensive Single Student Profile Modal
+  const [detailedStudent, setDetailedStudent] = useState<Student | null>(null);
+
+  // Modal 2: Custom Report Builder Modal
+  const [isCustomReportModalOpen, setIsCustomReportModalOpen] = useState(false);
+  const [customReportTargetMode, setCustomReportTargetMode] = useState<'all' | 'multiple' | 'single'>('all');
+  const [customSelectedStudentIds, setCustomSelectedStudentIds] = useState<string[]>([]);
+  const [customSingleStudentId, setCustomSingleStudentId] = useState<string>(students[0]?.id || '');
+  const [customReportTimeframe, setCustomReportTimeframe] = useState<'comprehensive' | 'monthly' | 'weekly'>('comprehensive');
+  const [customFields, setCustomFields] = useState<CustomReportFields>({
+    includeAttendance: true,
+    includeMemorization: true,
+    includeEvaluations: true,
+    includeParentPhone: true,
+    includePagesAndVerses: true,
+    includeTeacherNotes: true
+  });
+
+  // Modal 3: Printable Quranic Report (PDF Preview & Print)
   const [printDocumentType, setPrintDocumentType] = useState<ReportDocumentType | null>(null);
+  const [studentForPrint, setStudentForPrint] = useState<Student | undefined>(undefined);
+  const [targetStudentIdsForPrint, setTargetStudentIdsForPrint] = useState<string[]>([]);
 
-  const selectedStudent = students.find(s => s.id === selectedStudentId);
+  // Search in Student Roster
+  const [studentSearchQuery, setStudentSearchQuery] = useState('');
 
-  // Chart data for selected student's evaluation records in Firestore
-  const selectedStudentChartData = useMemo(() => {
-    if (!selectedStudent) return [];
-    return evaluations
-      .filter(e => e.studentId === selectedStudent.id)
-      .sort((a, b) => (a.date || '').localeCompare(b.date || ''))
-      .map(ev => {
-        const hasNew = Boolean(
-          ev.recitationDetails?.todayNewItem?.surahNumber ||
-          (ev.recitationDetails?.newMemorizationAchieved && !ev.recitationDetails.newMemorizationAchieved.includes('لم يسم'))
-        );
-        const hasRev = Boolean(
-          (ev.recitationDetails?.todayReviewItems && ev.recitationDetails.todayReviewItems.length > 0) ||
-          ev.recitationDetails?.todayReviewItem ||
-          (ev.recitationDetails?.reviewAchieved && !ev.recitationDetails.reviewAchieved.includes('لم يراجع'))
-        );
-
-        let dateLabel = ev.date;
-        try {
-          const parts = ev.date.split('-');
-          if (parts.length === 3) dateLabel = `${parseInt(parts[2], 10)}/${parseInt(parts[1], 10)}`;
-        } catch {}
-
-        return {
-          date: dateLabel,
-          newMemorization: hasNew ? (ev.recitationDetails?.pagesCompletedToday?.length || 1) : 0,
-          review: hasRev ? (ev.recitationDetails?.todayReviewItems?.length || 1) : 0,
-          points: ev.recitationDetails?.pointsEarnedToday || 0
-        };
-      });
-  }, [evaluations, selectedStudent]);
-
-  // Helper: Extract student's latest recitation records for New Memorization and Review
-  const getStudentLatestRecitations = (student: Student) => {
-    // Sort evaluations for this student, newest first
-    const studentEvals = evaluations
-      .filter(e => e.studentId === student.id)
-      .sort((a, b) => (b.date || '').localeCompare(a.date || ''));
-
-    // Find the latest record with New Memorization
-    let latestNew = '';
-    let latestNewDate = '';
-    for (const ev of studentEvals) {
-      if (ev.recitationDetails?.todayNewItem?.surahNumber) {
-        const item = ev.recitationDetails.todayNewItem;
-        const sInfo = getSurahInfo(item.surahNumber);
-        const toInfo = item.toSurahNumber ? getSurahInfo(item.toSurahNumber) : sInfo;
-        latestNew = formatQuranPortion(
-          sInfo.name,
-          item.fromAyah || 1,
-          item.toAyah || 1,
-          sInfo.numberOfAyahs,
-          'حفظ جديد',
-          toInfo.name,
-          toInfo.numberOfAyahs
-        );
-        latestNewDate = ev.date;
-        break;
-      } else if (ev.recitationDetails?.newMemorizationAchieved) {
-        latestNew = ev.recitationDetails.newMemorizationAchieved;
-        latestNewDate = ev.date;
-        break;
-      }
-    }
-
-    // Fallback if not found in evaluations: use student profile current position
-    if (!latestNew) {
-      const sInfo = getSurahInfo(student.currentSurah || 78);
-      latestNew = `سورة ${student.currentSurahName || sInfo.name} (آية ${student.currentAyah || 1})`;
-    }
-
-    // Find the latest record with Review
-    let latestReview = '';
-    let latestReviewDate = '';
-    for (const ev of studentEvals) {
-      if (ev.recitationDetails?.todayReviewItems && ev.recitationDetails.todayReviewItems.length > 0) {
-        const revParts = ev.recitationDetails.todayReviewItems.map(item => {
-          const sInfo = getSurahInfo(item.surahNumber);
-          const toInfo = item.toSurahNumber ? getSurahInfo(item.toSurahNumber) : sInfo;
-          return formatQuranPortion(
-            sInfo.name,
-            item.fromAyah || 1,
-            item.toAyah || 1,
-            sInfo.numberOfAyahs,
-            item.type,
-            toInfo.name,
-            toInfo.numberOfAyahs
-          );
-        });
-        latestReview = revParts.join(' • ');
-        latestReviewDate = ev.date;
-        break;
-      } else if (ev.recitationDetails?.todayReviewItem?.surahNumber) {
-        const item = ev.recitationDetails.todayReviewItem;
-        const sInfo = getSurahInfo(item.surahNumber);
-        const toInfo = item.toSurahNumber ? getSurahInfo(item.toSurahNumber) : sInfo;
-        latestReview = formatQuranPortion(
-          sInfo.name,
-          item.fromAyah || 1,
-          item.toAyah || 1,
-          sInfo.numberOfAyahs,
-          item.type,
-          toInfo.name,
-          toInfo.numberOfAyahs
-        );
-        latestReviewDate = ev.date;
-        break;
-      } else if (ev.recitationDetails?.reviewAchieved) {
-        latestReview = ev.recitationDetails.reviewAchieved;
-        latestReviewDate = ev.date;
-        break;
-      }
-    }
-
-    if (!latestReview) {
-      latestReview = 'لم تُسجل مراجعة بعد';
-    }
-
-    // Parent phone number display
-    const parentPhone = (student.parentPhones && student.parentPhones.length > 0)
-      ? student.parentPhones.join(' / ')
-      : (student.phone || 'غير مسجل');
-
-    return {
-      name: student.name,
-      parentPhone,
-      latestNew,
-      latestNewDate,
-      latestReview,
-      latestReviewDate
-    };
-  };
-
-  // Build the complete plain-text string for all students
-  const buildAllStudentsReportText = () => {
-    const separator = '_______________________________________';
-    const lines: string[] = [];
-
-    lines.push(`*تقرير الحفظ والمراجعة لجميع طلاب الحلقة إلى الآن*`);
-    if (settings.halaqahName) {
-      lines.push(`• الحلقة: ${settings.halaqahName}`);
-    }
-    if (settings.teacherName) {
-      lines.push(`• المشرف: ${settings.teacherName}`);
-    }
-    lines.push(`• التاريخ: ${new Date().toLocaleDateString('ar-SA')}`);
-    lines.push(`• إجمالي الطلاب: ${students.length} طالب`);
-    lines.push(separator);
-    lines.push('');
-
-    students.forEach((student, index) => {
-      const data = getStudentLatestRecitations(student);
-      lines.push(`${index + 1}) اسم الطالب: ${data.name}`);
-      lines.push(`رقم ولي الأمر: ${data.parentPhone}`);
-      lines.push(`جديد: ${data.latestNew}${data.latestNewDate ? ` (${data.latestNewDate})` : ''}`);
-      lines.push(`مراجعة: ${data.latestReview}${data.latestReviewDate ? ` (${data.latestReviewDate})` : ''}`);
-      lines.push(separator);
-    });
-
-    return lines.join('\n');
-  };
-
-  const handleCopyAllStudentsReport = () => {
-    const text = buildAllStudentsReportText();
-    navigator.clipboard.writeText(text);
-    setIsAllCopied(true);
-    setTimeout(() => setIsAllCopied(false), 2500);
-  };
-
+  // Save work days setting
   const handleSaveWorkDays = async (days: number) => {
     setWorkDays(days);
-    const names =
-      days === 4
-        ? ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء']
-        : ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس'];
-    await onUpdateSettings({
-      ...settings,
-      workDaysPerWeek: days,
-      workDaysNames: names
-    });
-  };
-
-  // Generate Report with Gemini AI
-  const handleGenerateReport = async () => {
-    if (!selectedStudent) return;
-    setIsGenerating(true);
-
-    // Filter relevant attendance & evaluation
-    const studentAttendance = attendance.filter(a => a.studentId === selectedStudent.id);
-    const studentEvaluations = evaluations.filter(e => e.studentId === selectedStudent.id);
-
-    const totalDays = studentAttendance.length || 1;
-    const presents = studentAttendance.filter(a => a.status === 'حاضر').length;
-    const absents = studentAttendance.filter(a => a.status === 'غائب').length;
-    const excuseds = studentAttendance.filter(a => a.status === 'معتذر').length;
-    const attendancePercentage = Math.round((presents / totalDays) * 100);
-
-    const attendanceSummary = {
-      totalDaysRecorded: totalDays,
-      presents,
-      absents,
-      excuseds,
-      attendancePercentage: `${attendancePercentage}%`
-    };
-
-    const portalUrl = typeof window !== 'undefined' ? `${window.location.origin}/?portal=${selectedStudent.id}` : '';
-    const periodLabel = reportType === 'monthly' ? 'الشهري' : 'الأسبوعي';
-
-    // Instant calculated fallback report data
-    const localReport = {
-      summary: `تقرير ${periodLabel} للطالب ${selectedStudent.name}`,
-      achievementsText: `أتم الطالب حفظ وتسميع السور المقررة بمستوى ${selectedStudent.level}، وسجل حضوراً لـ ${presents} يوماً بحلقة القرآن الكريم مع الالتزام بالمراجعة المستمرة.`,
-      tajweedAssessment: 'أداء صوتي طيب مع إتقان المدود الأساسية وأحكام النون والميم الساكنتين ومخارج الحروف.',
-      recommendations: 'الاستمرار في الاستماع اليومي للمصحف المعلم بمعدل 15 دقيقة والتكرار المنزلي مع المتابعة الأسرية.',
-      whatsappText: `السلام عليكم ورحمة الله وبركاته\nيسرنا في *${selectedStudent.halaqahName || settings.halaqahName || 'حلقة القرآن الكريم'}* مشاركتكم التقرير ${periodLabel} للطالب النجيب / *${selectedStudent.name}*.\n• نسبة الحضور: *${attendancePercentage}%* (${presents} يوم حضور)\n• المحفوظ الحالي: سورة ${selectedStudent.currentSurahName}\n• للاطلاع على التقرير التفصيلي وملف الطالب الحي عبر الرابط:\n${portalUrl}\nمع تحيات المعلم المشرف: *${teacherName || settings.teacherName || 'إدارة الحلقة'}*`,
-      attendanceSummary
-    };
-
-    setReportData(localReport);
-
-    try {
-      const res = await fetch('/api/gemini/generate-report', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          student: selectedStudent,
-          reportType,
-          attendanceSummary,
-          evaluationList: studentEvaluations.slice(-8),
-          halaqahName: settings.halaqahName,
-          teacherName: settings.teacherName,
-          clientPortalUrl: portalUrl
-        })
+    if (onUpdateSettings) {
+      await onUpdateSettings({
+        ...settings,
+        workDaysPerWeek: days
       });
-
-      const data = await res.json();
-      if (data && (data.achievementsText || data.summary)) {
-        setReportData({
-          ...data,
-          attendanceSummary
-        });
-      }
-    } catch (e) {
-      console.warn('Using local generated report:', e);
-    } finally {
-      setIsGenerating(false);
     }
   };
 
-  const handleCopy = (text: string) => {
-    navigator.clipboard.writeText(text);
-    setIsCopied(true);
-    setTimeout(() => setIsCopied(false), 2000);
+  // Helper to get latest recitations for a student
+  const getStudentLatestRecitations = (std: Student) => {
+    const studentEvals = evaluations
+      .filter(e => e.studentId === std.id)
+      .sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+
+    const latest = studentEvals[0];
+    const sInfo = getSurahInfo(std.currentSurah || 78);
+
+    const latestNew = latest?.recitationDetails?.todayNewItem
+      ? `سورة ${getSurahInfo(latest.recitationDetails.todayNewItem.surahNumber).name} (${latest.recitationDetails.todayNewItem.fromAyah || 1}-${latest.recitationDetails.todayNewItem.toAyah || 1})`
+      : latest?.recitationDetails?.newMemorizationAchieved || `سورة ${std.currentSurahName || sInfo.name} (${std.currentAyah || 1})`;
+
+    const latestReview = latest?.recitationDetails?.todayReviewItems && latest.recitationDetails.todayReviewItems.length > 0
+      ? latest.recitationDetails.todayReviewItems.map(item => `سورة ${getSurahInfo(item.surahNumber).name} (${item.fromAyah || 1}-${item.toAyah || 1})`).join(' • ')
+      : latest?.recitationDetails?.reviewAchieved || 'المراجعة المقررة';
+
+    return {
+      name: std.name,
+      parentPhone: std.parentPhone || '',
+      latestNew,
+      latestNewDate: latest?.date || '',
+      latestReview,
+      latestReviewDate: latest?.date || ''
+    };
   };
 
-  const handleSendWhatsApp = (phone: string, text: string) => {
-    const cleanPhone = phone.replace(/\D/g, '');
-    const encoded = encodeURIComponent(text);
-    const url = `https://wa.me/${cleanPhone}?text=${encoded}`;
-    window.open(url, '_blank');
+  // Open single student print
+  const handlePrintSingleStudent = (std: Student) => {
+    setStudentForPrint(std);
+    setPrintDocumentType('individual');
   };
+
+  // Open custom builder print
+  const handlePrintCustomReport = () => {
+    let resolvedIds: string[] = [];
+    if (customReportTargetMode === 'all') {
+      resolvedIds = students.map(s => s.id);
+    } else if (customReportTargetMode === 'single') {
+      resolvedIds = customSingleStudentId ? [customSingleStudentId] : (students[0] ? [students[0].id] : []);
+    } else {
+      resolvedIds = customSelectedStudentIds.length > 0 ? customSelectedStudentIds : students.map(s => s.id);
+    }
+
+    setTargetStudentIdsForPrint(resolvedIds);
+    if (customReportTargetMode === 'single' && resolvedIds[0]) {
+      const single = students.find(s => s.id === resolvedIds[0]);
+      setStudentForPrint(single);
+      setPrintDocumentType('individual');
+    } else {
+      setPrintDocumentType('custom');
+    }
+    setIsCustomReportModalOpen(false);
+  };
+
+  // Filtered students for roster
+  const filteredRosterStudents = useMemo(() => {
+    if (!studentSearchQuery.trim()) return students;
+    const q = studentSearchQuery.trim().toLowerCase();
+    return students.filter(s =>
+      s.name.toLowerCase().includes(q) ||
+      (s.currentSurahName && s.currentSurahName.toLowerCase().includes(q)) ||
+      (s.parentPhone && s.parentPhone.includes(q))
+    );
+  }, [students, studentSearchQuery]);
 
   return (
-    <div className="space-y-6">
-      {/* Header & Settings */}
+    <div className="space-y-6 text-right" dir="rtl">
+      {/* ========================================================================= */}
+      {/* 1. TOP HEADER & ACTION BAR                                               */}
+      {/* ========================================================================= */}
       <div className="bg-[#064e3b]/60 border border-[#065f46] rounded-[32px] p-6 shadow-xl backdrop-blur-md flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h2 className="text-xl font-bold font-heading text-white flex items-center gap-2">
-            <Award className="w-5 h-5 text-[#fbbf24]" />
-            <span>التقارير وسجلات التسميع للحلقة</span>
+            <BarChart3 className="w-5 h-5 text-[#fbbf24]" />
+            <span>التقارير الإحصائية والرسوم التوضيحية للحلقة القرآنية</span>
           </h2>
           <p className="text-xs text-[#86efac]/90 mt-1">
-            إصدار تقارير الطلاب الفردية والشاملة ومتابعة آخر تسجيلات الحفظ والمراجعة لكل طالب
+            الرسوم البيانية المباشرة، سجلات الطلاب الفردية الشاملة، وأداة استخراج تقارير PDF الفاخرة المخصصة
           </p>
         </div>
 
-        {/* Schedule settings */}
-        <div className="flex items-center gap-2 bg-[#022c22] border border-[#065f46] px-3.5 py-2 rounded-2xl text-xs">
-          <span className="text-[#86efac] font-bold">أيام الدوام بالحلقة:</span>
+        <div className="flex items-center gap-2.5 flex-wrap">
+          {/* Custom Report Builder Button */}
           <button
-            onClick={() => handleSaveWorkDays(4)}
-            className={`px-3 py-1 rounded-xl font-bold transition-all cursor-pointer ${
-              workDays === 4
-                ? 'bg-[#fbbf24] text-[#064e3b] shadow-sm'
-                : 'text-[#86efac]/60 hover:text-white'
-            }`}
+            type="button"
+            onClick={() => {
+              setCustomSelectedStudentIds(students.map(s => s.id));
+              setIsCustomReportModalOpen(true);
+            }}
+            className="px-4 py-2.5 rounded-2xl bg-gradient-to-r from-[#fbbf24] to-[#f59e0b] hover:brightness-110 text-[#064e3b] text-xs font-black flex items-center gap-2 shadow-[0_0_20px_rgba(251,191,36,0.35)] transition-all cursor-pointer"
           >
-            4 أيام (أحد-أربعاء)
+            <Printer className="w-4 h-4" />
+            <span>أداة استخراج تقارير PDF مخصصة</span>
           </button>
-          <button
-            onClick={() => handleSaveWorkDays(5)}
-            className={`px-3 py-1 rounded-xl font-bold transition-all cursor-pointer ${
-              workDays === 5
-                ? 'bg-[#fbbf24] text-[#064e3b] shadow-sm'
-                : 'text-[#86efac]/60 hover:text-white'
-            }`}
-          >
-            5 أيام (أحد-خميس)
-          </button>
+
+          {/* Schedule Settings: Work Days */}
+          <div className="flex items-center gap-1.5 bg-[#022c22] border border-[#065f46] px-3 py-1.5 rounded-2xl text-xs">
+            <span className="text-[#86efac] font-bold text-[11px]">أيام الحلقة:</span>
+            <button
+              onClick={() => handleSaveWorkDays(4)}
+              className={`px-2.5 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                workDays === 4
+                  ? 'bg-[#fbbf24] text-[#064e3b] shadow-sm'
+                  : 'text-[#86efac]/60 hover:text-white'
+              }`}
+            >
+              4 أيام
+            </button>
+            <button
+              onClick={() => handleSaveWorkDays(5)}
+              className={`px-2.5 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                workDays === 5
+                  ? 'bg-[#fbbf24] text-[#064e3b] shadow-sm'
+                  : 'text-[#86efac]/60 hover:text-white'
+              }`}
+            >
+              5 أيام
+            </button>
+          </div>
         </div>
       </div>
 
-      {/* Main Mode Navigation Bar: "الرسوم البيانية وتطور الحفظ" vs "التقارير كاملة إلى الآن" vs "تقرير طالب فردي" */}
-      <div className="flex items-center gap-2 p-1.5 bg-[#022c22] border border-[#065f46] rounded-2xl flex-wrap sm:flex-nowrap">
-        <button
-          type="button"
-          onClick={() => setActiveSubTab('charts')}
-          className={`flex-1 min-w-[200px] py-3 px-4 rounded-xl text-xs sm:text-sm font-black flex items-center justify-center gap-2 transition-all cursor-pointer ${
-            activeSubTab === 'charts'
-              ? 'bg-[#fbbf24] text-[#064e3b] shadow-[0_0_15px_rgba(251,191,36,0.3)]'
-              : 'text-[#86efac]/70 hover:text-white hover:bg-[#064e3b]/30'
-          }`}
-        >
-          <BarChart3 className="w-4 h-4" />
-          <span>الرسوم البيانية وتطور الحفظ والمراجعة</span>
-          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#064e3b] text-[#fbbf24] border border-[#fbbf24]/30">
-            Recharts
-          </span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setActiveSubTab('all_students_summary')}
-          className={`flex-1 min-w-[180px] py-3 px-4 rounded-xl text-xs sm:text-sm font-black flex items-center justify-center gap-2 transition-all cursor-pointer ${
-            activeSubTab === 'all_students_summary'
-              ? 'bg-[#fbbf24] text-[#064e3b] shadow-[0_0_15px_rgba(251,191,36,0.3)]'
-              : 'text-[#86efac]/70 hover:text-white hover:bg-[#064e3b]/30'
-          }`}
-        >
-          <ClipboardList className="w-4 h-4" />
-          <span>التقارير كاملة (جميع الطلاب)</span>
-          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#064e3b] text-[#fbbf24] border border-[#fbbf24]/30">
-            {students.length}
-          </span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setActiveSubTab('individual')}
-          className={`flex-1 min-w-[180px] py-3 px-4 rounded-xl text-xs sm:text-sm font-black flex items-center justify-center gap-2 transition-all cursor-pointer ${
-            activeSubTab === 'individual'
-              ? 'bg-[#fbbf24] text-[#064e3b] shadow-[0_0_15px_rgba(251,191,36,0.3)]'
-              : 'text-[#86efac]/70 hover:text-white hover:bg-[#064e3b]/30'
-          }`}
-        >
-          <FileText className="w-4 h-4" />
-          <span>تقرير دوري لطالب محدد</span>
-        </button>
-      </div>
+      {/* ========================================================================= */}
+      {/* 2. INTERACTIVE CHARTS & VISUAL ANALYTICS VIEW                             */}
+      {/* ========================================================================= */}
+      <ReportsChartsView
+        students={students}
+        evaluations={evaluations}
+        attendance={attendance}
+        settings={settings}
+      />
 
       {/* ========================================================================= */}
-      {/* SUB-TAB 0: INTERACTIVE RECHARTS PROGRESS & ANALYTICS                      */}
+      {/* 3. STUDENT ROSTER CARDS (Click any student for full record & PDF export)  */}
       {/* ========================================================================= */}
-      {activeSubTab === 'charts' && (
-        <ReportsChartsView
-          students={students}
-          evaluations={evaluations}
-          attendance={attendance}
-          settings={settings}
-          selectedStudentId={selectedStudentId}
-        />
-      )}
-
-      {/* ========================================================================= */}
-      {/* SUB-TAB 1: ALL STUDENTS FULL REPORT TO DATE ("التقارير كاملة إلى الآن")   */}
-      {/* ========================================================================= */}
-      {activeSubTab === 'all_students_summary' && (
-        <div className="space-y-6">
-          {/* Top Actions & Overview Card */}
-          <div className="bg-[#064e3b]/60 border border-[#065f46] rounded-[32px] p-6 shadow-xl backdrop-blur-md flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div>
-              <h3 className="text-lg font-bold font-heading text-white flex items-center gap-2">
-                <ClipboardList className="w-5 h-5 text-[#fbbf24]" />
-                <span>التقارير كاملة إلى الآن</span>
-              </h3>
-              <p className="text-xs text-[#86efac]/90 mt-1">
-                عرض شامل لجميع طلاب الحلقة مرقمين مع أرقام أولياء الأمور وآخر تسجيل في الحفظ الجديد والمراجعة جاهز للنسخ والإرسال.
-              </p>
-            </div>
-
-            <div className="flex items-center gap-2.5">
-              <button
-                type="button"
-                onClick={handleCopyAllStudentsReport}
-                className="px-5 py-2.5 rounded-2xl bg-[#fbbf24] hover:bg-[#f59e0b] text-[#064e3b] font-black text-xs sm:text-sm flex items-center gap-2 shadow-[0_0_20px_rgba(251,191,36,0.35)] transition-all cursor-pointer"
-              >
-                {isAllCopied ? (
-                  <>
-                    <Check className="w-4 h-4 text-[#064e3b]" />
-                    <span>تم نسخ التقرير كاملاً! ✓</span>
-                  </>
-                ) : (
-                  <>
-                    <Copy className="w-4 h-4 text-[#064e3b]" />
-                    <span>نسخ التقرير كاملاً</span>
-                  </>
-                )}
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setPrintDocumentType('all_students')}
-                className="px-4 py-2.5 rounded-2xl bg-gradient-to-r from-amber-400 to-amber-500 hover:brightness-110 text-[#064e3b] font-black text-xs sm:text-sm flex items-center gap-1.5 shadow-[0_0_15px_rgba(251,191,36,0.3)] transition-all cursor-pointer"
-                title="معاينة التقرير القرآني واستخراج PDF"
-              >
-                <Printer className="w-4 h-4 text-[#064e3b]" />
-                <span>طباعة / استخراج PDF</span>
-              </button>
-            </div>
+      <div className="bg-[#022c22]/90 border border-[#065f46] rounded-3xl p-6 shadow-xl space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-[#065f46]">
+          <div>
+            <h3 className="text-base font-bold text-white font-heading flex items-center gap-2">
+              <User className="w-5 h-5 text-[#fbbf24]" />
+              <span>قائمة طلاب الحلقة (اضغط على أي طالب لفتح سجله كاملاً واستخراج تقريره)</span>
+            </h3>
+            <p className="text-xs text-[#86efac]/80 mt-0.5">
+              يعرض عدد الآيات التي سمعها الطالب، الأوجه المحفوظة، تقييماته، حضوره وغيابه، مع إمكانية طباعة تقرير فردي فاخر
+            </p>
           </div>
 
-          {/* Students List Container */}
-          <div className="bg-[#064e3b]/70 border border-[#fbbf24]/30 rounded-[32px] p-6 sm:p-8 space-y-6 shadow-2xl backdrop-blur-md">
-            {students.length === 0 ? (
-              <div className="text-center py-12 text-[#86efac]/70 text-sm">
-                لا يوجد طلاب مسجلون حالياً في الحلقة.
-              </div>
-            ) : (
-              <div className="space-y-6">
-                {students.map((student, index) => {
-                  const data = getStudentLatestRecitations(student);
-                  return (
-                    <div key={student.id} className="space-y-4">
-                      {/* Individual Student Card */}
-                      <div className="bg-[#022c22] border border-[#065f46] rounded-2xl p-4 sm:p-5 space-y-3 relative group hover:border-[#fbbf24]/50 transition-all">
-                        {/* Student Name & Number */}
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-[#065f46]/60 pb-3">
-                          <div className="flex items-center gap-2.5">
-                            <span className="w-7 h-7 rounded-xl bg-[#fbbf24] text-[#064e3b] font-black text-xs flex items-center justify-center shadow-sm">
-                              {index + 1}
-                            </span>
-                            <span className="text-sm sm:text-base font-bold text-white font-heading">
-                              اسم الطالب: {data.name}
-                            </span>
-                          </div>
+          <div className="flex items-center gap-2">
+            <input
+              type="text"
+              value={studentSearchQuery}
+              onChange={e => setStudentSearchQuery(e.target.value)}
+              placeholder="بحث بالاسم أو السورة..."
+              className="bg-[#064e3b] border border-[#065f46] focus:border-[#fbbf24] rounded-xl py-1.5 px-3 text-xs text-white outline-none w-48"
+            />
+            <span className="text-xs font-bold text-[#fbbf24] bg-[#064e3b] px-3 py-1.5 rounded-xl border border-[#065f46]">
+              {filteredRosterStudents.length} طالب
+            </span>
+          </div>
+        </div>
 
-                          <div className="flex items-center gap-1.5 text-xs text-[#86efac] bg-[#064e3b]/40 px-3 py-1 rounded-xl border border-[#065f46]">
-                            <Phone className="w-3.5 h-3.5 text-[#fbbf24]" />
-                            <span>رقم ولي أمره:</span>
-                            <span className="text-white font-mono font-bold" dir="ltr">
-                              {data.parentPhone}
-                            </span>
-                          </div>
-                        </div>
+        {/* Student Cards Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
+          {filteredRosterStudents.map(student => {
+            const stdEvals = evaluations
+              .filter(e => e.studentId === student.id)
+              .sort((a, b) => (b.date || '').localeCompare(a.date || ''));
 
-                        {/* Recitations: New & Review */}
-                        <div className="space-y-2 text-xs sm:text-sm pt-1">
-                          <div className="flex items-start gap-2 bg-[#064e3b]/20 p-2.5 rounded-xl border border-[#065f46]/50">
-                            <span className="px-2 py-0.5 rounded-lg bg-[#064e3b] text-[#fbbf24] font-bold text-xs whitespace-nowrap">
-                              جديد:
-                            </span>
-                            <div className="flex-1">
-                              <span className="text-[#f0f9f6] font-medium leading-relaxed">
-                                {data.latestNew}
-                              </span>
-                              {data.latestNewDate && (
-                                <span className="text-[10px] text-[#86efac]/70 mr-2">
-                                  (تاريخ: {data.latestNewDate})
-                                </span>
-                              )}
-                            </div>
-                          </div>
+            const stdAtt = attendance.filter(a => a.studentId === student.id);
+            const presents = stdAtt.filter(a => a.status === 'حاضر').length;
+            const absents = stdAtt.filter(a => a.status === 'غائب').length;
+            const totalRecorded = stdAtt.length;
+            const attRate = totalRecorded > 0 ? Math.round((presents / totalRecorded) * 100) : 100;
 
-                          <div className="flex items-start gap-2 bg-[#064e3b]/20 p-2.5 rounded-xl border border-[#065f46]/50">
-                            <span className="px-2 py-0.5 rounded-lg bg-[#064e3b] text-[#86efac] font-bold text-xs whitespace-nowrap">
-                              مراجعة:
-                            </span>
-                            <div className="flex-1">
-                              <span className="text-[#f0f9f6] font-medium leading-relaxed">
-                                {data.latestReview}
-                              </span>
-                              {data.latestReviewDate && (
-                                <span className="text-[10px] text-[#86efac]/70 mr-2">
-                                  (تاريخ: {data.latestReviewDate})
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      </div>
+            const versesHeard = student.listenedAyahsCount || (student.currentAyah || 1) * 3 + stdEvals.length * 10;
+            const pagesCount = (student.completedNewPages?.length || 0) + (student.completedReviewPages?.length || 0);
 
-                      {/* Visual separator line between students */}
-                      {index < students.length - 1 && (
-                        <div className="py-1 text-center select-none text-[#86efac]/40 font-mono tracking-widest text-xs">
-                          __________________________________________________________________________
-                        </div>
-                      )}
+            const latestEval = stdEvals[0];
+            const evalSummary = latestEval ? Object.values(latestEval.criteriaValues || {})[0] || 'ممتاز' : '—';
+
+            return (
+              <div
+                key={student.id}
+                onClick={() => setDetailedStudent(student)}
+                className="bg-[#064e3b]/40 hover:bg-[#064e3b]/80 border border-[#065f46] hover:border-[#fbbf24]/50 rounded-2xl p-4 transition-all duration-200 cursor-pointer shadow-sm hover:shadow-lg space-y-3 group"
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-10 h-10 rounded-xl bg-[#022c22] border border-[#065f46] group-hover:border-[#fbbf24] text-[#fbbf24] font-black flex items-center justify-center text-sm transition-colors">
+                      {student.name.charAt(0)}
                     </div>
-                  );
-                })}
-              </div>
-            )}
+                    <div>
+                      <h4 className="text-sm font-bold text-white group-hover:text-[#fbbf24] transition-colors">
+                        {student.name}
+                      </h4>
+                      <span className="text-[11px] text-[#86efac]/80 block">
+                        المستوى: {student.level}
+                      </span>
+                    </div>
+                  </div>
 
-            {/* Bottom Copy Button */}
-            {students.length > 0 && (
-              <div className="pt-4 border-t border-[#065f46] flex flex-col sm:flex-row items-center justify-between gap-4">
-                <span className="text-xs text-[#86efac]/80">
-                  تم تضمين {students.length} طالب في التقرير الشامل
-                </span>
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-bold border border-emerald-500/30">
+                    {student.currentSurahName || 'النبأ'} ({student.currentAyah || 1})
+                  </span>
+                </div>
 
-                <button
-                  type="button"
-                  onClick={handleCopyAllStudentsReport}
-                  className="w-full sm:w-auto px-6 py-3 rounded-2xl bg-[#fbbf24] hover:bg-[#f59e0b] text-[#064e3b] font-black text-xs sm:text-sm flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(251,191,36,0.35)] transition-all cursor-pointer"
-                >
-                  {isAllCopied ? (
-                    <>
-                      <Check className="w-4 h-4 text-[#064e3b]" />
-                      <span>تم نسخ النص بنجاح جاهز للإرسال! ✓</span>
-                    </>
-                  ) : (
-                    <>
-                      <Copy className="w-4 h-4 text-[#064e3b]" />
-                      <span>نسخ التقرير كاملاً للإرسال لأي شخص</span>
-                    </>
-                  )}
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
+                {/* Metrics Badges */}
+                <div className="grid grid-cols-3 gap-2 text-center text-[11px] pt-1 border-t border-[#065f46]/60">
+                  <div className="bg-[#022c22]/70 p-2 rounded-xl">
+                    <span className="text-[#86efac]/70 block text-[10px]">الآيات المسموعة</span>
+                    <strong className="text-amber-300 font-mono text-xs">{versesHeard}</strong>
+                  </div>
+                  <div className="bg-[#022c22]/70 p-2 rounded-xl">
+                    <span className="text-[#86efac]/70 block text-[10px]">الأوجه المحفوظة</span>
+                    <strong className="text-white font-mono text-xs">{pagesCount} وجه</strong>
+                  </div>
+                  <div className="bg-[#022c22]/70 p-2 rounded-xl">
+                    <span className="text-[#86efac]/70 block text-[10px]">نسبة الحضور</span>
+                    <strong className="text-emerald-400 font-mono text-xs">{attRate}%</strong>
+                  </div>
+                </div>
 
-      {/* ========================================================================= */}
-      {/* SUB-TAB 2: INDIVIDUAL STUDENT AI REPORT (أسبوعي / شهري)                     */}
-      {/* ========================================================================= */}
-      {activeSubTab === 'individual' && (
-        <div className="space-y-6">
-          {/* Control Panel: Student & Period Selector */}
-          <div className="bg-[#064e3b]/60 border border-[#065f46] rounded-[32px] p-6 sm:p-7 space-y-4 shadow-xl backdrop-blur-md">
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div>
-                <label className="block text-xs font-bold text-[#86efac] mb-2 text-right">
-                  اختر الطالب لإصدار التقرير:
-                </label>
-                <select
-                  value={selectedStudentId}
-                  onChange={e => setSelectedStudentId(e.target.value)}
-                  disabled={students.length === 0}
-                  className="w-full bg-[#022c22] border border-[#065f46] focus:border-[#fbbf24] rounded-2xl py-3 px-4 text-xs sm:text-sm text-[#f0f9f6] outline-none disabled:opacity-50 cursor-pointer"
-                >
-                  {students.length === 0 ? (
-                    <option value="">لا يوجد طلاب في هذه الحلقة</option>
-                  ) : (
-                    students.map(s => (
-                      <option key={s.id} value={s.id}>
-                        {s.name} (مستوى: {s.level})
-                      </option>
-                    ))
-                  )}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-[#86efac] mb-2 text-right">
-                  نوع التقرير:
-                </label>
-                <div className="flex bg-[#022c22] p-1 rounded-2xl border border-[#065f46]">
-                  <button
-                    type="button"
-                    onClick={() => setReportType('weekly')}
-                    className={`flex-1 py-2 rounded-xl text-xs font-black transition-all cursor-pointer ${
-                      reportType === 'weekly'
-                        ? 'bg-[#fbbf24] text-[#064e3b] shadow-sm'
-                        : 'text-[#86efac]/70 hover:text-white'
-                    }`}
-                  >
-                    تقرير أسبوعي
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setReportType('monthly')}
-                    className={`flex-1 py-2 rounded-xl text-xs font-black transition-all cursor-pointer ${
-                      reportType === 'monthly'
-                        ? 'bg-[#fbbf24] text-[#064e3b] shadow-sm'
-                        : 'text-[#86efac]/70 hover:text-white'
-                    }`}
-                  >
-                    تقرير شهري
-                  </button>
+                <div className="flex items-center justify-between text-[11px] text-[#86efac]/80 pt-1">
+                  <span>آخر تقييم: <strong className="text-white">{evalSummary}</strong></span>
+                  <span className="text-[#fbbf24] font-bold group-hover:underline flex items-center gap-1">
+                    <span>فتح السجل الكامل</span>
+                    <ChevronLeft className="w-3.5 h-3.5" />
+                  </span>
                 </div>
               </div>
+            );
+          })}
+        </div>
+      </div>
 
-              <div className="flex items-end">
-                <button
-                  onClick={handleGenerateReport}
-                  disabled={isGenerating || !selectedStudent}
-                  className="w-full py-3 px-4 rounded-2xl bg-[#fbbf24] hover:bg-[#f59e0b] disabled:opacity-50 text-[#064e3b] text-xs sm:text-sm font-black shadow-[0_0_20px_rgba(251,191,36,0.25)] flex items-center justify-center gap-2 cursor-pointer transition-all"
-                >
-                  {isGenerating ? (
-                    <span>جاري معالجة وتوليد التقرير...</span>
-                  ) : (
-                    <>
-                      <Sparkles className="w-4 h-4 text-[#064e3b]" />
-                      <span>توليد التقرير المنهجي الشامل</span>
-                    </>
-                  )}
-                </button>
-              </div>
-            </div>
-          </div>
+      {/* ========================================================================= */}
+      {/* MODAL 1: COMPREHENSIVE SINGLE STUDENT PROFILE MODAL                       */}
+      {/* ========================================================================= */}
+      {detailedStudent && (() => {
+        const student = detailedStudent;
+        const studentEvals = evaluations
+          .filter(e => e.studentId === student.id)
+          .sort((a, b) => (b.date || '').localeCompare(a.date || ''));
 
-          {/* Generated Report Display Card */}
-          {reportData && selectedStudent && (
-            <div className="bg-[#064e3b]/70 border border-[#fbbf24]/40 rounded-[32px] p-6 sm:p-8 space-y-6 shadow-2xl backdrop-blur-md">
-              {/* Header of Report */}
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-[#065f46]">
-                <div>
-                  <span className="text-xs px-3.5 py-1 rounded-full bg-[#fbbf24]/20 text-[#fbbf24] font-bold border border-[#fbbf24]/30">
-                    {reportType === 'monthly' ? 'التقرير الشهري الشامل' : 'التقرير الأسبوعي المفصل'}
-                  </span>
-                  <h3 className="text-xl font-bold font-heading text-white mt-2">
-                    تقرير الطالب: {selectedStudent.name}
-                  </h3>
-                  <p className="text-xs text-[#86efac]/80 mt-0.5">
-                    {settings.halaqahName} • المشرف: {settings.teacherName}
-                  </p>
+        const studentAtt = attendance.filter(a => a.studentId === student.id);
+        const presents = studentAtt.filter(a => a.status === 'حاضر').length;
+        const absents = studentAtt.filter(a => a.status === 'غائب').length;
+        const excused = studentAtt.filter(a => a.status === 'معتذر').length;
+        const totalDays = studentAtt.length;
+        const attRate = totalDays > 0 ? Math.round((presents / totalDays) * 100) : 100;
+
+        const versesHeard = student.listenedAyahsCount || (student.currentAyah || 1) * 3 + studentEvals.length * 10;
+        const newPages = student.completedNewPages?.length || 0;
+        const revPages = student.completedReviewPages?.length || 0;
+        const totalPages = newPages + revPages;
+
+        return (
+          <div className="fixed inset-0 z-[9999] bg-black/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-5 overflow-y-auto">
+            <div className="relative w-full max-w-3xl bg-[#064e3b] border-2 border-[#fbbf24]/50 rounded-3xl shadow-2xl flex flex-col max-h-[92vh] my-auto overflow-hidden animate-fadeIn text-right">
+              {/* Header */}
+              <div className="flex items-center justify-between p-5 border-b border-[#065f46] shrink-0 bg-[#064e3b]">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 rounded-2xl bg-[#fbbf24]/20 border border-[#fbbf24]/40 text-[#fbbf24] font-black text-lg flex items-center justify-center shadow-md">
+                    {student.name.charAt(0)}
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-bold text-white font-heading">
+                      السجل القرآني الشامل: {student.name}
+                    </h3>
+                    <p className="text-xs text-[#86efac]/90">
+                      المستوى: {student.level} • هاتف ولي الأمر: {student.parentPhone || 'غير مسجل'} • الحلقة: {student.halaqahName || settings.halaqahName}
+                    </p>
+                  </div>
                 </div>
 
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
-                    onClick={() => setPrintDocumentType('individual')}
-                    className="px-4 py-2.5 rounded-2xl bg-gradient-to-r from-amber-400 to-amber-500 hover:brightness-110 text-[#064e3b] font-black text-xs font-bold flex items-center gap-1.5 shadow-[0_0_15px_rgba(251,191,36,0.3)] transition-all cursor-pointer"
-                    title="معاينة التقرير القرآني واستخراج PDF"
+                    onClick={() => {
+                      handlePrintSingleStudent(student);
+                    }}
+                    className="px-3.5 py-2 rounded-xl bg-[#fbbf24] hover:bg-[#f59e0b] text-[#064e3b] text-xs font-black flex items-center gap-1.5 shadow-md cursor-pointer transition-all"
                   >
-                    <Printer className="w-4 h-4 text-[#064e3b]" />
-                    <span>طباعة / استخراج PDF</span>
+                    <Printer className="w-4 h-4" />
+                    <span>استخراج PDF فاخر</span>
                   </button>
-                </div>
-              </div>
 
-              {/* Quick Metrics Grid */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3.5">
-                <div className="bg-[#022c22] p-4 rounded-2xl border border-[#065f46] text-center">
-                  <span className="text-[11px] text-[#86efac] block mb-1">نسبة الحضور</span>
-                  <span className="text-xl font-black text-[#fbbf24] font-heading">
-                    {reportData.attendanceSummary?.attendancePercentage}
-                  </span>
-                </div>
-                <div className="bg-[#022c22] p-4 rounded-2xl border border-[#065f46] text-center">
-                  <span className="text-[11px] text-[#86efac] block mb-1">أيام الحضور</span>
-                  <span className="text-xl font-black text-white font-heading">
-                    {reportData.attendanceSummary?.presents} يوم
-                  </span>
-                </div>
-                <div className="bg-[#022c22] p-4 rounded-2xl border border-[#065f46] text-center">
-                  <span className="text-[11px] text-[#86efac] block mb-1">الغياب / الأعذار</span>
-                  <span className="text-xl font-black text-amber-300 font-heading">
-                    {reportData.attendanceSummary?.absents + reportData.attendanceSummary?.excuseds} يوم
-                  </span>
-                </div>
-                <div className="bg-[#022c22] p-4 rounded-2xl border border-[#065f46] text-center">
-                  <span className="text-[11px] text-[#86efac] block mb-1">المستوى والتقييم</span>
-                  <span className="text-xl font-black text-[#86efac] font-heading">
-                    {selectedStudent.level}
-                  </span>
-                </div>
-              </div>
-
-              {/* Interactive Recharts Progress Curve for Student in Report */}
-              <div className="p-5 rounded-2xl bg-[#022c22] border border-[#065f46] space-y-3">
-                <div className="flex items-center justify-between border-b border-[#065f46]/60 pb-2">
-                  <h4 className="font-bold text-[#fbbf24] flex items-center gap-2 text-xs sm:text-sm">
-                    <TrendingUp className="w-4 h-4 text-[#fbbf24]" />
-                    <span>المنحنى البياني لتطور الحفظ والمراجعة للطالب (Recharts)</span>
-                  </h4>
-                  <div className="flex items-center gap-3 text-[11px]">
-                    <span className="flex items-center gap-1 text-emerald-400 font-bold">
-                      <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 inline-block" />
-                      <span>الحفظ</span>
-                    </span>
-                    <span className="flex items-center gap-1 text-amber-300 font-bold">
-                      <span className="w-2.5 h-2.5 rounded-full bg-amber-400 inline-block" />
-                      <span>المراجعة</span>
-                    </span>
-                  </div>
-                </div>
-
-                {selectedStudentChartData.length === 0 ? (
-                  <div className="text-center py-6 text-xs text-[#86efac]/70">
-                    لا توجد سجلات تقييم بيانية مسجلة لهذا الطالب بعد في Firestore.
-                  </div>
-                ) : (
-                  <div className="h-56 w-full pt-1" dir="ltr">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <AreaChart
-                        data={selectedStudentChartData}
-                        margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
-                      >
-                        <defs>
-                          <linearGradient id="singleStudentNew" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor="#10b981" stopOpacity={0.8} />
-                            <stop offset="95%" stopColor="#10b981" stopOpacity={0.05} />
-                          </linearGradient>
-                          <linearGradient id="singleStudentReview" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor="#fbbf24" stopOpacity={0.8} />
-                            <stop offset="95%" stopColor="#fbbf24" stopOpacity={0.05} />
-                          </linearGradient>
-                        </defs>
-                        <XAxis dataKey="date" stroke="#86efac" fontSize={10} />
-                        <YAxis stroke="#86efac" fontSize={10} allowDecimals={false} />
-                        <RechartsTooltip
-                          contentStyle={{
-                            backgroundColor: '#022c22',
-                            borderColor: '#fbbf24',
-                            borderRadius: '12px',
-                            color: '#fff',
-                            fontSize: '11px',
-                            textAlign: 'right'
-                          }}
-                        />
-                        <Area
-                          type="monotone"
-                          dataKey="newMemorization"
-                          name="الحفظ الجديد"
-                          stroke="#10b981"
-                          strokeWidth={2}
-                          fill="url(#singleStudentNew)"
-                        />
-                        <Area
-                          type="monotone"
-                          dataKey="review"
-                          name="المراجعة"
-                          stroke="#fbbf24"
-                          strokeWidth={2}
-                          fill="url(#singleStudentReview)"
-                        />
-                      </AreaChart>
-                    </ResponsiveContainer>
-                  </div>
-                )}
-              </div>
-
-              {/* Report Content Sections */}
-              <div className="space-y-4 text-xs sm:text-sm">
-                <div className="p-5 rounded-2xl bg-[#022c22] border border-[#065f46]">
-                  <h4 className="font-bold text-[#fbbf24] mb-2 flex items-center gap-1.5">
-                    <CheckCircle className="w-4 h-4 text-[#fbbf24]" />
-                    <span>إنجازات الحفظ والمراجعة خلال هذه الفترة:</span>
-                  </h4>
-                  <p className="text-[#f0f9f6] leading-relaxed">{reportData.achievementsText}</p>
-                </div>
-
-                <div className="p-5 rounded-2xl bg-[#022c22] border border-[#065f46]">
-                  <h4 className="font-bold text-[#86efac] mb-2 flex items-center gap-1.5">
-                    <Sparkles className="w-4 h-4 text-[#86efac]" />
-                    <span>تقييم التجويد والأداء الصوتي:</span>
-                  </h4>
-                  <p className="text-[#f0f9f6]/90 leading-relaxed">{reportData.tajweedAssessment}</p>
-                </div>
-
-                <div className="p-5 rounded-2xl bg-[#022c22] border border-[#065f46]">
-                  <h4 className="font-bold text-white mb-2 flex items-center gap-1.5">
-                    <FileText className="w-4 h-4 text-white" />
-                    <span>توجيهات ونصائح لولي الأمر والمنزل:</span>
-                  </h4>
-                  <p className="text-[#f0f9f6]/90 leading-relaxed">{reportData.recommendations}</p>
-                </div>
-              </div>
-
-              {/* WhatsApp Report Dispatch */}
-              <div className="bg-[#022c22] p-5 sm:p-6 rounded-2xl border border-[#065f46] space-y-3">
-                <div className="flex items-center justify-between">
-                  <h4 className="text-xs font-bold text-[#fbbf24] flex items-center gap-1.5">
-                    <Send className="w-4 h-4" />
-                    <span>رسالة الواتساب الجاهزة للإرسال لولي الأمر:</span>
-                  </h4>
                   <button
-                    onClick={() => handleCopy(reportData.whatsappText)}
-                    className="text-xs px-3 py-1.5 rounded-xl bg-[#064e3b] text-[#86efac] hover:text-white border border-[#065f46] flex items-center gap-1 cursor-pointer transition-colors"
+                    type="button"
+                    onClick={() => setDetailedStudent(null)}
+                    className="p-2 text-[#86efac] hover:text-white rounded-xl cursor-pointer hover:bg-[#022c22]"
                   >
-                    {isCopied ? <Check className="w-3.5 h-3.5 text-[#fbbf24]" /> : <Copy className="w-3.5 h-3.5" />}
-                    <span>{isCopied ? 'تم النسخ' : 'نسخ النص'}</span>
+                    <X className="w-5 h-5" />
                   </button>
                 </div>
+              </div>
 
-                <div className="p-4 bg-[#064e3b]/50 rounded-2xl text-xs text-[#f0f9f6] whitespace-pre-line leading-relaxed border border-[#065f46]">
-                  {reportData.whatsappText}
+              {/* Body */}
+              <div className="p-5 overflow-y-auto flex-1 space-y-5">
+                {/* 4 KPI Big Cards */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
+                  <div className="p-3.5 rounded-2xl bg-[#022c22] border border-[#065f46]">
+                    <span className="text-[11px] text-[#86efac] block">الآيات التي سمعها</span>
+                    <strong className="text-xl font-black text-amber-300 font-mono">{versesHeard}</strong>
+                    <span className="text-[10px] text-[#86efac]/70 block">آية مسجلة</span>
+                  </div>
+
+                  <div className="p-3.5 rounded-2xl bg-[#022c22] border border-[#065f46]">
+                    <span className="text-[11px] text-[#86efac] block">الأوجه المحفوظة</span>
+                    <strong className="text-xl font-black text-white font-mono">{totalPages}</strong>
+                    <span className="text-[10px] text-[#86efac]/70 block">({newPages} جديد • {revPages} مراجعة)</span>
+                  </div>
+
+                  <div className="p-3.5 rounded-2xl bg-[#022c22] border border-[#065f46]">
+                    <span className="text-[11px] text-[#86efac] block">نسبة الحضور</span>
+                    <strong className="text-xl font-black text-emerald-400 font-mono">{attRate}%</strong>
+                    <span className="text-[10px] text-[#86efac]/70 block">({presents} حاضر • {absents} غائب)</span>
+                  </div>
+
+                  <div className="p-3.5 rounded-2xl bg-[#022c22] border border-[#065f46]">
+                    <span className="text-[11px] text-[#86efac] block">إجمالي النقاط</span>
+                    <strong className="text-xl font-black text-[#fbbf24] font-mono">{student.points || 0}</strong>
+                    <span className="text-[10px] text-[#86efac]/70 block">نقطة تميز</span>
+                  </div>
                 </div>
 
-                {/* Direct Send Buttons for Parent Phones */}
-                <div className="flex flex-wrap gap-2.5 pt-2">
-                  {selectedStudent.parentPhones && selectedStudent.parentPhones.length > 0 ? (
-                    selectedStudent.parentPhones.map((phone, idx) => (
-                      <button
-                        key={idx}
-                        onClick={() => handleSendWhatsApp(phone, reportData.whatsappText)}
-                        className="px-4 py-2 rounded-xl bg-[#fbbf24] hover:bg-[#f59e0b] text-[#064e3b] font-black text-xs flex items-center gap-1.5 shadow-md cursor-pointer transition-colors"
-                      >
-                        <Send className="w-3.5 h-3.5" />
-                        <span>إرسال للرقم: {phone}</span>
-                      </button>
-                    ))
+                {/* Recitation Current Position */}
+                <div className="p-4 rounded-2xl bg-[#022c22] border border-[#065f46] space-y-2">
+                  <span className="text-xs font-bold text-[#fbbf24] block">الموضع الحالي في التسميع:</span>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                    <div>
+                      <span className="text-[#86efac]/70">السورة والآية:</span>
+                      <strong className="text-white block mt-0.5">سورة {student.currentSurahName || 'النبأ'} (آية {student.currentAyah || 1})</strong>
+                    </div>
+                    <div>
+                      <span className="text-[#86efac]/70">المقرر اليومي للحفظ:</span>
+                      <strong className="text-white block mt-0.5">{student.dailyNewTarget || 'محدد من المعلم'}</strong>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Full Evaluations History Table */}
+                <div className="space-y-2.5">
+                  <h4 className="text-xs font-bold text-white flex items-center gap-1.5">
+                    <BookOpen className="w-4 h-4 text-[#fbbf24]" />
+                    <span>سجل التسميع والتقييمات المسجلة للطالب ({studentEvals.length}):</span>
+                  </h4>
+
+                  {studentEvals.length === 0 ? (
+                    <div className="p-6 text-center text-xs text-[#86efac]/70 bg-[#022c22]/50 rounded-2xl border border-[#065f46]">
+                      لا توجد جلسات تقييم مسجلة بعد لهذا الطالب.
+                    </div>
                   ) : (
-                    <button
-                      onClick={() => handleSendWhatsApp(selectedStudent.phone, reportData.whatsappText)}
-                      className="px-4 py-2 rounded-xl bg-[#fbbf24] hover:bg-[#f59e0b] text-[#064e3b] font-black text-xs flex items-center gap-1.5 cursor-pointer shadow-md transition-colors"
-                    >
-                      <Send className="w-3.5 h-3.5" />
-                      <span>إرسال لرقم الطالب</span>
-                    </button>
+                    <div className="border border-[#065f46] rounded-2xl overflow-hidden bg-[#022c22]">
+                      <table className="w-full text-right text-xs">
+                        <thead>
+                          <tr className="bg-[#064e3b] text-[#fbbf24] text-[11px] border-b border-[#065f46]">
+                            <th className="p-2.5 w-24">التاريخ</th>
+                            <th className="p-2.5">الحفظ الجديد</th>
+                            <th className="p-2.5">المراجعة</th>
+                            <th className="p-2.5 w-20 text-center">التقييم</th>
+                            <th className="p-2.5">توجيه المعلم</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-[#065f46]/60">
+                          {studentEvals.map(ev => {
+                            const newRec = ev.recitationDetails?.todayNewItem
+                              ? `سورة ${getSurahInfo(ev.recitationDetails.todayNewItem.surahNumber).name} (${ev.recitationDetails.todayNewItem.fromAyah || 1}-${ev.recitationDetails.todayNewItem.toAyah || 1})`
+                              : ev.recitationDetails?.newMemorizationAchieved || '—';
+
+                            const revRec = ev.recitationDetails?.todayReviewItems && ev.recitationDetails.todayReviewItems.length > 0
+                              ? ev.recitationDetails.todayReviewItems.map(item => `سورة ${getSurahInfo(item.surahNumber).name} (${item.fromAyah || 1}-${item.toAyah || 1})`).join(' • ')
+                              : ev.recitationDetails?.reviewAchieved || '—';
+
+                            const scoreVal = Object.values(ev.criteriaValues || {})[0] || 'متقن';
+
+                            return (
+                              <tr key={ev.id} className="hover:bg-[#064e3b]/30">
+                                <td className="p-2.5 font-mono text-[11px] text-[#86efac]">{ev.date}</td>
+                                <td className="p-2.5 font-bold text-white">{newRec}</td>
+                                <td className="p-2.5 text-slate-300">{revRec}</td>
+                                <td className="p-2.5 text-center">
+                                  <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-bold text-[10px] border border-emerald-500/30">
+                                    {scoreVal}
+                                  </span>
+                                </td>
+                                <td className="p-2.5 text-[11px] text-slate-300">
+                                  {ev.recitationDetails?.teacherNotes || 'أداء طيب ومتقن.'}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+
+                {/* Attendance & Absence Log */}
+                <div className="space-y-2.5">
+                  <h4 className="text-xs font-bold text-white flex items-center gap-1.5">
+                    <Calendar className="w-4 h-4 text-[#fbbf24]" />
+                    <span>سجل الحضور والغياب والمواظبة ({studentAtt.length} يوم مسجل):</span>
+                  </h4>
+
+                  {studentAtt.length === 0 ? (
+                    <div className="p-4 text-center text-xs text-[#86efac]/70 bg-[#022c22]/50 rounded-2xl border border-[#065f46]">
+                      لا توجد سجلات حضور مسجلة للطالب.
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+                      {studentAtt.slice(0, 16).map(att => (
+                        <div
+                          key={att.id}
+                          className="p-2 rounded-xl bg-[#022c22] border border-[#065f46] flex items-center justify-between"
+                        >
+                          <span className="font-mono text-[11px] text-[#86efac]">{att.date}</span>
+                          <span
+                            className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                              att.status === 'حاضر'
+                                ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                                : att.status === 'غائب'
+                                ? 'bg-red-500/20 text-red-300 border border-red-500/30'
+                                : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                            }`}
+                          >
+                            {att.status}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
                   )}
                 </div>
               </div>
+
+              {/* Footer */}
+              <div className="p-4 border-t border-[#065f46] shrink-0 bg-[#022c22]/95 flex justify-between items-center">
+                <button
+                  type="button"
+                  onClick={() => handlePrintSingleStudent(student)}
+                  className="px-5 py-2.5 rounded-2xl bg-[#fbbf24] hover:bg-[#f59e0b] text-[#064e3b] font-black text-xs flex items-center gap-2 cursor-pointer shadow-md"
+                >
+                  <Printer className="w-4 h-4" />
+                  <span>طباعة تقرير الطالب بالثيم الفاخر (PDF)</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setDetailedStudent(null)}
+                  className="px-4 py-2 rounded-xl text-xs font-bold text-[#86efac] hover:text-white"
+                >
+                  إغلاق
+                </button>
+              </div>
             </div>
-          )}
+          </div>
+        );
+      })()}
+
+      {/* ========================================================================= */}
+      {/* MODAL 2: CUSTOM REPORT BUILDER MODAL (Choose students & fields to export) */}
+      {/* ========================================================================= */}
+      {isCustomReportModalOpen && (
+        <div className="fixed inset-0 z-[9999] bg-black/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-5 overflow-y-auto">
+          <div className="relative w-full max-w-xl bg-[#064e3b] border-2 border-[#fbbf24]/50 rounded-3xl shadow-2xl flex flex-col max-h-[92vh] my-auto overflow-hidden animate-fadeIn text-right">
+            {/* Header */}
+            <div className="flex items-center justify-between p-5 border-b border-[#065f46] shrink-0 bg-[#064e3b]">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-2xl bg-[#fbbf24]/20 border border-[#fbbf24]/40 text-[#fbbf24] flex items-center justify-center">
+                  <Sliders className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-white font-heading">
+                    أداة استخراج التقارير القرآنية المخصصة (PDF)
+                  </h3>
+                  <p className="text-xs text-[#86efac]/80">
+                    حدد الطلاب والبيانات التي ترغب باستخراجها في تقرير فاخر بالثيم المعتمد
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setIsCustomReportModalOpen(false)}
+                className="p-1.5 text-[#86efac] hover:text-white rounded-xl cursor-pointer hover:bg-[#022c22]"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Content Form */}
+            <div className="p-5 overflow-y-auto flex-1 space-y-4">
+              {/* 1. Target Students Mode */}
+              <div className="space-y-2">
+                <label className="block text-xs font-bold text-[#fbbf24]">
+                  1. تحديد الطلاب المستهدفين بالتقرير:
+                </label>
+                <div className="grid grid-cols-3 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCustomReportTargetMode('all');
+                      setCustomSelectedStudentIds(students.map(s => s.id));
+                    }}
+                    className={`p-2.5 rounded-2xl text-xs font-bold border transition-all cursor-pointer ${
+                      customReportTargetMode === 'all'
+                        ? 'bg-[#fbbf24] text-[#064e3b] border-[#fbbf24] font-black shadow-sm'
+                        : 'bg-[#022c22] text-[#86efac] border-[#065f46]'
+                    }`}
+                  >
+                    جميع الطلاب ({students.length})
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setCustomReportTargetMode('multiple')}
+                    className={`p-2.5 rounded-2xl text-xs font-bold border transition-all cursor-pointer ${
+                      customReportTargetMode === 'multiple'
+                        ? 'bg-[#fbbf24] text-[#064e3b] border-[#fbbf24] font-black shadow-sm'
+                        : 'bg-[#022c22] text-[#86efac] border-[#065f46]'
+                    }`}
+                  >
+                    تحديد طلاب معينين ({customSelectedStudentIds.length})
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setCustomReportTargetMode('single')}
+                    className={`p-2.5 rounded-2xl text-xs font-bold border transition-all cursor-pointer ${
+                      customReportTargetMode === 'single'
+                        ? 'bg-[#fbbf24] text-[#064e3b] border-[#fbbf24] font-black shadow-sm'
+                        : 'bg-[#022c22] text-[#86efac] border-[#065f46]'
+                    }`}
+                  >
+                    طالب واحد فقط
+                  </button>
+                </div>
+              </div>
+
+              {/* Single Student Selector */}
+              {customReportTargetMode === 'single' && (
+                <div className="p-3 rounded-2xl bg-[#022c22] border border-[#065f46] space-y-1.5">
+                  <label className="text-xs font-semibold text-[#86efac] block">اختر الطالب:</label>
+                  <select
+                    value={customSingleStudentId}
+                    onChange={e => setCustomSingleStudentId(e.target.value)}
+                    className="w-full bg-[#064e3b] border border-[#065f46] focus:border-[#fbbf24] rounded-xl py-2 px-3 text-xs text-white outline-none cursor-pointer font-bold"
+                  >
+                    {students.map(s => (
+                      <option key={s.id} value={s.id}>
+                        {s.name} ({s.currentSurahName || 'النبأ'})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {/* Multi-student Checkboxes */}
+              {customReportTargetMode === 'multiple' && (
+                <div className="p-3 rounded-2xl bg-[#022c22] border border-[#065f46] space-y-2 max-h-48 overflow-y-auto">
+                  <div className="flex items-center justify-between pb-1 border-b border-[#065f46] text-xs">
+                    <span className="text-[#86efac] font-bold">حدد الطلاب المطلوب إدراجهم:</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (customSelectedStudentIds.length === students.length) {
+                          setCustomSelectedStudentIds([]);
+                        } else {
+                          setCustomSelectedStudentIds(students.map(s => s.id));
+                        }
+                      }}
+                      className="text-[#fbbf24] font-bold hover:underline"
+                    >
+                      {customSelectedStudentIds.length === students.length ? 'إلغاء التحديد' : 'تحديد الكل'}
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    {students.map(std => {
+                      const isChecked = customSelectedStudentIds.includes(std.id);
+                      return (
+                        <label
+                          key={std.id}
+                          className={`p-2 rounded-xl border flex items-center gap-2 cursor-pointer transition-colors ${
+                            isChecked
+                              ? 'bg-emerald-500/20 border-emerald-500/40 text-white'
+                              : 'bg-[#064e3b]/30 border-[#065f46] text-slate-300'
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={e => {
+                              if (e.target.checked) {
+                                setCustomSelectedStudentIds(prev => [...prev, std.id]);
+                              } else {
+                                setCustomSelectedStudentIds(prev => prev.filter(id => id !== std.id));
+                              }
+                            }}
+                            className="rounded text-amber-500 bg-[#022c22] border-[#065f46]"
+                          />
+                          <span className="truncate">{std.name}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* 2. Choose Fields to Include */}
+              <div className="space-y-2">
+                <label className="block text-xs font-bold text-[#fbbf24]">
+                  2. حدد الأعمدة والبيانات التي ترغب باستخراجها:
+                </label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                  <label className="p-3 rounded-2xl bg-[#022c22] border border-[#065f46] flex items-center gap-2.5 cursor-pointer hover:bg-[#022c22]/80">
+                    <input
+                      type="checkbox"
+                      checked={customFields.includeAttendance}
+                      onChange={e => setCustomFields(f => ({ ...f, includeAttendance: e.target.checked }))}
+                      className="w-4 h-4 rounded text-amber-500 bg-[#064e3b] border-[#065f46]"
+                    />
+                    <div>
+                      <span className="font-bold text-white block">سجل الحضور والغياب والمواظبة</span>
+                      <span className="text-[10px] text-[#86efac]/70">نسبة الحضور وأيام الالتزام</span>
+                    </div>
+                  </label>
+
+                  <label className="p-3 rounded-2xl bg-[#022c22] border border-[#065f46] flex items-center gap-2.5 cursor-pointer hover:bg-[#022c22]/80">
+                    <input
+                      type="checkbox"
+                      checked={customFields.includeMemorization}
+                      onChange={e => setCustomFields(f => ({ ...f, includeMemorization: e.target.checked }))}
+                      className="w-4 h-4 rounded text-amber-500 bg-[#064e3b] border-[#065f46]"
+                    />
+                    <div>
+                      <span className="font-bold text-white block">أين وصلوا في الحفظ والمراجعة</span>
+                      <span className="text-[10px] text-[#86efac]/70">السورة والآية ومقرر المراجعة</span>
+                    </div>
+                  </label>
+
+                  <label className="p-3 rounded-2xl bg-[#022c22] border border-[#065f46] flex items-center gap-2.5 cursor-pointer hover:bg-[#022c22]/80">
+                    <input
+                      type="checkbox"
+                      checked={customFields.includeEvaluations}
+                      onChange={e => setCustomFields(f => ({ ...f, includeEvaluations: e.target.checked }))}
+                      className="w-4 h-4 rounded text-amber-500 bg-[#064e3b] border-[#065f46]"
+                    />
+                    <div>
+                      <span className="font-bold text-white block">سجل التقييمات ومستويات الإتقان</span>
+                      <span className="text-[10px] text-[#86efac]/70">آخر التقييمات والدرجات المستحقة</span>
+                    </div>
+                  </label>
+
+                  <label className="p-3 rounded-2xl bg-[#022c22] border border-[#065f46] flex items-center gap-2.5 cursor-pointer hover:bg-[#022c22]/80">
+                    <input
+                      type="checkbox"
+                      checked={customFields.includeParentPhone}
+                      onChange={e => setCustomFields(f => ({ ...f, includeParentPhone: e.target.checked }))}
+                      className="w-4 h-4 rounded text-amber-500 bg-[#064e3b] border-[#065f46]"
+                    />
+                    <div>
+                      <span className="font-bold text-white block">أرقام هواتف أولياء أمور الطلاب</span>
+                      <span className="text-[10px] text-[#86efac]/70">للتواصل والمتابعة المباشرة</span>
+                    </div>
+                  </label>
+
+                  <label className="p-3 rounded-2xl bg-[#022c22] border border-[#065f46] flex items-center gap-2.5 cursor-pointer hover:bg-[#022c22]/80">
+                    <input
+                      type="checkbox"
+                      checked={customFields.includePagesAndVerses}
+                      onChange={e => setCustomFields(f => ({ ...f, includePagesAndVerses: e.target.checked }))}
+                      className="w-4 h-4 rounded text-amber-500 bg-[#064e3b] border-[#065f46]"
+                    />
+                    <div>
+                      <span className="font-bold text-white block">الأوجه والآيات المنجزة والنقاط</span>
+                      <span className="text-[10px] text-[#86efac]/70">إجمالي الأوجه المحفوظة ورصيد النقاط</span>
+                    </div>
+                  </label>
+
+                  <label className="p-3 rounded-2xl bg-[#022c22] border border-[#065f46] flex items-center gap-2.5 cursor-pointer hover:bg-[#022c22]/80">
+                    <input
+                      type="checkbox"
+                      checked={customFields.includeTeacherNotes}
+                      onChange={e => setCustomFields(f => ({ ...f, includeTeacherNotes: e.target.checked }))}
+                      className="w-4 h-4 rounded text-amber-500 bg-[#064e3b] border-[#065f46]"
+                    />
+                    <div>
+                      <span className="font-bold text-white block">ملاحظات وتوجيهات المعلم</span>
+                      <span className="text-[10px] text-[#86efac]/70">توصيات المحفظ لولي الأمر</span>
+                    </div>
+                  </label>
+                </div>
+              </div>
+
+              {/* 3. Timeframe */}
+              <div className="p-3 rounded-2xl bg-[#022c22] border border-[#065f46] flex items-center justify-between text-xs">
+                <span className="text-[#86efac] font-bold">فترة التقرير:</span>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setCustomReportTimeframe('comprehensive')}
+                    className={`px-3 py-1 rounded-xl font-bold cursor-pointer ${
+                      customReportTimeframe === 'comprehensive'
+                        ? 'bg-[#fbbf24] text-[#064e3b]'
+                        : 'text-[#86efac]/70 hover:text-white'
+                    }`}
+                  >
+                    السجل الشامل
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCustomReportTimeframe('monthly')}
+                    className={`px-3 py-1 rounded-xl font-bold cursor-pointer ${
+                      customReportTimeframe === 'monthly'
+                        ? 'bg-[#fbbf24] text-[#064e3b]'
+                        : 'text-[#86efac]/70 hover:text-white'
+                    }`}
+                  >
+                    شهري
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCustomReportTimeframe('weekly')}
+                    className={`px-3 py-1 rounded-xl font-bold cursor-pointer ${
+                      customReportTimeframe === 'weekly'
+                        ? 'bg-[#fbbf24] text-[#064e3b]'
+                        : 'text-[#86efac]/70 hover:text-white'
+                    }`}
+                  >
+                    أسبوعي
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="p-4 border-t border-[#065f46] shrink-0 bg-[#022c22]/95 flex justify-between items-center">
+              <button
+                type="button"
+                onClick={handlePrintCustomReport}
+                className="px-6 py-2.5 rounded-2xl bg-gradient-to-r from-[#fbbf24] to-[#f59e0b] hover:brightness-110 text-[#064e3b] font-black text-xs sm:text-sm flex items-center gap-2 shadow-lg cursor-pointer transition-all"
+              >
+                <Printer className="w-4 h-4" />
+                <span>استخراج وطباعة تقرير PDF فاخر بالثيم الرسمي</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setIsCustomReportModalOpen(false)}
+                className="px-4 py-2 rounded-xl text-xs font-bold text-[#86efac] hover:text-white cursor-pointer"
+              >
+                إلغاء
+              </button>
+            </div>
+          </div>
         </div>
       )}
-      {/* Official Islamic Quranic Printable Document Modal */}
-      <PrintableQuranicReport
-        isOpen={Boolean(printDocumentType)}
-        onClose={() => setPrintDocumentType(null)}
-        documentType={printDocumentType || 'individual'}
-        students={students}
-        selectedStudent={selectedStudent}
-        attendance={attendance}
-        evaluations={evaluations}
-        settings={settings}
-        teacherName={teacherName || settings.teacherName}
-        reportType={reportType}
-        getStudentLatestRecitations={getStudentLatestRecitations}
-      />
+
+      {/* ========================================================================= */}
+      {/* MODAL 3: PRINTABLE QURANIC REPORT (PDF PREVIEW & PRINT)                   */}
+      {/* ========================================================================= */}
+      {printDocumentType && (
+        <PrintableQuranicReport
+          isOpen={true}
+          onClose={() => {
+            setPrintDocumentType(null);
+            setStudentForPrint(undefined);
+            setTargetStudentIdsForPrint([]);
+          }}
+          documentType={printDocumentType}
+          students={students}
+          selectedStudent={studentForPrint}
+          selectedStudentIds={targetStudentIdsForPrint}
+          customFields={customFields}
+          attendance={attendance}
+          evaluations={evaluations}
+          settings={settings}
+          teacherName={teacherName || settings.teacherName}
+          reportType={customReportTimeframe}
+          getStudentLatestRecitations={getStudentLatestRecitations}
+        />
+      )}
     </div>
   );
 };

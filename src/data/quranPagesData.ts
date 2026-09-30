@@ -152,7 +152,7 @@ export const QURAN_PAGE_BOUNDARIES: Array<{
 /**
  * Generate full 604 pages lookup using known boundaries and proportional interpolation for intermediate pages
  */
-const ALL_PAGES: QuranPageInfo[] = [];
+export const ALL_PAGES: QuranPageInfo[] = [];
 
 // Build comprehensive 604 page definitions
 (function buildAll604Pages() {

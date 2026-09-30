@@ -345,6 +345,7 @@ export interface Student {
   age: number;
   parentName: string;
   parentPhones: string[];
+  parentPhone?: string; // Optional convenience singular parent phone
   currentSurah: number; // 1 - 114
   currentSurahName: string;
   currentAyah: number;
@@ -365,6 +366,9 @@ export interface Student {
   completedReviewPages?: number[]; // الأوجه المكتملة في المراجعة (نقطة واحدة لكل وجه)
   totalPagePoints?: number; // إجمالي نقاط الأوجه المكتملة
   listeningPoints?: number; // نقاط إتمام واجبات الاستماع
+  listenedAyahsCount?: number; // إجمالي عدد الآيات المسموعة
+  dailyListeningCompletedDate?: string; // تاريخ آخر إنجاز استماع يومي
+  criteriaPoints?: number; // نقاط المعايير المكتسبة
   points?: number; // إجمالي النقاط الكلي للطالب
   createdAt: string;
 }
@@ -390,6 +394,8 @@ export interface EvaluationCriteria {
   options?: string[];
   isDefault?: boolean;
   complexId?: string; // المجمع القرآني الخاص بهذا المعيار
+  pointsWeight?: number; // أقصى نقاط يحصل عليها الطالب عند الدرجة الكاملة أو 5 نجوم (مثلاً: 10 نقاط)
+  hasPoints?: boolean; // هل هذا المعيار يتضمن نقاط أم معيار وصفي بدون نقاط
 }
 
 export interface StudentEvaluation {
@@ -419,6 +425,8 @@ export interface StudentEvaluation {
     };
     pagesCompletedToday?: number[];
     pointsEarnedToday?: number;
+    pagesPointsEarnedToday?: number;
+    criteriaPointsEarnedToday?: number;
   };
   aiFeedback?: {
     studentProgressStatus: 'متقدم' | 'منتظم' | 'متأخر' | 'يحتاج مساعدة';
@@ -435,6 +443,10 @@ export interface AppSettings {
   workDaysNames: string[];
   halaqahName: string;
   teacherName: string;
+  complexName?: string;
+  newPagePoints?: number; // نقاط كل وجه جديد (الافتراضي: 5)
+  reviewPagePoints?: number; // نقاط كل وجه مراجعة (الافتراضي: 1)
+  dailyListeningPoints?: number; // نقاط إنجاز الاستماع اليومي (الافتراضي: 5)
 }
 
 export interface ChatMessage {

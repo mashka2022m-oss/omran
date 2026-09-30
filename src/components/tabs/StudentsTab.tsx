@@ -1167,6 +1167,20 @@ export const StudentsTab: React.FC<StudentsTabProps> = ({
                 <br />
                 <span className="text-red-300 text-[11px]">سيتم حذف كافة سجلات التسميع والحضور والخطة الخاصة به.</span>
               </p>
+              {Boolean(studentToDelete.isGoogleLinked || studentToDelete.googleEmail) && (
+                <div className="p-3 rounded-2xl bg-amber-500/15 border border-amber-500/30 text-amber-300 text-xs text-right mt-3 space-y-1">
+                  <div className="font-bold flex items-center gap-1.5">
+                    <span>🔗</span>
+                    <span>حساب Google مرتبط بهذا الطالب:</span>
+                  </div>
+                  <div className="font-mono text-xs text-white" dir="ltr">
+                    {studentToDelete.googleEmail}
+                  </div>
+                  <div className="text-[11px] text-amber-200/90 leading-tight">
+                    سيتم فك ارتباط حساب Google وحذف بيانات اعتماده نهائياً مع إتمام عملية الحذف.
+                  </div>
+                </div>
+              )}
             </div>
             <div className="flex items-center justify-center gap-3 pt-2 flex-col sm:flex-row">
               <button
