@@ -100,10 +100,13 @@ export const PrintableQuranicReport: React.FC<PrintableQuranicReportProps> = ({
 
     const iframe = document.createElement('iframe');
     iframe.style.position = 'fixed';
-    iframe.style.right = '0';
-    iframe.style.bottom = '0';
-    iframe.style.width = '0';
-    iframe.style.height = '0';
+    iframe.style.top = '0';
+    iframe.style.left = '0';
+    iframe.style.width = '210mm';
+    iframe.style.height = '297mm';
+    iframe.style.opacity = '0';
+    iframe.style.pointerEvents = 'none';
+    iframe.style.zIndex = '-9999';
     iframe.style.border = 'none';
     iframe.id = 'omran-print-frame';
     document.body.appendChild(iframe);
@@ -113,6 +116,11 @@ export const PrintableQuranicReport: React.FC<PrintableQuranicReportProps> = ({
       window.print();
       return;
     }
+
+    // Collect parent stylesheets to ensure any base classes are available
+    const parentStyles = Array.from(document.querySelectorAll('link[rel="stylesheet"], style'))
+      .map(el => el.outerHTML)
+      .join('\n');
 
     doc.open();
     doc.write(`
@@ -124,88 +132,365 @@ export const PrintableQuranicReport: React.FC<PrintableQuranicReportProps> = ({
         <link rel="preconnect" href="https://fonts.googleapis.com">
         <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
         <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&family=Amiri:wght@400;700&display=swap" rel="stylesheet">
+        ${parentStyles}
         <style>
           @page {
             size: A4 portrait;
             margin: 6mm 6mm 6mm 6mm;
           }
-          * {
-            box-sizing: border-box;
+          *, *::before, *::after {
+            box-sizing: border-box !important;
+            margin: 0;
+            padding: 0;
             -webkit-print-color-adjust: exact !important;
             print-color-adjust: exact !important;
             color-adjust: exact !important;
           }
           html, body {
-            margin: 0;
-            padding: 0;
+            margin: 0 !important;
+            padding: 0 !important;
+            width: 100% !important;
             background: #ffffff !important;
             color: #064e3b !important;
-            font-family: 'Cairo', -apple-system, BlinkMacSystemFont, sans-serif;
-            direction: rtl;
-            text-align: right;
+            font-family: 'Cairo', 'Amiri', -apple-system, BlinkMacSystemFont, sans-serif !important;
+            direction: rtl !important;
+            text-align: right !important;
+            font-size: 9pt;
+            line-height: 1.35;
           }
           .print-wrapper {
-            width: 100%;
-            max-width: 198mm;
-            margin: 0 auto;
+            width: 100% !important;
+            max-width: 100% !important;
+            margin: 0 !important;
+            padding: 0 !important;
             background: #ffffff !important;
-            padding: 2mm;
+          }
+
+          /* CRITICAL RESET: Headings, Paragraphs, SVGs */
+          h1, h2, h3, h4, h5, h6 {
+            margin: 0 !important;
+            padding: 0 !important;
+            font-weight: 800 !important;
+            line-height: 1.2 !important;
+          }
+          p {
+            margin: 0 !important;
+            padding: 0 !important;
+          }
+          svg {
+            width: 12px !important;
+            height: 12px !important;
+            max-width: 12px !important;
+            max-height: 12px !important;
+            display: inline-block !important;
+            vertical-align: middle !important;
+          }
+
+          /* OUTER & INNER LUXURY ISLAMIC FRAMES */
+          .omran-doc-outer {
+            border: 2.5px solid #064e3b !important;
+            border-radius: 8px !important;
+            padding: 2.5mm !important;
+            background: #ffffff !important;
+            box-shadow: none !important;
+            width: 100% !important;
+          }
+          .omran-doc-inner {
+            border: 1.5px solid #b45309 !important;
+            border-radius: 6px !important;
+            padding: 3.5mm !important;
+            background: #ffffff !important;
+            position: relative !important;
+          }
+
+          /* CORNER ORNAMENTS: Absolute positioning so they NEVER push content down */
+          .corner-glyph {
+            position: absolute !important;
+            color: #b45309 !important;
+            font-size: 13px !important;
+            line-height: 1 !important;
+            font-family: serif !important;
+            user-select: none !important;
+            z-index: 10 !important;
+          }
+          .corner-tr { top: 3px !important; right: 4px !important; }
+          .corner-tl { top: 3px !important; left: 4px !important; }
+          .corner-br { bottom: 3px !important; right: 4px !important; }
+          .corner-bl { bottom: 3px !important; left: 4px !important; }
+
+          /* 1. TOP BASMALA */
+          .basmala-banner {
+            text-align: center !important;
+            margin: 0 0 3px 0 !important;
+            padding: 0 !important;
+          }
+          .basmala-text {
+            font-size: 10pt !important;
+            font-family: 'Amiri', serif !important;
+            font-weight: bold !important;
+            color: #064e3b !important;
+            letter-spacing: 0.5px !important;
+            display: inline-block !important;
+          }
+
+          /* 2. OFFICIAL EMBLEM & REPORT HEADER */
+          .header-row {
+            display: flex !important;
+            align-items: center !important;
+            justify-content: space-between !important;
+            border-bottom: 2px solid #064e3b !important;
+            padding-bottom: 5px !important;
+            margin-bottom: 6px !important;
+            gap: 8px !important;
+          }
+          .header-org {
+            text-align: right !important;
+            font-size: 8pt !important;
+            line-height: 1.35 !important;
+            flex: 1 1 0 !important;
+          }
+          .org-title {
+            font-size: 9pt !important;
+            font-weight: 900 !important;
+            color: #064e3b !important;
+            display: block !important;
+          }
+          .org-sub {
+            font-size: 7.5pt !important;
+            color: #334155 !important;
+            display: block !important;
+          }
+          .header-center {
+            text-align: center !important;
+            flex: 0 0 auto !important;
+          }
+          .report-title-badge {
+            display: inline-block !important;
+            background-color: #064e3b !important;
+            color: #fbbf24 !important;
+            padding: 4px 12px !important;
+            border-radius: 6px !important;
+            border: 1.5px solid #b45309 !important;
+          }
+          .report-title-badge h1 {
+            font-size: 10.5pt !important;
+            font-weight: 900 !important;
+            color: #fbbf24 !important;
+            margin: 0 !important;
+            letter-spacing: 0.2px !important;
+          }
+          .quran-ayah-motto {
+            font-size: 7pt !important;
+            color: #b45309 !important;
+            font-weight: 700 !important;
+            margin-top: 2px !important;
+          }
+          .header-meta {
+            text-align: left !important;
+            font-size: 7.5pt !important;
+            line-height: 1.35 !important;
+            color: #475569 !important;
+            flex: 1 1 0 !important;
+          }
+
+          /* 3. STUDENT IDENTITY BOX */
+          .student-identity-box {
+            display: grid !important;
+            grid-template-columns: repeat(4, 1fr) !important;
+            gap: 6px !important;
+            background-color: #f0fdf4 !important;
+            border: 1.5px solid #065f46 !important;
+            border-radius: 6px !important;
+            padding: 5px 8px !important;
+            margin-bottom: 6px !important;
+            font-size: 8pt !important;
+          }
+          .identity-col {
+            text-align: right !important;
+          }
+          .identity-lbl {
+            font-size: 6.5pt !important;
+            color: #64748b !important;
+            font-weight: 700 !important;
+            display: block !important;
+          }
+          .identity-val {
+            font-size: 8pt !important;
+            font-weight: 900 !important;
+            color: #064e3b !important;
+            display: block !important;
+          }
+
+          /* 4. HIGH IMPACT VISUAL STATS BADGES - STRICT 4 COLUMNS */
+          .stats-grid-4 {
+            display: grid !important;
+            grid-template-columns: repeat(4, 1fr) !important;
+            gap: 5px !important;
+            margin-bottom: 6px !important;
+          }
+          .stat-card-green {
+            background-color: #f0fdf4 !important;
+            border: 1px solid #16a34a !important;
+            border-radius: 6px !important;
+            padding: 4px !important;
+            text-align: center !important;
+          }
+          .stat-card-gold {
+            background-color: #fefce8 !important;
+            border: 1px solid #f59e0b !important;
+            border-radius: 6px !important;
+            padding: 4px !important;
+            text-align: center !important;
+          }
+          .stat-num {
+            font-size: 13pt !important;
+            font-weight: 900 !important;
+            font-family: monospace, sans-serif !important;
+            line-height: 1.1 !important;
+            display: block !important;
+            margin: 1px 0 !important;
+          }
+          .stat-lbl {
+            font-size: 7pt !important;
+            font-weight: 700 !important;
+            color: #475569 !important;
+            display: block !important;
+          }
+          .stat-sub {
+            font-size: 6.5pt !important;
+            color: #64748b !important;
+            display: block !important;
+          }
+
+          /* 5. DATA TABLES & HEADINGS */
+          .section-heading {
+            font-size: 8.5pt !important;
+            font-weight: 800 !important;
+            color: #064e3b !important;
+            margin-bottom: 4px !important;
+            display: flex !important;
+            align-items: center !important;
+            gap: 4px !important;
           }
           table {
-            width: 100%;
-            border-collapse: collapse;
+            width: 100% !important;
+            border-collapse: collapse !important;
+            margin-bottom: 6px !important;
+            page-break-inside: auto !important;
+          }
+          thead {
+            display: table-header-group !important;
+          }
+          tr {
+            page-break-inside: avoid !important;
+            page-break-after: auto !important;
           }
           th {
             background-color: #064e3b !important;
             color: #fbbf24 !important;
-            font-weight: 800;
+            font-weight: 800 !important;
             border: 1px solid #065f46 !important;
-            padding: 6px 8px;
-            font-size: 11px;
-            text-align: right;
+            padding: 4px 6px !important;
+            font-size: 8pt !important;
+            text-align: right !important;
           }
           td {
             border: 1px solid #cbd5e1 !important;
-            padding: 5px 8px;
-            font-size: 11px;
-            text-align: right;
+            padding: 3.5px 5px !important;
+            font-size: 7.5pt !important;
+            text-align: right !important;
+            color: #0f172a !important;
+            line-height: 1.25 !important;
           }
-          tr:nth-child(even) {
+          tr:nth-child(even) td {
             background-color: #f8fafc !important;
           }
-          tr:nth-child(odd) {
-            background-color: #f0fdf4 !important;
+          tr:nth-child(odd) td {
+            background-color: #ffffff !important;
           }
-          .text-center { text-align: center !important; }
-          .text-right { text-align: right !important; }
-          .text-left { text-align: left !important; }
-          .font-bold { font-weight: 700 !important; }
-          .font-black { font-weight: 900 !important; }
-          .rounded-xl { border-radius: 12px; }
-          .rounded-2xl { border-radius: 16px; }
-          .rounded-lg { border-radius: 8px; }
-          .rounded-full { border-radius: 9999px; }
-          .p-2 { padding: 8px; }
-          .p-3 { padding: 12px; }
-          .p-4 { padding: 16px; }
-          .mb-3 { margin-bottom: 12px; }
-          .mb-4 { margin-bottom: 16px; }
-          .mt-3 { margin-top: 12px; }
-          .mt-4 { margin-top: 16px; }
-          .grid { display: grid; }
-          .grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-          .grid-cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-          .grid-cols-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-          .gap-2 { gap: 8px; }
-          .gap-3 { gap: 12px; }
-          .flex { display: flex; }
-          .items-center { align-items: center; }
-          .justify-between { justify-content: space-between; }
+          .badge-pill {
+            display: inline-block !important;
+            padding: 1px 6px !important;
+            border-radius: 9999px !important;
+            font-size: 7pt !important;
+            font-weight: 800 !important;
+          }
+          .badge-green {
+            background-color: #dcfce7 !important;
+            color: #14532d !important;
+            border: 1px solid #86efac !important;
+          }
+          .badge-amber {
+            background-color: #fef3c7 !important;
+            color: #78350f !important;
+            border: 1px solid #fcd34d !important;
+          }
+          .badge-red {
+            background-color: #fee2e2 !important;
+            color: #7f1d1d !important;
+            border: 1px solid #fca5a5 !important;
+          }
+
+          /* 6. ADVICE / RECOMMENDATION BOX */
+          .advice-banner {
+            background-color: #fefce8 !important;
+            border: 1.2px solid #f59e0b !important;
+            border-radius: 5px !important;
+            padding: 4px 8px !important;
+            font-size: 7.5pt !important;
+            color: #78350f !important;
+            line-height: 1.35 !important;
+            margin-bottom: 6px !important;
+            page-break-inside: avoid !important;
+          }
+
+          /* 7. OFFICIAL ACCREDITATION SEAL */
+          .seal-row {
+            display: flex !important;
+            align-items: center !important;
+            justify-content: space-between !important;
+            border-top: 1.5px solid #064e3b !important;
+            padding-top: 4px !important;
+            margin-top: 5px !important;
+            page-break-inside: avoid !important;
+          }
+          .seal-info {
+            font-size: 7.5pt !important;
+            color: #334155 !important;
+            line-height: 1.3 !important;
+          }
+          .seal-badge {
+            width: 46px !important;
+            height: 46px !important;
+            border-radius: 50% !important;
+            border: 1.5px double #b45309 !important;
+            background-color: #fefce8 !important;
+            display: flex !important;
+            flex-direction: column !important;
+            align-items: center !important;
+            justify-content: center !important;
+            text-align: center !important;
+            padding: 2px !important;
+            flex-shrink: 0 !important;
+          }
+
+          /* 8. FOOTER */
+          .doc-footer {
+            display: flex !important;
+            align-items: center !important;
+            justify-content: space-between !important;
+            border-top: 1px solid #e2e8f0 !important;
+            padding-top: 3px !important;
+            margin-top: 4px !important;
+            font-size: 6.5pt !important;
+            color: #64748b !important;
+            page-break-inside: avoid !important;
+          }
         </style>
       </head>
       <body>
         <div class="print-wrapper">
-          ${printEl.innerHTML}
+          ${printEl.outerHTML}
         </div>
       </body>
       </html>
@@ -235,7 +520,7 @@ export const PrintableQuranicReport: React.FC<PrintableQuranicReportProps> = ({
     ? evaluations
         .filter(e => e.studentId === student.id)
         .sort((a, b) => (b.date || '').localeCompare(a.date || ''))
-        .slice(0, reportType === 'monthly' ? 25 : reportType === 'weekly' ? 10 : 35)
+        .slice(0, reportType === 'monthly' ? 20 : reportType === 'weekly' ? 8 : 14)
     : [];
 
   const studentAttendance = student
@@ -303,52 +588,52 @@ export const PrintableQuranicReport: React.FC<PrintableQuranicReportProps> = ({
         </div>
 
         {/* Scrollable Document Preview Container */}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-8 bg-[#011a14] flex justify-center">
+        <div className="flex-1 overflow-y-auto p-2 sm:p-6 bg-[#011a14] flex justify-center items-start">
           {/* THE OFFICIAL PRINTABLE QURANIC DOCUMENT */}
           <div
             id="printable-quranic-document"
-            className="omran-printable-document bg-white text-[#064e3b] w-full max-w-[210mm] p-6 sm:p-8 shadow-2xl relative font-sans border-4 border-[#064e3b] rounded-2xl print:rounded-none print:shadow-none print:p-0 print:border-none"
+            className="omran-doc-outer bg-white text-[#064e3b] w-full max-w-[210mm] p-2.5 sm:p-3 shadow-2xl relative font-sans border-2 border-[#064e3b] rounded-xl"
             dir="rtl"
           >
             {/* Islamic Gold Decorative Outer Frame */}
-            <div className="border-2 border-[#b45309] p-4 sm:p-5 rounded-xl relative bg-white">
+            <div className="omran-doc-inner border-[1.5px] border-[#b45309] p-3 sm:p-3.5 rounded-lg relative bg-white">
               {/* Ornate Corner Motif Glyphs */}
-              <div className="absolute top-1.5 right-2 text-[#b45309] font-serif text-xl leading-none select-none">❖</div>
-              <div className="absolute top-1.5 left-2 text-[#b45309] font-serif text-xl leading-none select-none">❖</div>
-              <div className="absolute bottom-1.5 right-2 text-[#b45309] font-serif text-xl leading-none select-none">❖</div>
-              <div className="absolute bottom-1.5 left-2 text-[#b45309] font-serif text-xl leading-none select-none">❖</div>
+              <div className="corner-glyph corner-tr select-none">❖</div>
+              <div className="corner-glyph corner-tl select-none">❖</div>
+              <div className="corner-glyph corner-br select-none">❖</div>
+              <div className="corner-glyph corner-bl select-none">❖</div>
 
               {/* 1. TOP BASMALA */}
-              <div className="text-center mb-3">
-                <span className="text-xs sm:text-sm text-[#064e3b] font-serif font-bold tracking-wide">
+              <div className="basmala-banner text-center mb-1">
+                <span className="basmala-text font-serif font-bold">
                   ۩ بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ ۩
                 </span>
               </div>
 
               {/* 2. OFFICIAL EMBLEM & REPORT HEADER */}
-              <div className="flex items-center justify-between border-b-2 border-[#064e3b] pb-3 mb-4 gap-4">
+              <div className="header-row flex items-center justify-between border-b-2 border-[#064e3b] pb-2 mb-2 gap-3">
                 {/* Right: Complex & Halaqah */}
-                <div className="text-right space-y-1">
-                  <div className="flex items-center gap-2">
-                    <span className="w-7 h-7 rounded-lg bg-[#064e3b] text-[#fbbf24] flex items-center justify-center font-bold text-sm shadow-sm border border-[#fbbf24]/50">
+                <div className="header-org text-right space-y-0.5">
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-5 h-5 rounded-md bg-[#064e3b] text-[#fbbf24] flex items-center justify-center font-bold text-xs shadow-sm border border-[#fbbf24]/50">
                       ع
                     </span>
-                    <strong className="text-sm font-black text-[#064e3b] font-heading block">
+                    <strong className="org-title font-heading">
                       {settings.complexName || 'منظومة عُمران لإدارة المجمعات القرآنية'}
                     </strong>
                   </div>
-                  <p className="text-xs text-slate-800 font-bold">
+                  <p className="org-sub font-bold text-slate-800">
                     حلقة: <span className="text-[#064e3b] font-black">{settings.halaqahName || 'الحلقة القرآنية'}</span>
                   </p>
-                  <p className="text-xs text-slate-700">
+                  <p className="org-sub text-slate-700">
                     المعلم المشرف: فضيلة الشيخ / <span className="font-bold text-[#064e3b]">{teacherName || settings.teacherName}</span>
                   </p>
                 </div>
 
                 {/* Center: Main Title Ribbon */}
-                <div className="text-center">
-                  <div className="inline-block bg-[#064e3b] text-[#fbbf24] px-5 py-2 rounded-xl border-2 border-[#b45309] shadow-sm">
-                    <h1 className="text-sm sm:text-base font-black font-heading tracking-wide">
+                <div className="header-center text-center">
+                  <div className="report-title-badge shadow-sm">
+                    <h1 className="font-heading">
                       {documentType === 'custom'
                         ? 'تقرير المتابعة المخصص لطلاب الحلقة القرآنية'
                         : documentType === 'all_students'
@@ -362,16 +647,16 @@ export const PrintableQuranicReport: React.FC<PrintableQuranicReportProps> = ({
                         : 'سجل التقييم والإنجاز القرآني الشامل للطالب'}
                     </h1>
                   </div>
-                  <p className="text-[10px] text-[#b45309] font-bold mt-1">
+                  <p className="quran-ayah-motto font-bold">
                     ﴿ وَفِي ذَٰلِكَ فَلْيَتَنَافَسِ الْمُتَنَافِسُونَ ﴾
                   </p>
                 </div>
 
                 {/* Left: Metadata & Date */}
-                <div className="text-left text-xs space-y-0.5 text-slate-600">
+                <div className="header-meta text-left space-y-0.5">
                   <p className="font-bold text-[#064e3b]">التاريخ: <span className="text-slate-800">{todayFormatted}</span></p>
-                  <p className="text-[11px] font-mono text-slate-600">موافق: {todayGregorian}</p>
-                  <p className="text-[10px] font-mono text-[#b45309] font-bold">كود الوثيقة: OMR-{Date.now().toString().slice(-6)}</p>
+                  <p className="font-mono text-slate-600">موافق: {todayGregorian}</p>
+                  <p className="font-mono text-[#b45309] font-bold">كود: OMR-{Date.now().toString().slice(-6)}</p>
                 </div>
               </div>
 
@@ -379,76 +664,76 @@ export const PrintableQuranicReport: React.FC<PrintableQuranicReportProps> = ({
               {/* DOCUMENT CONTENT TYPE 1: INDIVIDUAL STUDENT REPORT                         */}
               {/* ========================================================================= */}
               {documentType === 'individual' && student && (
-                <div className="space-y-4">
+                <div className="space-y-2">
                   {/* Student Identity Box */}
-                  <div className="bg-[#f0fdf4] border-2 border-[#065f46] rounded-xl p-3.5 grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
-                    <div>
-                      <span className="text-[10px] text-slate-500 block font-bold">اسم الطالب المكرم:</span>
-                      <strong className="text-sm font-black text-[#064e3b]">{student.name}</strong>
+                  <div className="student-identity-box">
+                    <div className="identity-col">
+                      <span className="identity-lbl">اسم الطالب المكرم:</span>
+                      <strong className="identity-val">{student.name}</strong>
                     </div>
-                    <div>
-                      <span className="text-[10px] text-slate-500 block font-bold">المستوى القرآني:</span>
-                      <strong className="font-bold text-slate-800">{student.level}</strong>
+                    <div className="identity-col">
+                      <span className="identity-lbl">المستوى القرآني:</span>
+                      <strong className="identity-val text-slate-800">{student.level}</strong>
                     </div>
-                    <div>
-                      <span className="text-[10px] text-slate-500 block font-bold">رقم هاتف ولي الأمر:</span>
-                      <strong className="font-mono text-slate-900 font-bold" dir="ltr">{student.parentPhone || 'غير مسجل'}</strong>
+                    <div className="identity-col">
+                      <span className="identity-lbl">رقم هاتف ولي الأمر:</span>
+                      <strong className="identity-val font-mono text-slate-900" dir="ltr">{student.parentPhone || 'غير مسجل'}</strong>
                     </div>
-                    <div>
-                      <span className="text-[10px] text-slate-500 block font-bold">موضع الحفظ الحالي:</span>
-                      <strong className="font-bold text-[#b45309]">
+                    <div className="identity-col">
+                      <span className="identity-lbl">موضع الحفظ الحالي:</span>
+                      <strong className="identity-val text-[#b45309]">
                         سورة {student.currentSurahName || studentSurah?.name || 'النبأ'} (آية {student.currentAyah || 1})
                       </strong>
                     </div>
                   </div>
 
-                  {/* High Impact Visual Stats Badges */}
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-center text-xs">
-                    <div className="bg-[#f0fdf4] border border-[#16a34a] rounded-xl p-2.5">
-                      <span className="text-[10px] text-slate-600 block font-bold">نسبة المواظبة والحضور:</span>
-                      <span className="text-lg font-black text-[#15803d] font-mono">{attendanceRate}%</span>
-                      <span className="text-[9px] text-slate-500 block">({presentsCount} من {totalDaysRecorded} يوم)</span>
+                  {/* High Impact Visual Stats Badges - Strict 4 columns */}
+                  <div className="stats-grid-4">
+                    <div className="stat-card-green">
+                      <span className="stat-lbl">نسبة المواظبة والحضور:</span>
+                      <span className="stat-num text-[#15803d]">{attendanceRate}%</span>
+                      <span className="stat-sub">({presentsCount} من {totalDaysRecorded} يوم)</span>
                     </div>
 
-                    <div className="bg-[#fefce8] border border-[#f59e0b] rounded-xl p-2.5">
-                      <span className="text-[10px] text-slate-600 block font-bold">الآيات التي سمعها:</span>
-                      <span className="text-lg font-black text-[#b45309] font-mono">{totalVersesHeard}</span>
-                      <span className="text-[9px] text-slate-500 block">آية مسجلة ومحفوظة</span>
+                    <div className="stat-card-gold">
+                      <span className="stat-lbl">الآيات التي سمعها:</span>
+                      <span className="stat-num text-[#b45309]">{totalVersesHeard}</span>
+                      <span className="stat-sub">آية مسجلة ومحفوظة</span>
                     </div>
 
-                    <div className="bg-[#f0fdf4] border border-[#065f46] rounded-xl p-2.5">
-                      <span className="text-[10px] text-slate-600 block font-bold">الأوجه المحفوظة:</span>
-                      <span className="text-lg font-black text-[#064e3b] font-mono">{totalPagesCompleted}</span>
-                      <span className="text-[9px] text-slate-500 block">وجهاً من مصحف المدينة</span>
+                    <div className="stat-card-green">
+                      <span className="stat-lbl">الأوجه المحفوظة:</span>
+                      <span className="stat-num text-[#064e3b]">{totalPagesCompleted}</span>
+                      <span className="stat-sub">وجهاً من مصحف المدينة</span>
                     </div>
 
-                    <div className="bg-[#fefce8] border border-[#f59e0b] rounded-xl p-2.5">
-                      <span className="text-[10px] text-slate-600 block font-bold">رصيد النقاط المحققة:</span>
-                      <span className="text-lg font-black text-[#b45309] font-mono">{student.points || 0}</span>
-                      <span className="text-[9px] text-slate-500 block">نقطة في معايير التميز</span>
+                    <div className="stat-card-gold">
+                      <span className="stat-lbl">رصيد النقاط المحققة:</span>
+                      <span className="stat-num text-[#b45309]">{student.points || 0}</span>
+                      <span className="stat-sub">نقطة في معايير التميز</span>
                     </div>
                   </div>
 
                   {/* Recitations Log Table with Emerald and Gold Theme */}
                   <div>
-                    <h4 className="text-xs font-bold text-[#064e3b] mb-2 flex items-center gap-1.5">
-                      <BookOpen className="w-3.5 h-3.5 text-[#b45309]" />
+                    <h4 className="section-heading">
+                      <BookOpen style={{ width: '13px', height: '13px' }} className="text-[#b45309]" />
                       <span>سجل التسميع والمراجعة والتقييمات بالمنظومة:</span>
                     </h4>
 
                     {studentEvals.length === 0 ? (
-                      <div className="p-6 text-center text-xs text-slate-500 border border-dashed border-slate-300 rounded-xl bg-slate-50">
+                      <div className="p-3 text-center text-xs text-slate-500 border border-dashed border-slate-300 rounded-lg bg-slate-50">
                         لا توجد سجلات تقييم مسجلة للطالب في هذه الفترة.
                       </div>
                     ) : (
-                      <table className="w-full text-right text-xs border border-[#065f46] rounded-xl overflow-hidden shadow-sm">
+                      <table>
                         <thead>
-                          <tr className="bg-[#064e3b] text-[#fbbf24] text-[11px]">
-                            <th className="p-2 border border-[#065f46] w-24">التاريخ</th>
-                            <th className="p-2 border border-[#065f46]">الحفظ الجديد</th>
-                            <th className="p-2 border border-[#065f46]">المراجعة والتثبيت</th>
-                            <th className="p-2 border border-[#065f46] w-24 text-center">التقييم</th>
-                            <th className="p-2 border border-[#065f46]">توجيه المعلم</th>
+                          <tr>
+                            <th style={{ width: '75px' }}>التاريخ</th>
+                            <th>الحفظ الجديد</th>
+                            <th>المراجعة والتثبيت</th>
+                            <th style={{ width: '70px', textAlign: 'center' }}>التقييم</th>
+                            <th>توجيه المعلم</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -464,16 +749,16 @@ export const PrintableQuranicReport: React.FC<PrintableQuranicReportProps> = ({
                             const firstCritScore = Object.values(ev.criteriaValues || {})[0];
 
                             return (
-                              <tr key={ev.id || i} className={i % 2 === 0 ? 'bg-white' : 'bg-[#f0fdf4]'}>
-                                <td className="p-2 border border-[#cbd5e1] font-mono text-[11px] text-slate-700 font-bold">{ev.date}</td>
-                                <td className="p-2 border border-[#cbd5e1] font-bold text-[#064e3b]">{newRec}</td>
-                                <td className="p-2 border border-[#cbd5e1] text-slate-800">{revRec}</td>
-                                <td className="p-2 border border-[#cbd5e1] text-center">
-                                  <span className="px-2 py-0.5 rounded-full bg-[#dcfce7] text-[#14532d] text-[10px] font-bold border border-[#86efac]">
+                              <tr key={ev.id || i}>
+                                <td style={{ fontWeight: 'bold', fontFamily: 'monospace' }}>{ev.date}</td>
+                                <td style={{ fontWeight: 'bold', color: '#064e3b' }}>{newRec}</td>
+                                <td>{revRec}</td>
+                                <td style={{ textAlign: 'center' }}>
+                                  <span className="badge-pill badge-green">
                                     {firstCritScore ? `${firstCritScore}` : 'متميز'}
                                   </span>
                                 </td>
-                                <td className="p-2 border border-[#cbd5e1] text-[11px] text-slate-700">
+                                <td>
                                   {ev.recitationDetails?.teacherNotes || 'أداء طيب ومتقن بارك الله فيه.'}
                                 </td>
                               </tr>
@@ -485,8 +770,10 @@ export const PrintableQuranicReport: React.FC<PrintableQuranicReportProps> = ({
                   </div>
 
                   {/* Teacher Recommendation Box */}
-                  <div className="bg-[#fefce8] border-2 border-[#f59e0b] rounded-xl p-3 text-xs text-[#78350f] leading-relaxed">
-                    <strong className="block text-[#b45309] font-bold mb-1">توجيه المعلم المحفّظ لولي الأمر:</strong>
+                  <div className="advice-banner">
+                    <strong style={{ display: 'block', color: '#b45309', marginBottom: '2px', fontWeight: 'bold' }}>
+                      توجيه المعلم المحفّظ لولي الأمر:
+                    </strong>
                     يرجى حث الطالب على المتابعة اليومية والاستماع للتلاوات المتقنة لتثبيت الحفظ، فالمتابعة المنزلية ركيزة أساسية في رسوخ القرآن الكريم في صدر الطالب.
                   </div>
                 </div>
@@ -496,35 +783,35 @@ export const PrintableQuranicReport: React.FC<PrintableQuranicReportProps> = ({
               {/* DOCUMENT CONTENT TYPE 2: CUSTOM / ALL STUDENTS ROSTER                     */}
               {/* ========================================================================= */}
               {(documentType === 'custom' || documentType === 'all_students') && (
-                <div className="space-y-4">
-                  <div className="bg-[#f0fdf4] border-2 border-[#065f46] rounded-xl p-2.5 flex items-center justify-between text-xs text-slate-800 font-bold">
+                <div className="space-y-2">
+                  <div className="student-identity-box flex items-center justify-between" style={{ display: 'flex' }}>
                     <span>عدد الطلاب المشمولين بالتقرير: <strong className="text-[#064e3b] font-black">{targetStudents.length} طالباً</strong></span>
                     <span>تاريخ الإصدار: <strong className="font-mono text-[#064e3b]">{todayFormatted}</strong></span>
                     <span>الحالة: <strong className="text-emerald-700">معتمد رسمياً</strong></span>
                   </div>
 
-                  <table className="w-full text-right text-xs border border-[#065f46] rounded-xl overflow-hidden shadow-sm">
+                  <table>
                     <thead>
-                      <tr className="bg-[#064e3b] text-[#fbbf24] text-[11px]">
-                        <th className="p-2 border border-[#065f46] w-8 text-center">م</th>
-                        <th className="p-2 border border-[#065f46]">اسم الطالب</th>
+                      <tr>
+                        <th style={{ width: '28px', textAlign: 'center' }}>م</th>
+                        <th>اسم الطالب</th>
                         {customFields.includeParentPhone && (
-                          <th className="p-2 border border-[#065f46] w-28 text-center">هاتف ولي الأمر</th>
+                          <th style={{ width: '90px', textAlign: 'center' }}>هاتف ولي الأمر</th>
                         )}
                         {customFields.includeMemorization && (
-                          <th className="p-2 border border-[#065f46]">الموضع الحالي (الحفظ والمراجعة)</th>
+                          <th>الموضع الحالي (الحفظ والمراجعة)</th>
                         )}
                         {customFields.includeAttendance && (
-                          <th className="p-2 border border-[#065f46] w-24 text-center">نسبة الحضور</th>
+                          <th style={{ width: '70px', textAlign: 'center' }}>نسبة الحضور</th>
                         )}
                         {customFields.includePagesAndVerses && (
-                          <th className="p-2 border border-[#065f46] w-24 text-center">الأوجه المنجزة</th>
+                          <th style={{ width: '70px', textAlign: 'center' }}>الأوجه المنجزة</th>
                         )}
                         {customFields.includeEvaluations && (
-                          <th className="p-2 border border-[#065f46] w-24 text-center">آخر تقييم</th>
+                          <th style={{ width: '65px', textAlign: 'center' }}>آخر تقييم</th>
                         )}
                         {customFields.includeTeacherNotes && (
-                          <th className="p-2 border border-[#065f46]">ملاحظات وتوجيه</th>
+                          <th>ملاحظات وتوجيه</th>
                         )}
                       </tr>
                     </thead>
@@ -548,41 +835,41 @@ export const PrintableQuranicReport: React.FC<PrintableQuranicReportProps> = ({
                         const pagesCount = (std.completedNewPages?.length || 0) + (std.completedReviewPages?.length || 0);
 
                         return (
-                          <tr key={std.id} className={idx % 2 === 0 ? 'bg-white' : 'bg-[#f0fdf4]'}>
-                            <td className="p-2 border border-[#cbd5e1] text-center font-bold text-slate-700 font-mono">{idx + 1}</td>
-                            <td className="p-2 border border-[#cbd5e1] font-bold text-[#064e3b]">{std.name}</td>
+                          <tr key={std.id}>
+                            <td style={{ textAlign: 'center', fontWeight: 'bold', fontFamily: 'monospace' }}>{idx + 1}</td>
+                            <td style={{ fontWeight: 'bold', color: '#064e3b' }}>{std.name}</td>
                             {customFields.includeParentPhone && (
-                              <td className="p-2 border border-[#cbd5e1] text-center font-mono text-[11px] text-slate-700 font-bold" dir="ltr">
+                              <td style={{ textAlign: 'center', fontFamily: 'monospace', fontWeight: 'bold' }} dir="ltr">
                                 {std.parentPhone || '—'}
                               </td>
                             )}
                             {customFields.includeMemorization && (
-                              <td className="p-2 border border-[#cbd5e1] text-slate-800">
-                                <span className="font-bold text-[#064e3b] block">{newText}</span>
-                                <span className="text-[10px] text-slate-500">{revText}</span>
+                              <td>
+                                <span style={{ fontWeight: 'bold', color: '#064e3b', display: 'block' }}>{newText}</span>
+                                <span style={{ fontSize: '6.5pt', color: '#64748b' }}>{revText}</span>
                               </td>
                             )}
                             {customFields.includeAttendance && (
-                              <td className="p-2 border border-[#cbd5e1] text-center">
-                                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#dcfce7] text-[#14532d] border border-[#86efac]">
+                              <td style={{ textAlign: 'center' }}>
+                                <span className="badge-pill badge-green">
                                   {attPct}%
                                 </span>
                               </td>
                             )}
                             {customFields.includePagesAndVerses && (
-                              <td className="p-2 border border-[#cbd5e1] text-center font-bold text-[#b45309] font-mono">
+                              <td style={{ textAlign: 'center', fontWeight: 'bold', color: '#b45309', fontFamily: 'monospace' }}>
                                 {pagesCount} وجه
                               </td>
                             )}
                             {customFields.includeEvaluations && (
-                              <td className="p-2 border border-[#cbd5e1] text-center">
-                                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#fef3c7] text-[#78350f] border border-[#fcd34d]">
+                              <td style={{ textAlign: 'center' }}>
+                                <span className="badge-pill badge-amber">
                                   {evalScore}
                                 </span>
                               </td>
                             )}
                             {customFields.includeTeacherNotes && (
-                              <td className="p-2 border border-[#cbd5e1] text-[11px] text-slate-700">{note}</td>
+                              <td>{note}</td>
                             )}
                           </tr>
                         );
@@ -596,20 +883,20 @@ export const PrintableQuranicReport: React.FC<PrintableQuranicReportProps> = ({
               {/* DOCUMENT CONTENT TYPE 3: ATTENDANCE SHEET                                  */}
               {/* ========================================================================= */}
               {documentType === 'attendance' && (
-                <div className="space-y-4">
-                  <div className="bg-[#f0fdf4] border-2 border-[#065f46] rounded-xl p-2.5 flex items-center justify-between text-xs text-slate-800 font-bold">
+                <div className="space-y-2">
+                  <div className="student-identity-box flex items-center justify-between" style={{ display: 'flex' }}>
                     <span>كشف رصد الحضور والمواظبة ليوم: <strong className="text-[#064e3b] font-black">{selectedDate}</strong></span>
                     <span>عدد الطلاب: <strong className="text-[#064e3b] font-black">{students.length} طالباً</strong></span>
                   </div>
 
-                  <table className="w-full text-right text-xs border border-[#065f46] rounded-xl overflow-hidden shadow-sm">
+                  <table>
                     <thead>
-                      <tr className="bg-[#064e3b] text-[#fbbf24] text-[11px]">
-                        <th className="p-2 border border-[#065f46] w-8 text-center">م</th>
-                        <th className="p-2 border border-[#065f46]">اسم الطالب</th>
-                        <th className="p-2 border border-[#065f46] w-24 text-center">حالة الحضور</th>
-                        <th className="p-2 border border-[#065f46]">ملاحظات العذر / التبرير</th>
-                        <th className="p-2 border border-[#065f46] w-20 text-center">الاعتماد</th>
+                      <tr>
+                        <th style={{ width: '28px', textAlign: 'center' }}>م</th>
+                        <th>اسم الطالب</th>
+                        <th style={{ width: '75px', textAlign: 'center' }}>حالة الحضور</th>
+                        <th>ملاحظات العذر / التبرير</th>
+                        <th style={{ width: '60px', textAlign: 'center' }}>الاعتماد</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -617,22 +904,22 @@ export const PrintableQuranicReport: React.FC<PrintableQuranicReportProps> = ({
                         const att = attendance.find(a => a.studentId === std.id && a.date === selectedDate);
                         const status = att?.status || 'حاضر';
                         return (
-                          <tr key={std.id} className={idx % 2 === 0 ? 'bg-white' : 'bg-[#f0fdf4]'}>
-                            <td className="p-2 border border-[#cbd5e1] text-center font-bold text-slate-700 font-mono">{idx + 1}</td>
-                            <td className="p-2 border border-[#cbd5e1] font-bold text-slate-900">{std.name}</td>
-                            <td className="p-2 border border-[#cbd5e1] text-center">
-                              <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                          <tr key={std.id}>
+                            <td style={{ textAlign: 'center', fontWeight: 'bold', fontFamily: 'monospace' }}>{idx + 1}</td>
+                            <td style={{ fontWeight: 'bold' }}>{std.name}</td>
+                            <td style={{ textAlign: 'center' }}>
+                              <span className={`badge-pill ${
                                 status === 'حاضر'
-                                  ? 'bg-[#dcfce7] text-[#14532d] border-[#86efac]'
+                                  ? 'badge-green'
                                   : status === 'غائب'
-                                  ? 'bg-[#fee2e2] text-[#7f1d1d] border-[#fca5a5]'
-                                  : 'bg-[#fef3c7] text-[#78350f] border-[#fcd34d]'
+                                  ? 'badge-red'
+                                  : 'badge-amber'
                               }`}>
                                 {status}
                               </span>
                             </td>
-                            <td className="p-2 border border-[#cbd5e1] text-[11px] text-slate-700">{att?.note || '—'}</td>
-                            <td className="p-2 border border-[#cbd5e1] text-center text-[#15803d] font-bold text-[10px]">معتمد</td>
+                            <td>{att?.note || '—'}</td>
+                            <td style={{ textAlign: 'center', color: '#15803d', fontWeight: 'bold' }}>معتمد</td>
                           </tr>
                         );
                       })}
@@ -642,34 +929,32 @@ export const PrintableQuranicReport: React.FC<PrintableQuranicReportProps> = ({
               )}
 
               {/* 3. OFFICIAL ELECTRONIC CERTIFICATION & GOLD SEAL */}
-              <div className="mt-5 pt-3.5 border-t-2 border-[#064e3b] flex items-center justify-between text-xs">
-                <div className="text-right space-y-1">
-                  <div className="font-bold text-[#064e3b] text-xs flex items-center gap-1.5">
-                    <ShieldCheck className="w-4 h-4 text-[#b45309]" />
+              <div className="seal-row">
+                <div className="seal-info">
+                  <div style={{ fontWeight: 'bold', color: '#064e3b', display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '2px' }}>
+                    <ShieldCheck style={{ width: '13px', height: '13px' }} className="text-[#b45309]" />
                     <span>الاعتماد الإلكتروني الرسمي للمنظومة:</span>
                   </div>
-                  <p className="text-[11px] text-slate-800">
-                    هذه الوثيقة صادرة ومعتمدة إلكترونياً من <strong className="text-[#064e3b] font-black">{settings.complexName || 'منظومة عُمران'}</strong>
+                  <p style={{ fontSize: '7.5pt', color: '#1e293b' }}>
+                    هذه الوثيقة صادرة ومعتمدة إلكترونياً من <strong style={{ color: '#064e3b' }}>{settings.complexName || 'منظومة عُمران'}</strong>
                   </p>
-                  <p className="text-[10px] text-slate-500">
+                  <p style={{ fontSize: '7pt', color: '#64748b' }}>
                     تاريخ الاعتماد: {todayFormatted} • موافق {todayGregorian}
                   </p>
                 </div>
 
                 {/* Circular Golden Accreditation Seal */}
-                <div className="flex flex-col items-center justify-center shrink-0">
-                  <div className="w-16 h-16 rounded-full border-2 border-[#b45309] bg-[#fefce8] flex flex-col items-center justify-center text-[#b45309] p-1 shadow-sm border-double">
-                    <span className="text-[8px] font-black text-center text-[#064e3b]">منظومة عُمران</span>
-                    <span className="text-[7px] text-[#b45309] font-bold">معتمد إلكترونياً</span>
-                    <span className="text-[6.5px] text-slate-600 font-mono">{todayGregorian}</span>
-                  </div>
+                <div className="seal-badge">
+                  <span style={{ fontSize: '6.5pt', fontWeight: 900, color: '#064e3b', lineHeight: 1.1 }}>منظومة عُمران</span>
+                  <span style={{ fontSize: '6pt', color: '#b45309', fontWeight: 'bold', lineHeight: 1.1 }}>معتمد إلكترونياً</span>
+                  <span style={{ fontSize: '5.5pt', color: '#64748b', fontFamily: 'monospace', lineHeight: 1.1 }}>{todayGregorian}</span>
                 </div>
               </div>
 
               {/* 4. FOOTER VERSE */}
-              <div className="mt-4 pt-2.5 border-t border-slate-200 text-center text-[10px] text-slate-500 flex items-center justify-between">
+              <div className="doc-footer">
                 <span>﴿ إِنَّا نَحْنُ نَزَّلْنَا الذِّكْرَ وَإِنَّا لَهُ لَحَافِظُونَ ﴾</span>
-                <span className="font-bold text-[#064e3b]">منظومة عُمْرَان لإدارة المجمعات القرآنية • وثيقة رسمية معتمدة</span>
+                <span style={{ fontWeight: 'bold', color: '#064e3b' }}>منظومة عُمْرَان لإدارة المجمعات القرآنية • وثيقة رسمية معتمدة</span>
                 <span>صفحة 1 من 1</span>
               </div>
             </div>
