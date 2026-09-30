@@ -24,8 +24,9 @@ import {
   Trophy,
   ChevronLeft
 } from 'lucide-react';
-import { Student, AttendanceRecord, StudentEvaluation, AppSettings } from '../../types';
+import { Student, AttendanceRecord, StudentEvaluation, AppSettings, getStudentParentPhone } from '../../types';
 import { getSurahInfo } from '../../data/quranData';
+import { calculateStudentCompletedPages } from '../../data/quranPagesData';
 import { ReportsChartsView } from './ReportsChartsView';
 import {
   PrintableQuranicReport,
@@ -108,7 +109,7 @@ export const ReportsTab: React.FC<ReportsTabProps> = ({
 
     return {
       name: std.name,
-      parentPhone: std.parentPhone || '',
+      parentPhone: getStudentParentPhone(std),
       latestNew,
       latestNewDate: latest?.date || '',
       latestReview,
@@ -151,7 +152,7 @@ export const ReportsTab: React.FC<ReportsTabProps> = ({
     return students.filter(s =>
       s.name.toLowerCase().includes(q) ||
       (s.currentSurahName && s.currentSurahName.toLowerCase().includes(q)) ||
-      (s.parentPhone && s.parentPhone.includes(q))
+      getStudentParentPhone(s).includes(q)
     );
   }, [students, studentSearchQuery]);
 
@@ -265,7 +266,8 @@ export const ReportsTab: React.FC<ReportsTabProps> = ({
             const attRate = totalRecorded > 0 ? Math.round((presents / totalRecorded) * 100) : 100;
 
             const versesHeard = student.listenedAyahsCount || (student.currentAyah || 1) * 3 + stdEvals.length * 10;
-            const pagesCount = (student.completedNewPages?.length || 0) + (student.completedReviewPages?.length || 0);
+            const studentPagesInfo = calculateStudentCompletedPages(student, evaluations);
+            const pagesCount = studentPagesInfo.totalPagesCount;
 
             const latestEval = stdEvals[0];
             const evalSummary = latestEval ? Object.values(latestEval.criteriaValues || {})[0] || 'ممتاز' : '—';
@@ -342,9 +344,10 @@ export const ReportsTab: React.FC<ReportsTabProps> = ({
         const attRate = totalDays > 0 ? Math.round((presents / totalDays) * 100) : 100;
 
         const versesHeard = student.listenedAyahsCount || (student.currentAyah || 1) * 3 + studentEvals.length * 10;
-        const newPages = student.completedNewPages?.length || 0;
-        const revPages = student.completedReviewPages?.length || 0;
-        const totalPages = newPages + revPages;
+        const studentPagesInfo = calculateStudentCompletedPages(student, evaluations);
+        const newPages = studentPagesInfo.newPagesCount;
+        const revPages = studentPagesInfo.reviewPagesCount;
+        const totalPages = studentPagesInfo.totalPagesCount;
 
         return (
           <div className="fixed inset-0 z-[9999] bg-black/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-5 overflow-y-auto">
@@ -360,7 +363,7 @@ export const ReportsTab: React.FC<ReportsTabProps> = ({
                       السجل القرآني الشامل: {student.name}
                     </h3>
                     <p className="text-xs text-[#86efac]/90">
-                      المستوى: {student.level} • هاتف ولي الأمر: {student.parentPhone || 'غير مسجل'} • الحلقة: {student.halaqahName || settings.halaqahName}
+                      المستوى: {student.level} • هاتف ولي الأمر: {getStudentParentPhone(student) || 'غير مسجل'} • الحلقة: {student.halaqahName || settings.halaqahName}
                     </p>
                   </div>
                 </div>

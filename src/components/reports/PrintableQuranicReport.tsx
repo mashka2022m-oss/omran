@@ -18,8 +18,9 @@ import {
   Flame,
   Trophy
 } from 'lucide-react';
-import { Student, AttendanceRecord, StudentEvaluation, AppSettings } from '../../types';
+import { Student, AttendanceRecord, StudentEvaluation, AppSettings, getStudentParentPhone } from '../../types';
 import { getSurahInfo } from '../../data/quranData';
+import { calculateStudentCompletedPages } from '../../data/quranPagesData';
 
 export type ReportDocumentType = 'individual' | 'all_students' | 'attendance' | 'custom';
 
@@ -540,7 +541,8 @@ export const PrintableQuranicReport: React.FC<PrintableQuranicReportProps> = ({
 
   // Total verses listened/recited by student
   const totalVersesHeard = student?.listenedAyahsCount || (student?.currentAyah || 1) * 3 + studentEvals.length * 10;
-  const totalPagesCompleted = (student?.completedNewPages?.length || 0) + (student?.completedReviewPages?.length || 0);
+  const singleStudentPages = calculateStudentCompletedPages(student, evaluations);
+  const totalPagesCompleted = singleStudentPages.totalPagesCount;
 
   // Filter students for custom or all students document
   const targetStudents = documentType === 'custom' && selectedStudentIds.length > 0
@@ -677,7 +679,7 @@ export const PrintableQuranicReport: React.FC<PrintableQuranicReportProps> = ({
                     </div>
                     <div className="identity-col">
                       <span className="identity-lbl">رقم هاتف ولي الأمر:</span>
-                      <strong className="identity-val font-mono text-slate-900" dir="ltr">{student.parentPhone || 'غير مسجل'}</strong>
+                      <strong className="identity-val font-mono text-slate-900" dir="ltr">{getStudentParentPhone(student) || 'غير مسجل'}</strong>
                     </div>
                     <div className="identity-col">
                       <span className="identity-lbl">موضع الحفظ الحالي:</span>
@@ -832,7 +834,8 @@ export const PrintableQuranicReport: React.FC<PrintableQuranicReportProps> = ({
                         const evalScore = stdEval ? Object.values(stdEval.criteriaValues || {})[0] || 'ممتاز' : '—';
                         const note = stdEval?.recitationDetails?.teacherNotes || std.notes || 'منتظم ومتقن';
 
-                        const pagesCount = (std.completedNewPages?.length || 0) + (std.completedReviewPages?.length || 0);
+                        const stdProgress = calculateStudentCompletedPages(std, evaluations);
+                        const pagesCount = stdProgress.totalPagesCount;
 
                         return (
                           <tr key={std.id}>
@@ -840,7 +843,7 @@ export const PrintableQuranicReport: React.FC<PrintableQuranicReportProps> = ({
                             <td style={{ fontWeight: 'bold', color: '#064e3b' }}>{std.name}</td>
                             {customFields.includeParentPhone && (
                               <td style={{ textAlign: 'center', fontFamily: 'monospace', fontWeight: 'bold' }} dir="ltr">
-                                {std.parentPhone || '—'}
+                                {getStudentParentPhone(std) || '—'}
                               </td>
                             )}
                             {customFields.includeMemorization && (

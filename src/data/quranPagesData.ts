@@ -18,6 +18,7 @@ export interface QuranPageInfo {
  * Each tuple: [page, juz, startSurah, startAyah, endSurah, endAyah]
  */
 import { QURAN_SURAHS, getSurahInfo } from './quranData';
+import type { StudentEvaluation } from '../types';
 
 // Generate verified page boundaries for the 604 pages of King Fahd Mushaf
 // Key anchor pages:
@@ -370,3 +371,137 @@ export function formatPageTitle(pageNumber: number): string {
   const s2 = getSurahInfo(page.endSurah).name;
   return `الوجه ${pageNumber} (من ${s1} ${page.startAyah} إلى ${s2} ${page.endAyah})`;
 }
+
+/**
+ * Calculates total completed/memorized pages for a student by checking:
+ * 1. Explicitly recorded completedNewPages on the student
+ * 2. Historical evaluations:
+ *    - recitationDetails.pagesCompletedToday
+ *    - recitationDetails.todayNewItem (startPage to endPage)
+ *    - text parsing of recitationDetails.newMemorizationAchieved
+ * 3. Fallback to student's currentSurah & currentAyah position
+ */
+export function calculateStudentCompletedPages(
+  student?: {
+    id?: string;
+    completedNewPages?: number[];
+    completedReviewPages?: number[];
+    currentSurah?: number;
+    currentAyah?: number;
+  } | null,
+  evaluations: StudentEvaluation[] = []
+): {
+  newPagesCount: number;
+  reviewPagesCount: number;
+  totalPagesCount: number;
+  uniqueNewPages: number[];
+  uniqueReviewPages: number[];
+} {
+  if (!student) {
+    return {
+      newPagesCount: 0,
+      reviewPagesCount: 0,
+      totalPagesCount: 0,
+      uniqueNewPages: [],
+      uniqueReviewPages: []
+    };
+  }
+
+  const newPagesSet = new Set<number>(student.completedNewPages || []);
+  const reviewPagesSet = new Set<number>(student.completedReviewPages || []);
+
+  const studentEvals = evaluations.filter(e => e.studentId === student.id);
+
+  for (const ev of studentEvals) {
+    const details = ev.recitationDetails;
+    if (!details) continue;
+
+    // 1. Explicit pagesCompletedToday
+    if (Array.isArray(details.pagesCompletedToday)) {
+      details.pagesCompletedToday.forEach(p => {
+        if (typeof p === 'number' && p >= 1 && p <= 604) {
+          newPagesSet.add(p);
+        }
+      });
+    }
+
+    // 2. todayNewItem
+    if (details.todayNewItem && !details.todayNewItem.didNotRecite) {
+      const startSurah = details.todayNewItem.surahNumber || 78;
+      const startAyah = details.todayNewItem.fromAyah || 1;
+      const endSurah = details.todayNewItem.toSurahNumber || startSurah;
+      const endAyah = details.todayNewItem.toAyah || startAyah;
+
+      const startPage = getPageOfAyah(startSurah, startAyah);
+      const endPage = getPageOfAyah(endSurah, endAyah);
+      const minP = Math.min(startPage, endPage);
+      const maxP = Math.max(startPage, endPage);
+
+      for (let p = minP; p <= maxP; p++) {
+        newPagesSet.add(p);
+      }
+    }
+
+    // 3. todayReviewItems
+    if (Array.isArray(details.todayReviewItems)) {
+      for (const item of details.todayReviewItems) {
+        if (item && !item.didNotRecite) {
+          const sSurah = item.surahNumber || 78;
+          const sAyah = item.fromAyah || 1;
+          const eSurah = item.toSurahNumber || sSurah;
+          const eAyah = item.toAyah || sAyah;
+
+          const sPage = getPageOfAyah(sSurah, sAyah);
+          const ePage = getPageOfAyah(eSurah, eAyah);
+          const minP = Math.min(sPage, ePage);
+          const maxP = Math.max(sPage, ePage);
+
+          for (let p = minP; p <= maxP; p++) {
+            reviewPagesSet.add(p);
+          }
+        }
+      }
+    }
+
+    // 4. Text fallback for older/legacy evaluations
+    if (!details.todayNewItem && details.newMemorizationAchieved) {
+      const match = details.newMemorizationAchieved.match(/(\d+)\s*[-–—]\s*(\d+)/);
+      if (match && student.currentSurah) {
+        const fromA = parseInt(match[1], 10);
+        const toA = parseInt(match[2], 10);
+        const p1 = getPageOfAyah(student.currentSurah, fromA);
+        const p2 = getPageOfAyah(student.currentSurah, toA);
+        for (let p = Math.min(p1, p2); p <= Math.max(p1, p2); p++) {
+          newPagesSet.add(p);
+        }
+      }
+    }
+  }
+
+  // If newPagesSet is still empty, estimate based on currentSurah and currentAyah
+  if (newPagesSet.size === 0 && student.currentSurah) {
+    const curPage = getPageOfAyah(student.currentSurah, student.currentAyah || 1);
+    // If student is in Juz Amma (582 - 604) or from beginning (1 - 604)
+    if (curPage >= 582) {
+      for (let p = 582; p <= curPage; p++) {
+        newPagesSet.add(p);
+      }
+    } else {
+      for (let p = 1; p <= curPage; p++) {
+        newPagesSet.add(p);
+      }
+    }
+  }
+
+  const uniqueNewPages = Array.from(newPagesSet).sort((a, b) => a - b);
+  const uniqueReviewPages = Array.from(reviewPagesSet).sort((a, b) => a - b);
+
+  return {
+    newPagesCount: uniqueNewPages.length,
+    reviewPagesCount: uniqueReviewPages.length,
+    totalPagesCount: uniqueNewPages.length, // Primary completed new memorization pages
+    uniqueNewPages,
+    uniqueReviewPages
+  };
+}
+

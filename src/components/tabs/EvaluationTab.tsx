@@ -1002,6 +1002,17 @@ export const EvaluationTab: React.FC<EvaluationTabProps> = ({
         }
       });
 
+      let pagesCompletedToday: number[] = [];
+      if (!todayNewDidNotRecite && todayNewItem) {
+        const startP = getPageOfAyah(todayNewItem.surahNumber, todayNewItem.fromAyah);
+        const endP = getPageOfAyah(todayNewItem.toSurahNumber || todayNewItem.surahNumber, todayNewItem.toAyah);
+        const minP = Math.min(startP, endP);
+        const maxP = Math.max(startP, endP);
+        for (let p = minP; p <= maxP; p++) {
+          pagesCompletedToday.push(p);
+        }
+      }
+
       const fullEvaluation: StudentEvaluation = {
         id: `eval_${selectedDate}_${activeStudent.id}`,
         date: selectedDate,
@@ -1020,7 +1031,8 @@ export const EvaluationTab: React.FC<EvaluationTabProps> = ({
           tomorrowReviewItems: tomReviews || [],
           tomorrowSuggestedSheikh: selectedSheikh || '',
           tomorrowDailyNote: dailyHomeNote || '',
-          criteriaPointsEarnedToday: calculatedCriteriaPoints
+          criteriaPointsEarnedToday: calculatedCriteriaPoints,
+          pagesCompletedToday
         },
         evaluatedAt: new Date().toISOString()
       };

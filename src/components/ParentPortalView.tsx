@@ -31,6 +31,7 @@ import {
 } from 'lucide-react';
 import { YouTubeAyahPlayer, formatTimeMMSS } from './recordings/YouTubeAyahPlayer';
 import { getAyahTextSync } from '../lib/quranTextService';
+import confetti from 'canvas-confetti';
 import {
   Student,
   AttendanceRecord,
@@ -332,6 +333,67 @@ export const ParentPortalView: React.FC<ParentPortalViewProps> = ({
   const [activePortalTargetAyah, setActivePortalTargetAyah] = useState<SurahRecordingSegment | null>(null);
   const [portalLiveTime, setPortalLiveTime] = useState<number>(0);
   const [listensCount, setListensCount] = useState<number>(0);
+  const [listeningCelebrationMsg, setListeningCelebrationMsg] = useState<string | null>(null);
+
+  const handleRecordListening = async () => {
+    const target = recordingsConfig?.dailyRepetitionTarget || 3;
+    const rewardPoints = recordingsConfig?.listeningPointsReward ?? settings?.dailyListeningPoints ?? 5;
+
+    if (listensCount >= target) {
+      // Reset counter
+      setListensCount(0);
+      return;
+    }
+
+    const nextCount = listensCount + 1;
+    setListensCount(nextCount);
+
+    if (nextCount >= target) {
+      const todayStr = new Date().toISOString().split('T')[0];
+      const alreadyAwarded = currentStudent.dailyListeningCompletedDate === todayStr;
+
+      if (!alreadyAwarded && onUpdateStudent) {
+        const updatedStudent: Student = {
+          ...currentStudent,
+          listeningPoints: (currentStudent.listeningPoints || 0) + rewardPoints,
+          points: (currentStudent.points || 0) + rewardPoints,
+          dailyListeningCompletedDate: todayStr
+        };
+        onUpdateStudent(updatedStudent);
+
+        try {
+          await OmranDataService.saveListeningLog({
+            id: `listen_${Date.now()}_${currentStudent.id}`,
+            studentId: currentStudent.id,
+            studentName: currentStudent.name,
+            halaqahId: currentStudent.halaqahId,
+            surahNumber: activeRecording?.surahNumber || currentStudent.currentSurah || 78,
+            surahName: activeRecording?.surahName || currentStudent.currentSurahName || 'النبأ',
+            fromAyah: 1,
+            toAyah: activeRecording?.segments?.length || 1,
+            targetCount: target,
+            completedCount: target,
+            isFullyCompleted: true,
+            date: todayStr,
+            timestamp: new Date().toISOString()
+          });
+        } catch (e) {
+          console.warn('Save listening log note:', e);
+        }
+
+        confetti({
+          particleCount: 80,
+          spread: 70,
+          origin: { y: 0.6 }
+        });
+        setListeningCelebrationMsg(`🎉 هنيئاً لك! أتممت الاستماع القرآني وحصلت على +${rewardPoints} نقاط تميز في رصيدك.`);
+        setTimeout(() => setListeningCelebrationMsg(null), 6000);
+      } else {
+        setListeningCelebrationMsg(`✨ رائع جداً! أتممت عدد مرات الاستماع المقررة (${target} مرات) اليوم.`);
+        setTimeout(() => setListeningCelebrationMsg(null), 4000);
+      }
+    }
+  };
 
   // Initialize selected recording based on student's current Surah
   React.useEffect(() => {
@@ -756,20 +818,26 @@ export const ParentPortalView: React.FC<ParentPortalViewProps> = ({
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-end">
+                  <div className="flex flex-col sm:flex-row items-center gap-3 w-full sm:w-auto justify-between sm:justify-end">
                     <span className="text-xs text-[#86efac]">
                       المكتمل: <strong className="text-[#fbbf24] text-sm">{listensCount}</strong> من {recordingsConfig?.dailyRepetitionTarget || 3}
                     </span>
                     <button
                       type="button"
-                      onClick={() => setListensCount(prev => (prev < (recordingsConfig?.dailyRepetitionTarget || 3) ? prev + 1 : 0))}
-                      className="px-3 py-1.5 rounded-xl bg-[#fbbf24] hover:bg-[#f59e0b] text-[#064e3b] text-xs font-black flex items-center gap-1.5 transition-all shadow-md cursor-pointer"
+                      onClick={handleRecordListening}
+                      className="px-4 py-2 rounded-xl bg-[#fbbf24] hover:bg-[#f59e0b] text-[#064e3b] text-xs font-black flex items-center gap-1.5 transition-all shadow-md cursor-pointer"
                     >
                       <Check className="w-4 h-4" />
                       <span>{listensCount >= (recordingsConfig?.dailyRepetitionTarget || 3) ? 'إعادة التعيين' : 'تسجيل استماع'}</span>
                     </button>
                   </div>
                 </div>
+
+                {listeningCelebrationMsg && (
+                  <div className="p-3.5 bg-gradient-to-r from-amber-500/20 via-emerald-500/20 to-amber-500/20 border-2 border-[#fbbf24] rounded-2xl text-[#fbbf24] text-xs font-black text-center shadow-lg animate-bounce">
+                    {listeningCelebrationMsg}
+                  </div>
+                )}
 
                 {/* Player & Ayah Segment Navigator Grid */}
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">

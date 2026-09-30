@@ -437,6 +437,13 @@ export interface StudentEvaluation {
   evaluatedAt: string;
 }
 
+export interface AbsenceMessageTemplate {
+  id: string;
+  title: string;
+  template: string; // e.g. "السلام عليكم ورحمة الله وبركاته، علومك شيخنا بشرنا عنك وعن {اسم_الولد} استغربنا غيابه اليوم بشر عساه بخير"
+  createdAt: string;
+}
+
 export interface AppSettings {
   allowStudentRegistration: boolean;
   workDaysPerWeek: number;
@@ -447,6 +454,7 @@ export interface AppSettings {
   newPagePoints?: number; // نقاط كل وجه جديد (الافتراضي: 5)
   reviewPagePoints?: number; // نقاط كل وجه مراجعة (الافتراضي: 1)
   dailyListeningPoints?: number; // نقاط إنجاز الاستماع اليومي (الافتراضي: 5)
+  absenceMessageTemplates?: AbsenceMessageTemplate[];
 }
 
 export interface ChatMessage {
@@ -659,7 +667,27 @@ export interface SurahRecording {
 
 export interface RecordingsConfig {
   isPublishedToStudents: boolean;
+  dailyRepetitionTarget?: number;
+  listeningPointsReward?: number; // نقاط إتمام الاستماع (المبرمج والمعلم المشرف)
   updatedAt: string;
+}
+
+/**
+ * Returns clean singular phone number for a student's parent.
+ */
+export function getStudentParentPhone(student?: Student | null): string {
+  if (!student) return '';
+  if (student.parentPhone && student.parentPhone.trim()) {
+    return student.parentPhone.trim();
+  }
+  if (Array.isArray(student.parentPhones) && student.parentPhones.length > 0) {
+    const valid = student.parentPhones.find(p => p && p.trim().length > 0);
+    if (valid) return valid.trim();
+  }
+  if (student.phone && student.phone.trim()) {
+    return student.phone.trim();
+  }
+  return '';
 }
 
 export interface StudentListeningLog {

@@ -707,12 +707,15 @@ export function App() {
     }
   }, [currentUser, isSupervisor, assignedHalaqahs, activeHalaqahId, scopedHalaqahIds]);
 
-  // Guard programmer-only tabs: recordings, accounts/ranks, and database backup are strictly for Programmer (Mohamed Montaser)
+  // Guard programmer-only tabs: accounts/ranks and database backup are strictly for Programmer (Mohamed Montaser), recordings is for developer & supervisor
   useEffect(() => {
-    if (!isDeveloper && (activeTab === 'recordings' || activeTab === 'accounts' || activeTab === 'backup')) {
+    if (!isDeveloper && (activeTab === 'accounts' || activeTab === 'backup')) {
       setActiveTab('home');
     }
-  }, [isDeveloper, activeTab]);
+    if (!isDeveloper && !isSupervisor && activeTab === 'recordings') {
+      setActiveTab('home');
+    }
+  }, [isDeveloper, isSupervisor, activeTab]);
 
   // Helper to check whether a student has an assigned halaqah
   const isStudentAssigned = (s: Student) => {
@@ -1434,6 +1437,7 @@ export function App() {
             isLoggedInStudent={!!currentUser}
             onLogout={handleLogout}
             onSaveSubmission={handleSaveSubmission}
+            onUpdateStudent={handleUpdateStudent}
           />
         </motion.div>
       </div>
@@ -1570,8 +1574,10 @@ export function App() {
     { id: 'attendance', label: 'الحضور والغياب', icon: UserCheck },
     { id: 'evaluation', label: 'تقييم التسميع', icon: BookOpen },
     { id: 'exams', label: 'قسم الاختبارات', icon: FileText, badge: scopedExams.length > 0 ? scopedExams.length : undefined },
+    ...(isDeveloper || isSupervisor ? [
+      { id: 'recordings', label: 'مقاطع التلاوة والواجبات', icon: Headphones, badge: recordings.length > 0 ? recordings.length : undefined }
+    ] : []),
     ...(isDeveloper ? [
-      { id: 'recordings', label: 'مقاطع التلاوة والواجبات', icon: Headphones, badge: recordings.length > 0 ? recordings.length : undefined },
       { id: 'accounts', label: 'إدارة الحسابات والرتب', icon: UserCog, badge: teachers.length }
     ] : []),
     { id: 'behavior', label: 'المخالفات السلوكية', icon: ShieldAlert, badge: displayedViolations.length > 0 ? displayedViolations.length : undefined },
@@ -1817,6 +1823,10 @@ export function App() {
                 onSaveAttendance={handleSaveAttendance}
                 settings={scopedSettings}
                 teacherName={currentTeacher?.name || currentUser?.username || scopedSettings.teacherName}
+                isDeveloper={isDeveloper}
+                onUpdateSettings={handleUpdateSettings}
+                complexName={activeComplex?.name || scopedSettings.complexName}
+                halaqahName={halaqahs.find(h => h.id === activeHalaqahId)?.name || scopedSettings.halaqahName}
               />
             )}
 
@@ -1858,13 +1868,17 @@ export function App() {
               />
             )}
 
-            {activeTab === 'recordings' && isDeveloper && (
+            {activeTab === 'recordings' && (isDeveloper || isSupervisor) && (
               <RecordingsTab
                 recordings={recordings}
                 recordingsConfig={recordingsConfig}
                 onSaveRecording={handleSaveRecording}
                 onDeleteRecording={handleDeleteRecording}
                 onSaveConfig={handleSaveRecordingsConfig}
+                isDeveloper={isDeveloper}
+                isSupervisor={isSupervisor}
+                settings={scopedSettings}
+                onUpdateSettings={handleUpdateSettings}
               />
             )}
 

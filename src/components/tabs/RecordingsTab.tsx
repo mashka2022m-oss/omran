@@ -33,7 +33,7 @@ import {
   Repeat,
   ArrowLeft
 } from 'lucide-react';
-import { SurahRecording, RecordingsConfig, SurahRecordingSegment } from '../../types';
+import { SurahRecording, RecordingsConfig, SurahRecordingSegment, AppSettings } from '../../types';
 import { QURAN_SURAHS, getSurahInfo } from '../../data/quranData';
 import { YouTubeAyahPlayer, formatTimeMMSS } from '../recordings/YouTubeAyahPlayer';
 import { loadAllQuranVerses, getSurahVerses, getAyahTextSync } from '../../lib/quranTextService';
@@ -44,6 +44,10 @@ interface RecordingsTabProps {
   onSaveRecording: (recording: SurahRecording) => Promise<void>;
   onDeleteRecording: (recordingId: string) => Promise<void>;
   onSaveConfig: (config: RecordingsConfig) => Promise<void>;
+  isDeveloper?: boolean;
+  isSupervisor?: boolean;
+  settings?: AppSettings;
+  onUpdateSettings?: (settings: AppSettings) => Promise<void>;
 }
 
 export const RecordingsTab: React.FC<RecordingsTabProps> = ({
@@ -51,12 +55,26 @@ export const RecordingsTab: React.FC<RecordingsTabProps> = ({
   recordingsConfig,
   onSaveRecording,
   onDeleteRecording,
-  onSaveConfig
+  onSaveConfig,
+  isDeveloper = false,
+  isSupervisor = false,
+  settings,
+  onUpdateSettings
 }) => {
   const [isAddingRecording, setIsAddingRecording] = useState(false);
   const [editingRecording, setEditingRecording] = useState<Partial<SurahRecording> | null>(null);
   const [recordingToDelete, setRecordingToDelete] = useState<SurahRecording | null>(null);
   const [previewingRecording, setPreviewingRecording] = useState<SurahRecording | null>(null);
+
+  // Listening Points & Repetition Target Configuration State (for Developer & Supervisor)
+  const [listeningRewardPoints, setListeningRewardPoints] = useState<number>(
+    recordingsConfig.listeningPointsReward ?? settings?.dailyListeningPoints ?? 5
+  );
+  const [dailyRepetitions, setDailyRepetitions] = useState<number>(
+    recordingsConfig.dailyRepetitionTarget ?? 3
+  );
+  const [isSavingPointsConfig, setIsSavingPointsConfig] = useState(false);
+  const [pointsConfigSuccess, setPointsConfigSuccess] = useState<string | null>(null);
 
   // Active playback state
   const [activeAyahIndex, setActiveAyahIndex] = useState<number>(0);
@@ -180,6 +198,38 @@ export const RecordingsTab: React.FC<RecordingsTabProps> = ({
       setStatusMsg({ type: 'error', text: 'فشل تعديل حالة التفعيل: ' + (e?.message || String(e)) });
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleSavePointsConfig = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      setIsSavingPointsConfig(true);
+      setPointsConfigSuccess(null);
+      const pointsVal = Math.max(1, Number(listeningRewardPoints) || 5);
+      const repVal = Math.max(1, Number(dailyRepetitions) || 3);
+
+      await onSaveConfig({
+        ...recordingsConfig,
+        listeningPointsReward: pointsVal,
+        dailyRepetitionTarget: repVal,
+        updatedAt: new Date().toISOString()
+      });
+
+      if (onUpdateSettings && settings) {
+        await onUpdateSettings({
+          ...settings,
+          dailyListeningPoints: pointsVal
+        });
+      }
+
+      setPointsConfigSuccess(`تم حفظ إعدادات الاستماع بنجاح! سيحصل الطالب على (${pointsVal}) نقاط عند إتمام الاستماع (${repVal}) مرات.`);
+      setTimeout(() => setPointsConfigSuccess(null), 4500);
+    } catch (err: any) {
+      console.error('Error saving listening points config:', err);
+      setStatusMsg({ type: 'error', text: 'حدث خطأ أثناء حفظ إعدادات نقاط الاستماع.' });
+    } finally {
+      setIsSavingPointsConfig(false);
     }
   };
 
@@ -679,6 +729,102 @@ export const RecordingsTab: React.FC<RecordingsTabProps> = ({
           </div>
         )}
       </div>
+
+      {/* Listening Points & Repetition Target Configuration Card (Programmer & Supervisor) */}
+      {(isDeveloper || isSupervisor) && (
+        <div className="bg-[#064e3b]/50 border-2 border-[#fbbf24]/40 rounded-3xl p-5 shadow-xl backdrop-blur-md space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-[#065f46]">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-amber-500/20 text-[#fbbf24] border border-amber-500/40 flex items-center justify-center shrink-0">
+                <Sliders className="w-5 h-5" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-sm font-bold text-white font-heading">
+                    إعدادات نقاط ومكافأة إتمام الاستماع القرآني
+                  </h3>
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#fbbf24]/20 text-[#fbbf24] font-bold border border-[#fbbf24]/30">
+                    صلاحية المشرف والمبرمج
+                  </span>
+                </div>
+                <p className="text-xs text-[#86efac]/80 mt-0.5">
+                  حدد عدد النقاط الممنوحة للطالب عند إكمال الاستماع القرآني المقرّر وعدد مرات التكرار المطلوبة يومياً.
+                </p>
+              </div>
+            </div>
+
+            {pointsConfigSuccess && (
+              <span className="text-xs text-amber-300 bg-amber-950/60 border border-amber-500/50 px-3 py-1.5 rounded-xl font-bold animate-fadeIn">
+                {pointsConfigSuccess}
+              </span>
+            )}
+          </div>
+
+          <form onSubmit={handleSavePointsConfig} className="grid grid-cols-1 sm:grid-cols-12 gap-4 items-end">
+            <div className="sm:col-span-5">
+              <label className="block text-xs font-bold text-emerald-200 mb-1.5">
+                نقاط إتمام الاستماع المقرّر (تُمنح للطالب):
+              </label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="number"
+                  min="1"
+                  max="100"
+                  value={listeningRewardPoints}
+                  onChange={e => setListeningRewardPoints(Number(e.target.value))}
+                  className="w-full bg-[#022c22] border border-[#065f46] focus:border-[#fbbf24] rounded-2xl py-2 px-3 text-xs text-white font-mono font-bold outline-none"
+                  required
+                />
+                <div className="flex items-center gap-1 shrink-0">
+                  {[5, 10, 15].map(pt => (
+                    <button
+                      key={pt}
+                      type="button"
+                      onClick={() => setListeningRewardPoints(pt)}
+                      className={`px-2 py-1 rounded-xl text-[10px] font-bold border transition-colors cursor-pointer ${
+                        listeningRewardPoints === pt
+                          ? 'bg-[#fbbf24] text-[#064e3b] border-amber-400 font-black'
+                          : 'bg-[#022c22] text-[#86efac] border-[#065f46] hover:bg-[#064e3b]'
+                      }`}
+                    >
+                      {pt} ن
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="sm:col-span-4">
+              <label className="block text-xs font-bold text-emerald-200 mb-1.5">
+                تكرار الاستماع المطلوب لاكتمال الواجب:
+              </label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="number"
+                  min="1"
+                  max="20"
+                  value={dailyRepetitions}
+                  onChange={e => setDailyRepetitions(Number(e.target.value))}
+                  className="w-full bg-[#022c22] border border-[#065f46] focus:border-[#fbbf24] rounded-2xl py-2 px-3 text-xs text-white font-mono font-bold outline-none"
+                  required
+                />
+                <span className="text-xs text-[#86efac] shrink-0 font-bold">مرات</span>
+              </div>
+            </div>
+
+            <div className="sm:col-span-3">
+              <button
+                type="submit"
+                disabled={isSavingPointsConfig}
+                className="w-full py-2.5 px-4 rounded-2xl bg-[#fbbf24] hover:bg-[#f59e0b] disabled:opacity-50 text-[#064e3b] font-black text-xs shadow-md transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                <Check className="w-4 h-4" />
+                <span>{isSavingPointsConfig ? 'جاري الحفظ...' : 'حفظ النقاط والإعدادات'}</span>
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
 
       {/* Filter and Search Bar */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-[#022c22]/80 border border-[#065f46] p-3 rounded-2xl">

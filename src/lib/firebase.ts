@@ -94,7 +94,9 @@ if (typeof window !== 'undefined') {
 }
 
 export const DEFAULT_RECORDINGS_CONFIG: RecordingsConfig = {
-  isPublishedToStudents: false,
+  isPublishedToStudents: true,
+  dailyRepetitionTarget: 3,
+  listeningPointsReward: 5,
   updatedAt: new Date().toISOString()
 };
 
@@ -218,6 +220,15 @@ export const DEFAULT_HALAQAHS: Halaqah[] = [
   }
 ];
 
+export const DEFAULT_ABSENCE_TEMPLATES = [
+  {
+    id: 'absence-template-default',
+    title: 'رسالة تفقد غياب ودية (الافتراضية)',
+    template: 'السلام عليكم ورحمة الله وبركاته، علومك شيخنا بشرنا عنك وعن {اسم_الولد}، استغربنا غيابه اليوم بشر عساه بخير؟',
+    createdAt: new Date().toISOString()
+  }
+];
+
 export const DEFAULT_SETTINGS: AppSettings = {
   allowStudentRegistration: true,
   workDaysPerWeek: 5,
@@ -226,7 +237,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   teacherName: 'معلم ومحفظ الحلقة',
   newPagePoints: 5,
   reviewPagePoints: 1,
-  dailyListeningPoints: 5
+  dailyListeningPoints: 5,
+  absenceMessageTemplates: DEFAULT_ABSENCE_TEMPLATES
 };
 
 // Initial Registered Teachers (Default Teacher Accounts)
@@ -260,6 +272,7 @@ export const INITIAL_STUDENTS: Student[] = [
     age: 12,
     parentName: 'أحمد السعيد',
     parentPhones: ['966501234567', '966551234567'],
+    parentPhone: '966501234567',
     currentSurah: 2,
     currentSurahName: 'البقرة',
     currentAyah: 45,
@@ -292,6 +305,7 @@ export const INITIAL_STUDENTS: Student[] = [
     age: 10,
     parentName: 'عمر الكردي',
     parentPhones: ['966507654321'],
+    parentPhone: '966507654321',
     currentSurah: 78,
     currentSurahName: 'النبأ',
     currentAyah: 16,
@@ -324,6 +338,7 @@ export const INITIAL_STUDENTS: Student[] = [
     age: 8,
     parentName: 'خالد القحطاني',
     parentPhones: ['966509876543'],
+    parentPhone: '966509876543',
     currentSurah: 93,
     currentSurahName: 'الضحى',
     currentAyah: 1,
@@ -1134,6 +1149,12 @@ export class OmranDataService {
         return false;
       }
       return true;
+    }).map(s => {
+      const parentPhone = s.parentPhone || (s.parentPhones && s.parentPhones.length > 0 ? s.parentPhones[0] : s.phone) || '';
+      return {
+        ...s,
+        parentPhone
+      };
     });
     setLocalCache(OMRAN_CACHE_KEYS.STUDENTS, merged);
     return merged;
@@ -1145,7 +1166,8 @@ export class OmranDataService {
 
   // Save Student directly with Dual Persistence
   static async saveStudent(student: Student): Promise<void> {
-    const clean = cleanFirestoreData(student);
+    const parentPhone = student.parentPhone || (student.parentPhones && student.parentPhones.length > 0 ? student.parentPhones[0] : student.phone) || '';
+    const clean = cleanFirestoreData({ ...student, parentPhone });
     const local = getLocalCache<Student[]>(OMRAN_CACHE_KEYS.STUDENTS, INITIAL_STUDENTS);
     const updated = [clean, ...local.filter(s => s.id !== clean.id)];
     setLocalCache(OMRAN_CACHE_KEYS.STUDENTS, updated);
