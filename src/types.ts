@@ -867,6 +867,7 @@ export interface CustomCertificateTemplate {
 
 export type CertificateOccasion =
   | 'شكر وتقدير وتميز'
+  | 'أدب وحسن خُلق'
   | 'إتمام جزء من القرآن الكريم'
   | 'إتمام سورة من القرآن الكريم'
   | 'اجتياز اختبار قرآني'

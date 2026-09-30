@@ -50,7 +50,7 @@ import {
   formatQuranPortion
 } from '../../data/quranData';
 import { KingFahdQuranModal, QuranHighlightItem } from '../quran/KingFahdQuranModal';
-import { getPageOfAyah } from '../../data/quranPagesData';
+import { getPageOfAyah, calculateStudentCompletedPages } from '../../data/quranPagesData';
 
 interface EvaluationTabProps {
   students: Student[];
@@ -1570,6 +1570,7 @@ export const EvaluationTab: React.FC<EvaluationTabProps> = ({
                 const isCompleted = currentAyah >= totalAyahs;
                 const isNearing = percent >= 75 && !isCompleted;
                 const isHalfway = percent >= 50 && percent < 75;
+                const pagesInfo = calculateStudentCompletedPages(activeStudent, evaluations);
 
                 const triggerCelebrationConfetti = () => {
                   try {
@@ -1696,6 +1697,28 @@ export const EvaluationTab: React.FC<EvaluationTabProps> = ({
                             <span>ختم السورة اليوم</span>
                           </button>
                         ) : null}
+                      </div>
+                    </div>
+
+                    {/* Calculated Recited Pages Strip (احتساب دقيق للأوجه المسمعة من واقع السجل) */}
+                    <div className="my-2.5 p-2.5 rounded-2xl bg-[#011a14]/80 border border-[#065f46] flex flex-wrap items-center justify-between gap-3 text-xs">
+                      <div className="flex items-center gap-2">
+                        <BookOpen className="w-4 h-4 text-[#fbbf24] shrink-0" />
+                        <span className="text-[#86efac] font-semibold">إجمالي الأوجه المسمّعة من السجل:</span>
+                        <span className="font-mono font-black text-amber-300 text-sm px-2 py-0.5 rounded-lg bg-[#064e3b] border border-[#065f46]">
+                          {pagesInfo.totalPagesCount} وجه
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2 text-[11px] text-emerald-200">
+                        <span className="bg-[#022c22] px-2 py-0.5 rounded-lg border border-[#065f46]">
+                          حفظ جديد: <strong className="text-white font-mono">{pagesInfo.newPagesCount}</strong> وجه
+                        </span>
+                        <span className="bg-[#022c22] px-2 py-0.5 rounded-lg border border-[#065f46]">
+                          مراجعة: <strong className="text-white font-mono">{pagesInfo.reviewPagesCount}</strong> وجه
+                        </span>
+                        <span className="bg-[#022c22] px-2 py-0.5 rounded-lg border border-[#065f46]">
+                          موضع المصحف: <strong className="text-[#fbbf24] font-mono">الوجه {pagesInfo.currentMushafPage}</strong> (الجزء {pagesInfo.currentJuz})
+                        </span>
                       </div>
                     </div>
 

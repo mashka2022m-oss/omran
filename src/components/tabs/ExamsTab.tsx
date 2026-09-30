@@ -43,6 +43,7 @@ import {
   Printer,
   X
 } from 'lucide-react';
+import jsPDF from 'jspdf';
 import {
   Exam,
   ExamQuestion,
@@ -3261,23 +3262,23 @@ export const ExamsTab: React.FC<ExamsTabProps> = ({
                 return (
                   <div
                     id="exam-printable-certificate"
-                    className="w-full max-w-[720px] aspect-[1.414/1] rounded-3xl relative overflow-hidden shadow-2xl flex flex-col justify-between p-8 sm:p-10 text-center border-4 border-[#fbbf24] bg-gradient-to-br from-[#022c22] via-[#064e3b] to-[#022c22] text-white select-none"
+                    className="w-full max-w-[760px] min-h-[520px] sm:min-h-[560px] md:aspect-[1.414/1] rounded-3xl relative overflow-hidden shadow-2xl flex flex-col justify-between p-5 sm:p-8 md:p-10 text-center border-4 border-[#fbbf24] bg-gradient-to-br from-[#022c22] via-[#064e3b] to-[#022c22] text-white select-none shrink-0 my-auto"
                   >
                     {/* Header */}
-                    <div className="space-y-1">
-                      <div className="font-quran text-base sm:text-lg font-bold text-[#fbbf24]">
+                    <div className="flex flex-col items-center justify-center pt-2 sm:pt-1 pb-1">
+                      <div className="font-quran text-sm sm:text-base md:text-lg font-bold text-[#fbbf24] tracking-wide leading-normal mb-1.5">
                         بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ
                       </div>
-                      <div className="font-quran text-[11px] sm:text-xs text-[#86efac]">
+                      <div className="font-quran text-[11px] sm:text-xs md:text-sm text-[#86efac] opacity-95 leading-relaxed mb-3 sm:mb-4 px-2 text-center max-w-lg">
                         ﴿ يَرْفَعِ اللَّهُ الَّذِينَ آمَنُوا مِنكُمْ وَالَّذِينَ أُوتُوا الْعِلْمَ دَرَجَاتٍ ﴾
                       </div>
-                      <h2 className="font-black text-xl sm:text-3xl text-[#fbbf24] font-heading mt-2">
+                      <h2 className="font-black text-xl sm:text-2xl md:text-3xl text-[#fbbf24] font-heading leading-normal py-1 tracking-normal">
                         شَهَادَةُ اجْتِيَازِ وَتَفَوُّقِ فِي الاخْتِبَارِ
                       </h2>
                     </div>
 
                     {/* Body */}
-                    <div className="space-y-3 my-auto py-2">
+                    <div className="space-y-2 sm:space-y-3 my-auto py-2">
                       <p className="text-xs sm:text-sm text-emerald-100/90 font-medium">
                         تَشْهَدُ إِدَارَةُ المَجْمَعِ القُرْآنِيِّ بِأَنَّ الطَّالِبَ النَّجِيبَ:
                       </p>
@@ -3316,24 +3317,111 @@ export const ExamsTab: React.FC<ExamsTabProps> = ({
               <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={() => {
-                    const prevTitle = document.title;
-                    document.title = `شهادة_اختبار_${selectedCertSubmission.studentName}`;
-                    window.print();
-                    document.title = prevTitle;
+                  onClick={async () => {
+                    const sub = selectedCertSubmission;
+                    if (!sub) return;
+                    try {
+                      const canvas = document.createElement('canvas');
+                      const width = 1754;
+                      const height = 1240;
+                      canvas.width = width;
+                      canvas.height = height;
+                      const ctx = canvas.getContext('2d');
+                      if (!ctx) return;
+                      try { await document.fonts.ready; } catch (e) {}
+
+                      const grad = ctx.createLinearGradient(0, 0, width, height);
+                      grad.addColorStop(0, '#022c22');
+                      grad.addColorStop(0.5, '#064e3b');
+                      grad.addColorStop(1, '#022c22');
+                      ctx.fillStyle = grad;
+                      ctx.fillRect(0, 0, width, height);
+
+                      ctx.lineWidth = 18;
+                      ctx.strokeStyle = '#fbbf24';
+                      ctx.strokeRect(36, 36, width - 72, height - 72);
+
+                      ctx.lineWidth = 3.5;
+                      ctx.strokeStyle = '#ffffff44';
+                      ctx.strokeRect(56, 56, width - 112, height - 112);
+
+                      ctx.fillStyle = '#fbbf24';
+                      ctx.textAlign = 'center';
+                      ctx.font = "bold 34px 'Amiri', serif";
+                      ctx.fillText('بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ', width / 2, 130);
+
+                      ctx.fillStyle = '#86efac';
+                      ctx.font = "24px 'Amiri', serif";
+                      ctx.fillText('﴿ يَرْفَعِ اللَّهُ الَّذِينَ آمَنُوا مِنكُمْ وَالَّذِينَ أُوتُوا الْعِلْمَ دَرَجَاتٍ ﴾', width / 2, 195);
+
+                      ctx.font = "900 58px 'Cairo', sans-serif";
+                      ctx.fillStyle = '#fbbf24';
+                      ctx.fillText('شَهَادَةُ اجْتِيَازِ وَتَفَوُّقِ فِي الاخْتِبَارِ', width / 2, 305);
+
+                      ctx.font = "26px 'Cairo', sans-serif";
+                      ctx.fillStyle = '#f0f9f6';
+                      ctx.fillText('تَشْهَدُ إِدَارَةُ المَجْمَعِ القُرْآنِيِّ بِأَنَّ الطَّالِبَ النَّجِيبَ:', width / 2, 410);
+
+                      ctx.font = "bold 70px 'Amiri', serif";
+                      ctx.fillStyle = '#fbbf24';
+                      ctx.fillText(sub.studentName, width / 2, 515);
+
+                      ctx.font = "bold 30px 'Cairo', sans-serif";
+                      ctx.fillStyle = '#ffffff';
+                      ctx.fillText(`قَدِ اجْتَازَ بِتَفَوُّقٍ وَجَدَارَةٍ: (${sub.examTitle})`, width / 2, 610);
+
+                      const pct = sub.percentage;
+                      const gradeLabel = pct >= 90 ? 'ممتاز مرتفع مع مرتبة الشرف' : (pct >= 80 ? 'جيد جداً مرتفع' : (pct >= 65 ? 'جيد' : 'اجتياز معتمد'));
+                      ctx.fillStyle = 'rgba(2, 44, 34, 0.9)';
+                      ctx.strokeStyle = '#fbbf24';
+                      ctx.lineWidth = 4;
+                      ctx.beginPath();
+                      ctx.roundRect(width / 2 - 320, 670, 640, 110, 24);
+                      ctx.fill();
+                      ctx.stroke();
+
+                      ctx.fillStyle = '#86efac';
+                      ctx.font = "20px 'Cairo', sans-serif";
+                      ctx.fillText('النتيجة والتقدير العام:', width / 2, 710);
+                      ctx.fillStyle = '#fbbf24';
+                      ctx.font = "bold 32px 'Cairo', sans-serif";
+                      ctx.fillText(`${sub.totalScoreEarned} / ${sub.maxPossibleScore} (${pct}%) • ${gradeLabel}`, width / 2, 755);
+
+                      ctx.font = "24px 'Cairo', sans-serif";
+                      ctx.fillStyle = '#86efac';
+                      ctx.fillText(`الحلقة: ${sub.halaqahName || 'الحلقة القرآنية'} • المحاولة #${sub.attemptNumber}`, width / 2, 840);
+
+                      const todayFmt = formatArabicDateTime(sub.submittedAt) || new Intl.DateTimeFormat('ar-SA', { dateStyle: 'long' }).format(new Date());
+                      ctx.font = "20px 'Cairo', sans-serif";
+                      ctx.fillStyle = '#86efac';
+                      ctx.textAlign = 'right';
+                      ctx.fillText(`تاريخ الاعتماد: ${todayFmt}`, width - 100, 1080);
+
+                      ctx.textAlign = 'left';
+                      ctx.fillStyle = '#fbbf24';
+                      ctx.font = "bold 22px 'Cairo', sans-serif";
+                      ctx.fillText('معتمد إلكترونياً • منصة عُمران', 100, 1080);
+
+                      const pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+                      pdf.addImage(canvas.toDataURL('image/jpeg', 0.95), 'JPEG', 0, 0, 297, 210);
+                      pdf.save(`شهادة_اختبار_${sub.studentName.replace(/\s+/g, '_')}.pdf`);
+                    } catch (e) {
+                      window.print();
+                    }
                   }}
-                  className="px-4 py-2 rounded-xl bg-[#064e3b] hover:bg-[#064e3b]/80 text-[#86efac] hover:text-white border border-[#065f46] font-bold text-xs flex items-center gap-1.5 cursor-pointer transition-all"
+                  className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-amber-400 to-amber-500 hover:brightness-110 text-[#064e3b] font-black text-xs flex items-center gap-1.5 cursor-pointer shadow-md transition-all"
                 >
-                  <Printer className="w-4 h-4 text-amber-300" />
-                  <span>تحميل كـ PDF فاخر</span>
+                  <Printer className="w-4 h-4 text-[#064e3b]" />
+                  <span>تنزيل كـ PDF فاخر</span>
                 </button>
               </div>
 
               <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={() => {
+                  onClick={async () => {
                     const sub = selectedCertSubmission;
+                    if (!sub) return;
                     const studentObj = students.find(s => s.id === sub.studentId || s.name === sub.studentName);
                     const parentPhone = studentObj ? getStudentParentPhone(studentObj) : '';
                     const cleanPhone = parentPhone ? parentPhone.replace(/\D/g, '') : '';
@@ -3342,20 +3430,127 @@ export const ExamsTab: React.FC<ExamsTabProps> = ({
 *(${sub.examTitle})*
 بجدارة وتفوق، وحصوله على درجة: *${sub.totalScoreEarned} من ${sub.maxPossibleScore} (${sub.percentage}%)*.
 
+📄 *مرفق مع هذه الرسالة ملف الشهادة المعتمدة (PDF).*
 بارك الله في جهوده وجهودكم المباركة في تربيته على مائدة القرآن العظيم.
 مع تحيات إدارة حلقة: ${sub.halaqahName || 'القرآن الكريم'}`;
+
+                    try {
+                      const canvas = document.createElement('canvas');
+                      const width = 1754;
+                      const height = 1240;
+                      canvas.width = width;
+                      canvas.height = height;
+                      const ctx = canvas.getContext('2d');
+                      if (ctx) {
+                        try { await document.fonts.ready; } catch (e) {}
+
+                        const grad = ctx.createLinearGradient(0, 0, width, height);
+                        grad.addColorStop(0, '#022c22');
+                        grad.addColorStop(0.5, '#064e3b');
+                        grad.addColorStop(1, '#022c22');
+                        ctx.fillStyle = grad;
+                        ctx.fillRect(0, 0, width, height);
+
+                        ctx.lineWidth = 18;
+                        ctx.strokeStyle = '#fbbf24';
+                        ctx.strokeRect(36, 36, width - 72, height - 72);
+
+                        ctx.lineWidth = 3.5;
+                        ctx.strokeStyle = '#ffffff44';
+                        ctx.strokeRect(56, 56, width - 112, height - 112);
+
+                        ctx.fillStyle = '#fbbf24';
+                        ctx.textAlign = 'center';
+                        ctx.font = "bold 34px 'Amiri', serif";
+                        ctx.fillText('بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ', width / 2, 130);
+
+                        ctx.fillStyle = '#86efac';
+                        ctx.font = "24px 'Amiri', serif";
+                        ctx.fillText('﴿ يَرْفَعِ اللَّهُ الَّذِينَ آمَنُوا مِنكُمْ وَالَّذِينَ أُوتُوا الْعِلْمَ دَرَجَاتٍ ﴾', width / 2, 195);
+
+                        ctx.font = "900 58px 'Cairo', sans-serif";
+                        ctx.fillStyle = '#fbbf24';
+                        ctx.fillText('شَهَادَةُ اجْتِيَازِ وَتَفَوُّقِ فِي الاخْتِبَارِ', width / 2, 305);
+
+                        ctx.font = "26px 'Cairo', sans-serif";
+                        ctx.fillStyle = '#f0f9f6';
+                        ctx.fillText('تَشْهَدُ إِدَارَةُ المَجْمَعِ القُرْآنِيِّ بِأَنَّ الطَّالِبَ النَّجِيبَ:', width / 2, 410);
+
+                        ctx.font = "bold 70px 'Amiri', serif";
+                        ctx.fillStyle = '#fbbf24';
+                        ctx.fillText(sub.studentName, width / 2, 515);
+
+                        ctx.font = "bold 30px 'Cairo', sans-serif";
+                        ctx.fillStyle = '#ffffff';
+                        ctx.fillText(`قَدِ اجْتَازَ بِتَفَوُّقٍ وَجَدَارَةٍ: (${sub.examTitle})`, width / 2, 610);
+
+                        const pct = sub.percentage;
+                        const gradeLabel = pct >= 90 ? 'ممتاز مرتفع مع مرتبة الشرف' : (pct >= 80 ? 'جيد جداً مرتفع' : (pct >= 65 ? 'جيد' : 'اجتياز معتمد'));
+                        ctx.fillStyle = 'rgba(2, 44, 34, 0.9)';
+                        ctx.strokeStyle = '#fbbf24';
+                        ctx.lineWidth = 4;
+                        ctx.beginPath();
+                        ctx.roundRect(width / 2 - 320, 670, 640, 110, 24);
+                        ctx.fill();
+                        ctx.stroke();
+
+                        ctx.fillStyle = '#86efac';
+                        ctx.font = "20px 'Cairo', sans-serif";
+                        ctx.fillText('النتيجة والتقدير العام:', width / 2, 710);
+                        ctx.fillStyle = '#fbbf24';
+                        ctx.font = "bold 32px 'Cairo', sans-serif";
+                        ctx.fillText(`${sub.totalScoreEarned} / ${sub.maxPossibleScore} (${pct}%) • ${gradeLabel}`, width / 2, 755);
+
+                        ctx.font = "24px 'Cairo', sans-serif";
+                        ctx.fillStyle = '#86efac';
+                        ctx.fillText(`الحلقة: ${sub.halaqahName || 'الحلقة القرآنية'} • المحاولة #${sub.attemptNumber}`, width / 2, 840);
+
+                        const todayFmt = formatArabicDateTime(sub.submittedAt) || new Intl.DateTimeFormat('ar-SA', { dateStyle: 'long' }).format(new Date());
+                        ctx.font = "20px 'Cairo', sans-serif";
+                        ctx.fillStyle = '#86efac';
+                        ctx.textAlign = 'right';
+                        ctx.fillText(`تاريخ الاعتماد: ${todayFmt}`, width - 100, 1080);
+
+                        ctx.textAlign = 'left';
+                        ctx.fillStyle = '#fbbf24';
+                        ctx.font = "bold 22px 'Cairo', sans-serif";
+                        ctx.fillText('معتمد إلكترونياً • منصة عُمران', 100, 1080);
+
+                        const pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+                        pdf.addImage(canvas.toDataURL('image/jpeg', 0.95), 'JPEG', 0, 0, 297, 210);
+                        const pdfBlob = pdf.output('blob');
+                        const fileName = `شهادة_اختبار_${sub.studentName.replace(/\s+/g, '_')}.pdf`;
+                        const pdfFile = new File([pdfBlob], fileName, { type: 'application/pdf' });
+
+                        if (navigator.canShare && navigator.canShare({ files: [pdfFile] })) {
+                          try {
+                            await navigator.share({
+                              files: [pdfFile],
+                              title: `شهادة اختبار: ${sub.studentName}`,
+                              text: message
+                            });
+                            return;
+                          } catch (shErr: any) {
+                            if (shErr.name === 'AbortError') return;
+                          }
+                        }
+
+                        pdf.save(fileName);
+                      }
+                    } catch (e) {
+                      console.error('Error generating PDF for WhatsApp:', e);
+                    }
 
                     if (cleanPhone) {
                       window.open(`https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`, '_blank');
                     } else {
-                      navigator.clipboard.writeText(message);
-                      alert(`تم نسخ نص رسالة التهنئة للطالب (${sub.studentName}) بنجاح.`);
+                      window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, '_blank');
                     }
                   }}
                   className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-green-600 hover:brightness-110 text-white font-black text-xs flex items-center gap-1.5 shadow-md cursor-pointer transition-all"
                 >
                   <Send className="w-4 h-4" />
-                  <span>إرسال عبر واتساب لولي الأمر</span>
+                  <span>إرسال عبر واتساب (ملف PDF)</span>
                 </button>
               </div>
             </div>

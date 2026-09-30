@@ -745,7 +745,14 @@ export const PrintableQuranicReport: React.FC<PrintableQuranicReportProps> = ({
                               : ev.recitationDetails?.newMemorizationAchieved || '—';
 
                             const revRec = ev.recitationDetails?.todayReviewItems && ev.recitationDetails.todayReviewItems.length > 0
-                              ? ev.recitationDetails.todayReviewItems.map(item => `سورة ${getSurahInfo(item.surahNumber).name} (${item.fromAyah || 1}-${item.toAyah || 1})`).join(' • ')
+                              ? ev.recitationDetails.todayReviewItems.map(item => {
+                                  const s1 = getSurahInfo(item.surahNumber || 78);
+                                  const s2 = item.toSurahNumber ? getSurahInfo(item.toSurahNumber) : s1;
+                                  if (item.toSurahNumber && item.toSurahNumber !== item.surahNumber) {
+                                    return `من سورة ${s1.name} (آية ${item.fromAyah || 1}) إلى سورة ${s2.name} (آية ${item.toAyah || 1})`;
+                                  }
+                                  return `سورة ${s1.name} (${item.fromAyah || 1}-${item.toAyah || 1})`;
+                                }).join(' • ')
                               : ev.recitationDetails?.reviewAchieved || '—';
 
                             const firstCritScore = Object.values(ev.criteriaValues || {})[0];
@@ -939,23 +946,19 @@ export const PrintableQuranicReport: React.FC<PrintableQuranicReportProps> = ({
                     <span>الاعتماد الإلكتروني الرسمي للمنظومة:</span>
                   </div>
                   <p style={{ fontSize: '7.5pt', color: '#1e293b' }}>
-                    هذه الوثيقة صادرة ومعتمدة إلكترونياً من <strong style={{ color: '#064e3b' }}>{settings.complexName || 'منظومة عُمران'}</strong>
-                  </p>
-                  <p style={{ fontSize: '7pt', color: '#64748b' }}>
-                    تاريخ الاعتماد: {todayFormatted} • موافق {todayGregorian}
+                    هذه الوثيقة صادرة ومعتمدة إلكترونياً من إدارة المجمع القرآني
                   </p>
                 </div>
 
-                {/* Circular Golden Accreditation Seal */}
-                <div className="seal-badge">
-                  <span style={{ fontSize: '7pt', color: '#b45309', fontWeight: 'bold', lineHeight: 1.2 }}>معتمد إلكترونياً</span>
+                {/* Bottom Left: Strictly ONLY 'معتمد إلكترونياً' */}
+                <div className="seal-badge" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <span style={{ fontSize: '7.5pt', color: '#b45309', fontWeight: '900', lineHeight: 1.2 }}>معتمد إلكترونياً</span>
                 </div>
               </div>
 
               {/* 4. FOOTER VERSE */}
               <div className="doc-footer">
                 <span>﴿ إِنَّا نَحْنُ نَزَّلْنَا الذِّكْرَ وَإِنَّا لَهُ لَحَافِظُونَ ﴾</span>
-                <span style={{ fontWeight: 'bold', color: '#064e3b' }}>منظومة عُمْرَان لإدارة المجمعات القرآنية • وثيقة رسمية معتمدة</span>
                 <span>صفحة 1 من 1</span>
               </div>
             </div>

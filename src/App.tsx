@@ -1576,6 +1576,7 @@ export function App() {
     { id: 'attendance', label: 'الحضور والغياب', icon: UserCheck },
     { id: 'evaluation', label: 'تقييم التسميع', icon: BookOpen },
     { id: 'exams', label: 'قسم الاختبارات', icon: FileText, badge: scopedExams.length > 0 ? scopedExams.length : undefined },
+    { id: 'certificates', label: 'قسم الشهادات', icon: Award },
     ...(isDeveloper || isSupervisor ? [
       { id: 'recordings', label: 'مقاطع التلاوة والواجبات', icon: Headphones, badge: recordings.length > 0 ? recordings.length : undefined }
     ] : []),
@@ -1584,7 +1585,7 @@ export function App() {
     ] : []),
     { id: 'behavior', label: 'المخالفات السلوكية', icon: ShieldAlert, badge: displayedViolations.length > 0 ? displayedViolations.length : undefined },
     { id: 'parents', label: 'رسائل الواتساب', icon: MessageCircle },
-    { id: 'reports', label: 'التقارير الدورية', icon: Award },
+    { id: 'reports', label: 'التقارير الدورية', icon: ClipboardList },
     ...(isDeveloper ? [
       { id: 'backup', label: 'النسخ الاحتياطي', icon: Database }
     ] : [])
@@ -1867,6 +1868,19 @@ export function App() {
                 onDeleteSubmission={handleDeleteSubmission}
                 onSaveLeaderboardSettings={handleSaveLeaderboardSettings}
                 onRefreshGoogleAuth={handleRefreshGoogleAuth}
+              />
+            )}
+
+            {activeTab === 'certificates' && (
+              <CertificatesTab
+                students={assignedDisplayedStudents}
+                halaqahs={scopedHalaqahs}
+                settings={scopedSettings}
+                currentUserName={currentTeacher?.name || currentUser?.username || scopedSettings.teacherName}
+                isSupervisor={isSupervisor}
+                isDeveloper={isDeveloper}
+                activeHalaqahId={activeHalaqahId}
+                onUpdateSettings={handleUpdateSettings}
               />
             )}
 

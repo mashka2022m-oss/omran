@@ -396,6 +396,9 @@ export function calculateStudentCompletedPages(
   totalPagesCount: number;
   uniqueNewPages: number[];
   uniqueReviewPages: number[];
+  currentMushafPage?: number;
+  currentJuz?: number;
+  currentSurahName?: string;
 } {
   if (!student) {
     return {
@@ -403,7 +406,10 @@ export function calculateStudentCompletedPages(
       reviewPagesCount: 0,
       totalPagesCount: 0,
       uniqueNewPages: [],
-      uniqueReviewPages: []
+      uniqueReviewPages: [],
+      currentMushafPage: 582,
+      currentJuz: 30,
+      currentSurahName: 'النبأ'
     };
   }
 
@@ -465,29 +471,64 @@ export function calculateStudentCompletedPages(
 
     // 4. Text fallback for older/legacy evaluations
     if (!details.todayNewItem && details.newMemorizationAchieved) {
+      // Find any surah mentioned by name in text
+      let matchedSurahNum = student.currentSurah || 78;
+      for (const s of QURAN_SURAHS) {
+        if (details.newMemorizationAchieved.includes(s.name)) {
+          matchedSurahNum = s.number;
+          break;
+        }
+      }
+      const sInfo = getSurahInfo(matchedSurahNum);
       const match = details.newMemorizationAchieved.match(/(\d+)\s*[-–—]\s*(\d+)/);
-      if (match && student.currentSurah) {
-        const fromA = parseInt(match[1], 10);
-        const toA = parseInt(match[2], 10);
-        const p1 = getPageOfAyah(student.currentSurah, fromA);
-        const p2 = getPageOfAyah(student.currentSurah, toA);
+      if (match) {
+        const fromA = Math.max(1, parseInt(match[1], 10));
+        const toA = Math.min(sInfo.numberOfAyahs, parseInt(match[2], 10));
+        const p1 = getPageOfAyah(matchedSurahNum, fromA);
+        const p2 = getPageOfAyah(matchedSurahNum, toA);
         for (let p = Math.min(p1, p2); p <= Math.max(p1, p2); p++) {
           newPagesSet.add(p);
+        }
+      } else if (details.newMemorizationAchieved.includes('كاملة')) {
+        const p1 = getPageOfAyah(matchedSurahNum, 1);
+        const p2 = getPageOfAyah(matchedSurahNum, sInfo.numberOfAyahs);
+        for (let p = Math.min(p1, p2); p <= Math.max(p1, p2); p++) {
+          newPagesSet.add(p);
+        }
+      }
+    }
+
+    // 5. Review text fallback
+    if ((!details.todayReviewItems || details.todayReviewItems.length === 0) && details.reviewAchieved) {
+      for (const s of QURAN_SURAHS) {
+        if (details.reviewAchieved.includes(s.name)) {
+          const sInfo = getSurahInfo(s.number);
+          const match = details.reviewAchieved.match(/(\d+)\s*[-–—]\s*(\d+)/);
+          const fromA = match ? Math.max(1, parseInt(match[1], 10)) : 1;
+          const toA = match ? Math.min(sInfo.numberOfAyahs, parseInt(match[2], 10)) : sInfo.numberOfAyahs;
+          const p1 = getPageOfAyah(s.number, fromA);
+          const p2 = getPageOfAyah(s.number, toA);
+          for (let p = Math.min(p1, p2); p <= Math.max(p1, p2); p++) {
+            reviewPagesSet.add(p);
+          }
         }
       }
     }
   }
 
   // If newPagesSet is still empty, estimate based on currentSurah and currentAyah
+  const curSurah = student.currentSurah || 78;
+  const curAyah = student.currentAyah || 1;
+  const currentMushafPage = getPageOfAyah(curSurah, curAyah);
+  const curPageInfo = getKingFahdPageInfo(currentMushafPage);
+
   if (newPagesSet.size === 0 && student.currentSurah) {
-    const curPage = getPageOfAyah(student.currentSurah, student.currentAyah || 1);
-    // If student is in Juz Amma (582 - 604) or from beginning (1 - 604)
-    if (curPage >= 582) {
-      for (let p = 582; p <= curPage; p++) {
+    if (currentMushafPage >= 582) {
+      for (let p = 582; p <= currentMushafPage; p++) {
         newPagesSet.add(p);
       }
     } else {
-      for (let p = 1; p <= curPage; p++) {
+      for (let p = 1; p <= currentMushafPage; p++) {
         newPagesSet.add(p);
       }
     }
@@ -501,7 +542,10 @@ export function calculateStudentCompletedPages(
     reviewPagesCount: uniqueReviewPages.length,
     totalPagesCount: uniqueNewPages.length, // Primary completed new memorization pages
     uniqueNewPages,
-    uniqueReviewPages
+    uniqueReviewPages,
+    currentMushafPage,
+    currentJuz: curPageInfo.juz,
+    currentSurahName: getSurahInfo(curSurah).name
   };
 }
 

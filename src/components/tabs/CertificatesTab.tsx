@@ -38,6 +38,7 @@ import {
 } from '../../types';
 import { QURAN_SURAHS, getSurahInfo } from '../../data/quranData';
 import { OmranDataService, OMRAN_CACHE_KEYS, getLocalCache } from '../../lib/firebase';
+import jsPDF from 'jspdf';
 
 interface CertificatesTabProps {
   students: Student[];
@@ -206,6 +207,8 @@ export const CertificatesTab: React.FC<CertificatesTabProps> = ({
   const [isGeneratedModalOpen, setIsGeneratedModalOpen] = useState(false);
   const [previewStudentIndex, setPreviewStudentIndex] = useState(0);
   const [copiedNotification, setCopiedNotification] = useState<string | null>(null);
+  const [isExporting, setIsExporting] = useState(false);
+  const [exportStatusText, setExportStatusText] = useState<string | null>(null);
 
   // ---------------------------------------------------------------------------
   // TRACK 2: CUSTOM TEMPLATE BUILDER STATE
@@ -458,144 +461,175 @@ export const CertificatesTab: React.FC<CertificatesTabProps> = ({
   // ---------------------------------------------------------------------------
   // EXPORT AND DOWNLOAD HANDLERS
   // ---------------------------------------------------------------------------
-  // Download single certificate as high-res PNG image
-  const handleDownloadSinglePNG = async (student: Student, index: number) => {
-    const certElement = document.getElementById(`cert-rendered-${student.id}`) ||
-                        document.getElementById('cert-single-preview');
-    if (!certElement) return;
+  // Helper to render high-resolution canvas for a student's certificate
+  const renderCertificateCanvas = async (student: Student, _index: number): Promise<HTMLCanvasElement> => {
+    const canvas = document.createElement('canvas');
+    // High-resolution A4 landscape ratio (1754 x 1240)
+    const width = 1754;
+    const height = 1240;
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) throw new Error('Could not get canvas context');
 
     try {
-      // Use Canvas to draw the certificate
-      const canvas = document.createElement('canvas');
-      const width = 1200;
-      const height = 850;
-      canvas.width = width;
-      canvas.height = height;
-      const ctx = canvas.getContext('2d');
-      if (!ctx) return;
+      await document.fonts.ready;
+    } catch (e) {}
 
-      // If custom template with background image:
-      if (activeTemplate.type === 'custom') {
-        const img = new Image();
-        img.crossOrigin = 'anonymous';
-        img.src = activeTemplate.data.imageUrl;
-        await new Promise((resolve) => {
-          img.onload = resolve;
-        });
-        ctx.drawImage(img, 0, 0, width, height);
+    if (activeTemplate.type === 'custom') {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.src = activeTemplate.data.imageUrl;
+      await new Promise((resolve, reject) => {
+        img.onload = resolve;
+        img.onerror = reject;
+      });
+      ctx.drawImage(img, 0, 0, width, height);
 
-        // Draw student name
-        const pos = activeTemplate.data.studentNamePosition;
-        ctx.font = `${pos.fontWeight || 'bold'} ${pos.fontSize * 1.5}px ${pos.fontFamily || 'Amiri'}`;
-        ctx.fillStyle = pos.color || '#064e3b';
-        ctx.textAlign = pos.textAlign || 'center';
-        const px = (pos.x / 100) * width;
-        const py = (pos.y / 100) * height;
-        ctx.fillText(student.name, px, py);
+      // Student Name
+      const pos = activeTemplate.data.studentNamePosition;
+      const fFamily = ARABIC_FONTS.find(f => f.id === pos.fontFamily)?.id || 'Amiri';
+      ctx.font = `${pos.fontWeight || 'bold'} ${Math.round(pos.fontSize * 1.8)}px '${fFamily}', serif`;
+      ctx.fillStyle = pos.color || '#064e3b';
+      ctx.textAlign = pos.textAlign || 'center';
+      const px = (pos.x / 100) * width;
+      const py = (pos.y / 100) * height;
+      ctx.fillText(student.name, px, py);
 
-        // Draw date if enabled
-        if (activeTemplate.data.showDate && activeTemplate.data.datePosition) {
-          const dPos = activeTemplate.data.datePosition;
-          ctx.font = `${dPos.fontSize * 1.5}px ${dPos.fontFamily || 'Cairo'}`;
-          ctx.fillStyle = dPos.color || '#4b5563';
-          ctx.textAlign = dPos.textAlign || 'center';
-          ctx.fillText(todayArabic, (dPos.x / 100) * width, (dPos.y / 100) * height);
-        }
+      // Date if enabled
+      if (activeTemplate.data.showDate && activeTemplate.data.datePosition) {
+        const dPos = activeTemplate.data.datePosition;
+        const dFamily = ARABIC_FONTS.find(f => f.id === dPos.fontFamily)?.id || 'Cairo';
+        ctx.font = `${Math.round(dPos.fontSize * 1.8)}px '${dFamily}', sans-serif`;
+        ctx.fillStyle = dPos.color || '#4b5563';
+        ctx.textAlign = dPos.textAlign || 'center';
+        ctx.fillText(todayArabic, (dPos.x / 100) * width, (dPos.y / 100) * height);
+      }
+    } else {
+      // Ready-made platform certificate
+      const grad = ctx.createLinearGradient(0, 0, width, height);
+      if (activeTemplate.data.id === 'platform_emerald_royal') {
+        grad.addColorStop(0, '#022c22');
+        grad.addColorStop(0.5, '#064e3b');
+        grad.addColorStop(1, '#022c22');
+      } else if (activeTemplate.data.id === 'platform_imperial_gold') {
+        grad.addColorStop(0, '#fffdf5');
+        grad.addColorStop(0.5, '#fef9c3');
+        grad.addColorStop(1, '#fef08a');
+      } else if (activeTemplate.data.id === 'platform_celestial_sapphire') {
+        grad.addColorStop(0, '#0f172a');
+        grad.addColorStop(0.5, '#1e293b');
+        grad.addColorStop(1, '#0f172a');
       } else {
-        // Draw ready-made certificate directly
-        // Background
-        const grad = ctx.createLinearGradient(0, 0, width, height);
-        if (activeTemplate.data.id === 'platform_emerald_royal') {
-          grad.addColorStop(0, '#022c22');
-          grad.addColorStop(0.5, '#064e3b');
-          grad.addColorStop(1, '#022c22');
-        } else if (activeTemplate.data.id === 'platform_imperial_gold') {
-          grad.addColorStop(0, '#fffdf5');
-          grad.addColorStop(0.5, '#fef9c3');
-          grad.addColorStop(1, '#fef08a');
-        } else if (activeTemplate.data.id === 'platform_celestial_sapphire') {
-          grad.addColorStop(0, '#0f172a');
-          grad.addColorStop(0.5, '#1e293b');
-          grad.addColorStop(1, '#0f172a');
-        } else {
-          grad.addColorStop(0, '#fffefb');
-          grad.addColorStop(1, '#fffefb');
-        }
-        ctx.fillStyle = grad;
-        ctx.fillRect(0, 0, width, height);
+        grad.addColorStop(0, '#fffefb');
+        grad.addColorStop(1, '#fffefb');
+      }
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, width, height);
 
-        // Golden Frame Borders
-        ctx.lineWidth = 14;
-        ctx.strokeStyle = activeTemplate.data.accentColor;
-        ctx.strokeRect(30, 30, width - 60, height - 60);
+      // Outer gold border
+      ctx.lineWidth = 18;
+      ctx.strokeStyle = activeTemplate.data.accentColor;
+      ctx.strokeRect(36, 36, width - 72, height - 72);
 
-        ctx.lineWidth = 3;
-        ctx.strokeStyle = '#ffffff44';
-        ctx.strokeRect(45, 45, width - 90, height - 90);
+      // Inner thin border
+      ctx.lineWidth = 3.5;
+      ctx.strokeStyle = activeTemplate.data.id === 'platform_imperial_gold' ? '#b4530944' : '#ffffff44';
+      ctx.strokeRect(56, 56, width - 112, height - 112);
 
-        // Header Title
-        ctx.fillStyle = activeTemplate.data.accentColor;
-        ctx.textAlign = 'center';
-        ctx.font = "bold 26px 'Amiri', serif";
-        ctx.fillText('بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ', width / 2, 90);
+      // 1. Basmalah
+      ctx.fillStyle = activeTemplate.data.accentColor;
+      ctx.textAlign = 'center';
+      ctx.font = "bold 34px 'Amiri', serif";
+      ctx.fillText('بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ', width / 2, 130);
 
-        ctx.font = "bold 20px 'Amiri', serif";
-        ctx.fillText('﴿ يَرْفَعِ اللَّهُ الَّذِينَ آمَنُوا مِنكُمْ وَالَّذِينَ أُوتُوا الْعِلْمَ دَرَجَاتٍ ﴾', width / 2, 130);
+      // 2. Quranic Ayah
+      ctx.font = "24px 'Amiri', serif";
+      ctx.fillText('﴿ يَرْفَعِ اللَّهُ الَّذِينَ آمَنُوا مِنكُمْ وَالَّذِينَ أُوتُوا الْعِلْمَ دَرَجَاتٍ ﴾', width / 2, 195);
 
-        ctx.font = "900 46px 'Cairo', sans-serif";
-        ctx.fillStyle = activeTemplate.data.accentColor;
-        ctx.fillText('شَهَادَةُ تَمَيُّزٍ وَإِتْقَانٍ قُرْآنِيٍّ', width / 2, 210);
+      // 3. Title
+      ctx.font = "900 58px 'Cairo', sans-serif";
+      ctx.fillStyle = activeTemplate.data.accentColor;
+      ctx.fillText('شَهَادَةُ تَمَيُّزٍ وَإِتْقَانٍ قُرْآنِيٍّ', width / 2, 305);
 
-        ctx.font = "22px 'Cairo', sans-serif";
-        ctx.fillStyle = activeTemplate.data.textColor;
-        ctx.fillText('يَسُرُّ إِدَارَةَ الحِلْقَةِ أَنْ تَمْنَحَ هذِهِ الشَّهَادَةَ المُبَارَكَةَ لِلطَّالِبِ النَّجِيبِ:', width / 2, 280);
+      // 4. Intro text
+      ctx.font = "26px 'Cairo', sans-serif";
+      ctx.fillStyle = activeTemplate.data.textColor;
+      ctx.fillText('يَسُرُّ إِدَارَةَ الحِلْقَةِ أَنْ تَمْنَحَ هذِهِ الشَّهَادَةَ المُبَارَكَةَ لِلطَّالِبِ النَّجِيبِ:', width / 2, 400);
 
-        // Student Name Prominently
-        ctx.font = "bold 52px 'Amiri', serif";
-        ctx.fillStyle = activeTemplate.data.accentColor;
-        ctx.fillText(student.name, width / 2, 360);
+      // 5. Student Name
+      ctx.font = "bold 68px 'Amiri', serif";
+      ctx.fillStyle = activeTemplate.data.accentColor;
+      ctx.fillText(student.name, width / 2, 510);
 
-        // Occasion Details
-        ctx.font = "20px 'Cairo', sans-serif";
-        ctx.fillStyle = activeTemplate.data.textColor;
-        const occText = getOccasionDescription();
-        ctx.fillText(occText, width / 2, 430);
+      // 6. Occasion
+      ctx.font = "26px 'Cairo', sans-serif";
+      ctx.fillStyle = activeTemplate.data.textColor;
+      const occText = getOccasionDescription();
+      ctx.fillText(occText, width / 2, 600);
 
-        // Halaqah and Complex
-        const halaqahName = student.halaqahName || settings.halaqahName;
-        const complexName = settings.complexName || 'منظومة عُمران';
-        ctx.font = "18px 'Cairo', sans-serif";
-        ctx.fillText(`الحلقة: ${halaqahName} • ${complexName}`, width / 2, 500);
+      // 7. Halaqah & Complex
+      const halaqahName = student.halaqahName || settings.halaqahName;
+      const complexName = settings.complexName || 'منظومة عُمران';
+      ctx.font = "22px 'Cairo', sans-serif";
+      ctx.fillText(`الحلقة: ${halaqahName} • المجمع: ${complexName}`, width / 2, 680);
 
-        // Date
-        ctx.font = "16px 'Cairo', sans-serif";
-        ctx.fillStyle = activeTemplate.data.textColor;
-        ctx.fillText(`تاريخ الإصدار: ${todayArabic} • موافق ${todayGregorian}`, width / 2, 550);
+      // 8. Signatures
+      if (signatureMode !== 'none') {
+        const tName = signatureMode === 'custom' ? customTeacherName : (student.halaqahName ? `معلم ${student.halaqahName}` : settings.teacherName);
+        const sName = signatureMode === 'custom' ? customSupervisorName : (settings.complexName ? `مشرف ${settings.complexName}` : 'المشرف العام');
 
-        // Signatures
-        if (signatureMode !== 'none') {
-          const tName = signatureMode === 'custom' ? customTeacherName : (student.halaqahName ? `معلم ${student.halaqahName}` : settings.teacherName);
-          const sName = signatureMode === 'custom' ? customSupervisorName : (settings.complexName ? `مشرف ${settings.complexName}` : 'المشرف العام');
-
-          ctx.font = "bold 18px 'Cairo', sans-serif";
-          ctx.fillText(`معلم الحلقة: ${tName}`, 220, 680);
-          ctx.fillText(`المشرف: ${sName}`, width - 220, 680);
-        }
-
-        // Platform Seal (ONLY on platform templates)
-        ctx.fillStyle = activeTemplate.data.accentColor;
-        ctx.beginPath();
-        ctx.arc(width / 2, 710, 48, 0, Math.PI * 2);
-        ctx.fill();
-
-        ctx.fillStyle = '#064e3b';
-        ctx.font = "bold 14px 'Cairo', sans-serif";
-        ctx.fillText('منظومة عُمران', width / 2, 705);
-        ctx.font = "bold 12px 'Cairo', sans-serif";
-        ctx.fillText('معتمد إلكترونياً', width / 2, 725);
+        ctx.font = "bold 24px 'Cairo', sans-serif";
+        ctx.textAlign = 'right';
+        ctx.fillText(`معلم الحلقة: ${tName}`, width - 260, 920);
+        ctx.textAlign = 'left';
+        ctx.fillText(`المشرف العام: ${sName}`, 260, 920);
       }
 
-      // Convert to blob and download
+      // 9. Platform Seal
+      ctx.textAlign = 'center';
+      ctx.fillStyle = activeTemplate.data.accentColor;
+      ctx.beginPath();
+      ctx.arc(width / 2, 940, 60, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillStyle = activeTemplate.data.id === 'platform_imperial_gold' ? '#ffffff' : '#064e3b';
+      ctx.font = "bold 18px 'Cairo', sans-serif";
+      ctx.fillText('منظومة عُمران', width / 2, 935);
+      ctx.font = "bold 15px 'Cairo', sans-serif";
+      ctx.fillText('معتمد إلكترونياً', width / 2, 960);
+
+      // 10. Dates
+      ctx.font = "20px 'Cairo', sans-serif";
+      ctx.fillStyle = activeTemplate.data.textColor;
+      ctx.fillText(`تاريخ الإصدار: ${todayArabic} • الموافق: ${todayGregorian}`, width / 2, 1080);
+    }
+
+    return canvas;
+  };
+
+  // Helper to generate jsPDF document
+  const generateSinglePdfDoc = async (student: Student, index: number): Promise<{ pdf: jsPDF; blob: Blob; file: File }> => {
+    const canvas = await renderCertificateCanvas(student, index);
+    const pdf = new jsPDF({
+      orientation: 'landscape',
+      unit: 'mm',
+      format: 'a4'
+    });
+    const imgData = canvas.toDataURL('image/jpeg', 0.95);
+    pdf.addImage(imgData, 'JPEG', 0, 0, 297, 210);
+    const blob = pdf.output('blob');
+    const fileName = `شهادة_${student.name.replace(/\s+/g, '_')}.pdf`;
+    const file = new File([blob], fileName, { type: 'application/pdf' });
+    return { pdf, blob, file };
+  };
+
+  // 1. Download single PNG
+  const handleDownloadSinglePNG = async (student: Student, index: number) => {
+    setIsExporting(true);
+    setExportStatusText('جاري إنشاء صورة الشهادة عالية الدقة...');
+    try {
+      const canvas = await renderCertificateCanvas(student, index);
       canvas.toBlob((blob) => {
         if (!blob) return;
         const url = URL.createObjectURL(blob);
@@ -608,25 +642,59 @@ export const CertificatesTab: React.FC<CertificatesTabProps> = ({
         URL.revokeObjectURL(url);
       }, 'image/png');
     } catch (err) {
-      console.error('Error generating certificate image:', err);
+      console.error('Error generating image:', err);
+    } finally {
+      setIsExporting(false);
+      setExportStatusText(null);
     }
   };
 
-  // Download all individual PDFs separately (triggers browser print / individual files)
-  const handlePrintAllMergedPDF = () => {
-    window.print();
+  // 2. Download single PDF
+  const handleDownloadSinglePDF = async (student: Student, index: number) => {
+    setIsExporting(true);
+    setExportStatusText('جاري تجهيز وتحميل ملف الـ PDF...');
+    try {
+      const { pdf, file } = await generateSinglePdfDoc(student, index);
+      pdf.save(file.name);
+    } catch (err) {
+      console.error('Failed to generate PDF:', err);
+    } finally {
+      setIsExporting(false);
+      setExportStatusText(null);
+    }
   };
 
-  const handlePrintSingleStudentPDF = (student: Student) => {
-    // Print window focusing on this student's cert
-    const prevTitle = document.title;
-    document.title = `شهادة_${student.name}`;
-    window.print();
-    document.title = prevTitle;
+  // 3. Download All Merged PDF
+  const handleDownloadAllMergedPDF = async () => {
+    if (targetStudents.length === 0) return;
+    setIsExporting(true);
+    setExportStatusText(`جاري تجميع ${targetStudents.length} شهادة في ملف PDF واحد...`);
+    try {
+      const pdf = new jsPDF({
+        orientation: 'landscape',
+        unit: 'mm',
+        format: 'a4'
+      });
+      for (let i = 0; i < targetStudents.length; i++) {
+        setExportStatusText(`جاري معالجة شهادة (${i + 1} من ${targetStudents.length}): ${targetStudents[i].name}...`);
+        if (i > 0) pdf.addPage('a4', 'landscape');
+        const canvas = await renderCertificateCanvas(targetStudents[i], i);
+        const imgData = canvas.toDataURL('image/jpeg', 0.95);
+        pdf.addImage(imgData, 'JPEG', 0, 0, 297, 210);
+      }
+      pdf.save(`شهادات_الطلاب_المجمعة_${targetStudents.length}.pdf`);
+    } catch (err) {
+      console.error('Failed to export merged PDF:', err);
+    } finally {
+      setIsExporting(false);
+      setExportStatusText(null);
+    }
   };
 
-  // WhatsApp share to parent
-  const handleSendWhatsApp = (student: Student) => {
+  // 4. Send via WhatsApp With PDF
+  const handleSendWhatsApp = async (student: Student, index: number = previewStudentIndex) => {
+    setIsExporting(true);
+    setExportStatusText('جاري إنشاء ملف الشهادة PDF لمشاركته عبر الواتساب...');
     const parentPhone = getStudentParentPhone(student);
     const cleanPhone = parentPhone ? parentPhone.replace(/\D/g, '') : '';
     const occasionText = getOccasionDescription();
@@ -635,18 +703,56 @@ export const CertificatesTab: React.FC<CertificatesTabProps> = ({
     const message = `السلام عليكم ورحمة الله وبركاته،
 نزف إليكم أسمى آيات التهاني والتبريكات بمناسبة حصول ابنكم المتميز *(${student.name})* على شهادة شكر وتقدير وإتقان قرآني من حلقة: *${halaqahName}*.
 
-🌟 *مناسبة التكريم:*
+🌟 *المناسبة:*
 ${occasionText}
 
-نسأل الله تعالى أن يجعله من أهل القرآن الذين هم أهل الله وخاصته، وأن يثبته وينفع به والديه وأمته.
-مع تحيات إدارة حلقة ${halaqahName} • ${settings.complexName || 'منظومة عمران'}`;
+📄 *مرفق مع هذه الرسالة ملف الشهادة المعتمدة (PDF).*
+نسأل الله تعالى أن يجعله من أهل القرآن العظيم وأن ينفع به والديه وأمته.
+مع تحيات إدارة حلقة ${halaqahName} • ${settings.complexName || 'منظومة عُمران'}`;
 
-    if (cleanPhone) {
-      window.open(`https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`, '_blank');
-    } else {
-      navigator.clipboard.writeText(message);
-      setCopiedNotification(`تم نسخ رسالة التهنئة الخاصة بالطالب (${student.name}) للحافظة بنجاح، لعدم وجود رقم هاتف مسجل لولي أمره.`);
-      setTimeout(() => setCopiedNotification(null), 4000);
+    try {
+      const { pdf, file } = await generateSinglePdfDoc(student, index);
+
+      // 1. Try Native Web Share API with File (Mobile Chrome on Android, iOS Safari, etc.)
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        try {
+          await navigator.share({
+            files: [file],
+            title: `شهادة إتقان: ${student.name}`,
+            text: message
+          });
+          setIsExporting(false);
+          setExportStatusText(null);
+          return;
+        } catch (shareErr: any) {
+          if (shareErr.name === 'AbortError') {
+            setIsExporting(false);
+            setExportStatusText(null);
+            return;
+          }
+          console.warn('Native share failed, using download fallback:', shareErr);
+        }
+      }
+
+      // 2. Direct Fallback: Download the PDF file directly to device
+      pdf.save(file.name);
+
+      // 3. Open WhatsApp with message
+      const waUrl = cleanPhone
+        ? `https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`
+        : `https://wa.me/?text=${encodeURIComponent(message)}`;
+      window.open(waUrl, '_blank');
+
+      // 4. Inform user with prominent message
+      setCopiedNotification(
+        `تم تنزيل ملف الشهادة (PDF: ${file.name}) إلى جهازك وفتح محادثة الواتساب؛ يمكنك الآن إرفاق ملف الـ PDF فوراً في المحادثة لولي الأمر!`
+      );
+      setTimeout(() => setCopiedNotification(null), 7000);
+    } catch (err) {
+      console.error('Error sharing PDF via WhatsApp:', err);
+    } finally {
+      setIsExporting(false);
+      setExportStatusText(null);
     }
   };
 
@@ -905,7 +1011,7 @@ ${occasionText}
                   >
                     {QURAN_SURAHS.map(s => (
                       <option key={s.number} value={s.number}>
-                        {s.number}. سورة {s.name} ({s.numberOfAyahs} آية - {s.revelationType === 'Meccan' ? 'مكية' : 'مدنية'})
+                        {s.number}. سورة {s.name} ({s.numberOfAyahs} آية - {s.revelationType})
                       </option>
                     ))}
                   </select>
@@ -1737,7 +1843,7 @@ ${occasionText}
                 return (
                   <div
                     id="cert-single-preview"
-                    className="w-full max-w-[800px] aspect-[1.414/1] rounded-3xl relative overflow-hidden shadow-2xl flex flex-col justify-between p-8 sm:p-12 text-center border-4 border-[#fbbf24] select-none"
+                    className="w-full max-w-[850px] min-h-[540px] sm:min-h-[580px] md:aspect-[1.414/1] rounded-3xl relative overflow-hidden shadow-2xl flex flex-col justify-between p-5 sm:p-8 md:p-12 text-center border-4 border-[#fbbf24] select-none shrink-0 my-auto"
                     style={{
                       backgroundImage: activeTemplate.type === 'custom' ? `url(${activeTemplate.data.imageUrl})` : undefined,
                       backgroundSize: '100% 100%',
@@ -1785,16 +1891,22 @@ ${occasionText}
                     ) : (
                       /* Ready-Made Platform Design */
                       <>
-                        {/* Top Bismillah & Quranic Verse */}
-                        <div className="space-y-1">
-                          <div className="font-quran text-lg sm:text-xl font-bold" style={{ color: activeTemplate.data.accentColor }}>
+                        {/* Top Bismillah & Quranic Verse (Cleanly spaced without overlap) */}
+                        <div className="flex flex-col items-center justify-center pt-2 sm:pt-1 pb-1">
+                          <div
+                            className="font-quran text-sm sm:text-base md:text-xl font-bold tracking-wide leading-normal mb-1.5"
+                            style={{ color: activeTemplate.data.accentColor }}
+                          >
                             بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ
                           </div>
-                          <div className="font-quran text-xs sm:text-sm opacity-90" style={{ color: activeTemplate.data.accentColor }}>
+                          <div
+                            className="font-quran text-xs sm:text-sm md:text-base opacity-90 leading-relaxed mb-3 sm:mb-4 px-2 text-center max-w-lg"
+                            style={{ color: activeTemplate.data.accentColor }}
+                          >
                             ﴿ يَرْفَعِ اللَّهُ الَّذِينَ آمَنُوا مِنكُمْ وَالَّذِينَ أُوتُوا الْعِلْمَ دَرَجَاتٍ ﴾
                           </div>
                           <h1
-                            className="font-black text-2xl sm:text-4xl mt-3 font-heading"
+                            className="font-heading font-black text-xl sm:text-3xl md:text-4xl tracking-normal leading-normal py-1"
                             style={{ color: activeTemplate.data.accentColor }}
                           >
                             شَهَادَةُ تَمَيُّزٍ وَإِتْقَانٍ قُرْآنِيٍّ
@@ -1802,13 +1914,16 @@ ${occasionText}
                         </div>
 
                         {/* Student Name & Occasion */}
-                        <div className="space-y-3 my-auto py-4">
-                          <p className="text-xs sm:text-sm font-semibold opacity-90" style={{ color: activeTemplate.data.textColor }}>
+                        <div className="space-y-2 sm:space-y-3 my-auto py-2 sm:py-4">
+                          <p
+                            className="text-xs sm:text-sm font-semibold opacity-90 leading-normal"
+                            style={{ color: activeTemplate.data.textColor }}
+                          >
                             يَسُرُّ إِدَارَةَ الحِلْقَةِ أَنْ تَمْنَحَ هذِهِ الشَّهَادَةَ المُبَارَكَةَ لِلطَّالِبِ النَّجِيبِ:
                           </p>
 
                           <div
-                            className="font-quran text-3xl sm:text-5xl font-black py-2"
+                            className="font-quran text-2xl sm:text-4xl md:text-5xl font-black py-1 sm:py-2 leading-tight"
                             style={{ color: activeTemplate.data.accentColor }}
                           >
                             {curStudent.name}
@@ -1821,15 +1936,18 @@ ${occasionText}
                             {getOccasionDescription()}
                           </p>
 
-                          <div className="text-[11px] sm:text-xs opacity-75 mt-1" style={{ color: activeTemplate.data.textColor }}>
+                          <div
+                            className="text-[11px] sm:text-xs opacity-75 mt-1"
+                            style={{ color: activeTemplate.data.textColor }}
+                          >
                             الحلقة: <strong className="font-bold">{halaqahName}</strong> • المجمع: <strong className="font-bold">{complexName}</strong>
                           </div>
                         </div>
 
                         {/* Footer Details: Signatures, Seal & Date */}
-                        <div className="space-y-4 pt-4 border-t border-white/20">
+                        <div className="space-y-3 sm:space-y-4 pt-3 sm:pt-4 border-t border-white/20">
                           {signatureMode !== 'none' && (
-                            <div className="flex items-center justify-between px-6 text-xs sm:text-sm font-bold" style={{ color: activeTemplate.data.textColor }}>
+                            <div className="flex items-center justify-between px-4 sm:px-6 text-xs sm:text-sm font-bold" style={{ color: activeTemplate.data.textColor }}>
                               <div className="text-right">
                                 <span className="block text-[10px] opacity-75">معلم الحلقة:</span>
                                 <span>{teacherTitle}</span>
@@ -1861,14 +1979,34 @@ ${occasionText}
               })()}
             </div>
 
+            {/* Notification / Status Banner */}
+            {(copiedNotification || exportStatusText) && (
+              <div className="px-6 py-2.5 bg-emerald-950/90 border-t border-emerald-500/40 text-xs text-emerald-200 flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                  <span>{exportStatusText || copiedNotification}</span>
+                </div>
+                {copiedNotification && (
+                  <button
+                    type="button"
+                    onClick={() => setCopiedNotification(null)}
+                    className="text-emerald-400 hover:text-white cursor-pointer"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+            )}
+
             {/* Modal Bottom Actions Bar */}
             <div className="p-4 bg-[#022c22] border-t border-[#065f46] flex flex-wrap items-center justify-between gap-3 shrink-0">
               <div className="flex items-center gap-2">
                 {/* Download as Image PNG */}
                 <button
                   type="button"
+                  disabled={isExporting}
                   onClick={() => handleDownloadSinglePNG(targetStudents[previewStudentIndex], previewStudentIndex)}
-                  className="px-4 py-2 rounded-xl bg-[#064e3b] hover:bg-[#064e3b]/80 text-[#86efac] hover:text-white border border-[#065f46] font-bold text-xs flex items-center gap-1.5 cursor-pointer transition-all"
+                  className="px-4 py-2 rounded-xl bg-[#064e3b] hover:bg-[#064e3b]/80 disabled:opacity-50 text-[#86efac] hover:text-white border border-[#065f46] font-bold text-xs flex items-center gap-1.5 cursor-pointer transition-all"
                   title="تنزيل الشهادة كصورة PNG عالية الدقة"
                 >
                   <Download className="w-4 h-4 text-emerald-400" />
@@ -1878,8 +2016,9 @@ ${occasionText}
                 {/* Print/Download Separate PDF */}
                 <button
                   type="button"
-                  onClick={() => handlePrintSingleStudentPDF(targetStudents[previewStudentIndex])}
-                  className="px-4 py-2 rounded-xl bg-[#064e3b] hover:bg-[#064e3b]/80 text-[#86efac] hover:text-white border border-[#065f46] font-bold text-xs flex items-center gap-1.5 cursor-pointer transition-all"
+                  disabled={isExporting}
+                  onClick={() => handleDownloadSinglePDF(targetStudents[previewStudentIndex], previewStudentIndex)}
+                  className="px-4 py-2 rounded-xl bg-[#064e3b] hover:bg-[#064e3b]/80 disabled:opacity-50 text-[#86efac] hover:text-white border border-[#065f46] font-bold text-xs flex items-center gap-1.5 cursor-pointer transition-all"
                   title="تنزيل شهادة هذا الطالب كـ PDF منفصل"
                 >
                   <Printer className="w-4 h-4 text-amber-300" />
@@ -1890,8 +2029,9 @@ ${occasionText}
                 {targetStudents.length > 1 && (
                   <button
                     type="button"
-                    onClick={handlePrintAllMergedPDF}
-                    className="px-4 py-2 rounded-xl bg-emerald-900/80 hover:bg-emerald-800 text-emerald-100 border border-emerald-600/50 font-bold text-xs flex items-center gap-1.5 cursor-pointer transition-all"
+                    disabled={isExporting}
+                    onClick={handleDownloadAllMergedPDF}
+                    className="px-4 py-2 rounded-xl bg-emerald-900/80 hover:bg-emerald-800 disabled:opacity-50 text-emerald-100 border border-emerald-600/50 font-bold text-xs flex items-center gap-1.5 cursor-pointer transition-all"
                     title="تنزيل كافة الشهادات في ملف PDF واحد مجمع"
                   >
                     <FileText className="w-4 h-4 text-[#fbbf24]" />
@@ -1901,14 +2041,16 @@ ${occasionText}
               </div>
 
               <div className="flex items-center gap-2">
-                {/* Send via WhatsApp */}
+                {/* Send via WhatsApp (with actual PDF file) */}
                 <button
                   type="button"
-                  onClick={() => handleSendWhatsApp(targetStudents[previewStudentIndex])}
-                  className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-green-600 hover:brightness-110 text-white font-black text-xs flex items-center gap-1.5 shadow-md cursor-pointer transition-all"
+                  disabled={isExporting}
+                  onClick={() => handleSendWhatsApp(targetStudents[previewStudentIndex], previewStudentIndex)}
+                  className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-green-600 hover:brightness-110 disabled:opacity-50 text-white font-black text-xs flex items-center gap-1.5 shadow-md cursor-pointer transition-all"
+                  title="إرسال ملف الشهادة PDF مباشرة عبر الواتساب لولي الأمر"
                 >
                   <Send className="w-4 h-4" />
-                  <span>إرسال عبر واتساب لولي الأمر</span>
+                  <span>{isExporting ? 'جاري تجهيز الشهادة...' : 'إرسال عبر واتساب (ملف PDF)'}</span>
                 </button>
               </div>
             </div>

@@ -76,6 +76,16 @@ export const KingFahdQuranModal: React.FC<KingFahdQuranModalProps> = ({
   const modalContainerRef = useRef<HTMLDivElement | null>(null);
   const mushafScrollRef = useRef<HTMLDivElement | null>(null);
 
+  // Active Highlight Item
+  const activeHighlight = useMemo(() => {
+    return highlightItems.find(h => h.id === selectedHighlightId) || highlightItems[0] || null;
+  }, [highlightItems, selectedHighlightId]);
+
+  // Ensure verses for current page are loaded
+  const pageInfo: QuranPageInfo = useMemo(() => {
+    return getKingFahdPageInfo(currentPage);
+  }, [currentPage]);
+
   // Target Ayah and Surah to focus and scroll down to on this page
   const targetSurahNum = useMemo(() => {
     if (activeHighlight && getPageOfAyah(activeHighlight.surahNumber, activeHighlight.fromAyah) === currentPage) {
@@ -133,11 +143,6 @@ export const KingFahdQuranModal: React.FC<KingFahdQuranModalProps> = ({
     };
   }, [isOpen]);
 
-  // Ensure verses for current page are loaded
-  const pageInfo: QuranPageInfo = useMemo(() => {
-    return getKingFahdPageInfo(currentPage);
-  }, [currentPage]);
-
   useEffect(() => {
     if (!isOpen) return;
     const s1 = pageInfo.startSurah;
@@ -154,11 +159,6 @@ export const KingFahdQuranModal: React.FC<KingFahdQuranModalProps> = ({
       });
     }
   }, [isOpen, pageInfo, quranMap]);
-
-  // Active Highlight Item
-  const activeHighlight = useMemo(() => {
-    return highlightItems.find(h => h.id === selectedHighlightId) || highlightItems[0] || null;
-  }, [highlightItems, selectedHighlightId]);
 
   // Switch to another highlight item and jump straight to its start page
   const handleSelectHighlightItem = (item: QuranHighlightItem) => {
@@ -297,17 +297,38 @@ export const KingFahdQuranModal: React.FC<KingFahdQuranModalProps> = ({
   // Auto-scroll directly down to the targeted ayah when modal opens or page/item changes
   useEffect(() => {
     if (!isOpen) return;
-    const timer = setTimeout(() => {
-      const targetEl = document.getElementById(`mushaf-ayah-${targetSurahNum}-${targetAyahNum}`) ||
-                       document.querySelector('.ayah-primary-target') ||
-                       document.querySelector('.ayah-highlighted');
-      if (targetEl) {
-        targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      }
-    }, 280);
 
-    return () => clearTimeout(timer);
-  }, [isOpen, currentPage, targetSurahNum, targetAyahNum, pageSections]);
+    const performScroll = (behavior: ScrollBehavior = 'smooth') => {
+      const container = mushafScrollRef.current;
+      if (!container) return;
+      const targetEl = (document.getElementById(`mushaf-ayah-${targetSurahNum}-${targetAyahNum}`) ||
+                       container.querySelector('.ayah-primary-target') ||
+                       container.querySelector('.ayah-highlighted')) as HTMLElement | null;
+      if (targetEl) {
+        const targetRect = targetEl.getBoundingClientRect();
+        const containerRect = container.getBoundingClientRect();
+        const relativeTop = targetRect.top - containerRect.top + container.scrollTop;
+        const targetScrollTop = Math.max(0, relativeTop - (container.clientHeight / 2) + (targetRect.height / 2));
+        container.scrollTo({
+          top: targetScrollTop,
+          behavior
+        });
+      }
+    };
+
+    // Immediate and follow-up scroll intervals to ensure instant jump on open then smooth lock
+    const t0 = setTimeout(() => performScroll('auto'), 40);
+    const t1 = setTimeout(() => performScroll('smooth'), 150);
+    const t2 = setTimeout(() => performScroll('smooth'), 350);
+    const t3 = setTimeout(() => performScroll('smooth'), 700);
+
+    return () => {
+      clearTimeout(t0);
+      clearTimeout(t1);
+      clearTimeout(t2);
+      clearTimeout(t3);
+    };
+  }, [isOpen, currentPage, targetSurahNum, targetAyahNum, pageSections, isLoadingVerses]);
 
   if (!isOpen) return null;
 
@@ -518,9 +539,9 @@ export const KingFahdQuranModal: React.FC<KingFahdQuranModalProps> = ({
                           <React.Fragment key={ayah.ayahNumber}>
                             <span
                               id={`mushaf-ayah-${sec.surahNumber}-${ayah.ayahNumber}`}
-                              className={`transition-all rounded-lg px-1.5 py-0.5 inline duration-300 ${
+                              className={`transition-all rounded-lg px-2 py-1 inline duration-300 ${
                                 isTargetAyah
-                                  ? 'ayah-primary-target bg-[#fbbf24] text-[#064e3b] font-black shadow-[0_0_18px_rgba(251,191,36,0.65)] ring-2 ring-[#b45309]'
+                                  ? 'ayah-primary-target bg-[#fbbf24] text-[#064e3b] font-black shadow-[0_0_30px_rgba(251,191,36,0.9)] ring-4 ring-amber-500/90 scale-[1.03] animate-pulse z-10'
                                   : ayah.isHighlighted
                                   ? 'ayah-highlighted bg-[#fbbf24]/35 text-[#064e3b] font-bold shadow-[0_0_8px_rgba(251,191,36,0.3)] ring-1 ring-[#d97706]'
                                   : 'hover:bg-amber-100/60'

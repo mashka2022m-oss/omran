@@ -578,7 +578,14 @@ export const ReportsTab: React.FC<ReportsTabProps> = ({
                               : ev.recitationDetails?.newMemorizationAchieved || '—';
 
                             const revRec = ev.recitationDetails?.todayReviewItems && ev.recitationDetails.todayReviewItems.length > 0
-                              ? ev.recitationDetails.todayReviewItems.map(item => `سورة ${getSurahInfo(item.surahNumber).name} (${item.fromAyah || 1}-${item.toAyah || 1})`).join(' • ')
+                              ? ev.recitationDetails.todayReviewItems.map(item => {
+                                  const s1 = getSurahInfo(item.surahNumber || 78);
+                                  const s2 = item.toSurahNumber ? getSurahInfo(item.toSurahNumber) : s1;
+                                  if (item.toSurahNumber && item.toSurahNumber !== item.surahNumber) {
+                                    return `من سورة ${s1.name} (آية ${item.fromAyah || 1}) إلى سورة ${s2.name} (آية ${item.toAyah || 1})`;
+                                  }
+                                  return `سورة ${s1.name} (${item.fromAyah || 1}-${item.toAyah || 1})`;
+                                }).join(' • ')
                               : ev.recitationDetails?.reviewAchieved || '—';
 
                             const scoreVal = Object.values(ev.criteriaValues || {})[0] || 'متقن';
@@ -643,15 +650,28 @@ export const ReportsTab: React.FC<ReportsTabProps> = ({
               </div>
 
               {/* Footer */}
-              <div className="p-4 border-t border-[#065f46] shrink-0 bg-[#022c22]/95 flex justify-between items-center">
-                <button
-                  type="button"
-                  onClick={() => handlePrintSingleStudent(student)}
-                  className="px-5 py-2.5 rounded-2xl bg-[#fbbf24] hover:bg-[#f59e0b] text-[#064e3b] font-black text-xs flex items-center gap-2 cursor-pointer shadow-md"
-                >
-                  <Printer className="w-4 h-4" />
-                  <span>طباعة تقرير الطالب بالثيم الفاخر (PDF)</span>
-                </button>
+              <div className="p-4 border-t border-[#065f46] shrink-0 bg-[#022c22]/95 flex flex-wrap justify-between items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <button
+                    type="button"
+                    onClick={() => handlePrintSingleStudent(student)}
+                    className="px-4 py-2.5 rounded-2xl bg-[#fbbf24] hover:bg-[#f59e0b] text-[#064e3b] font-black text-xs flex items-center gap-2 cursor-pointer shadow-md"
+                  >
+                    <Printer className="w-4 h-4" />
+                    <span>طباعة تقرير PDF</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      handleGenerateTextMessage(student);
+                    }}
+                    className="px-4 py-2.5 rounded-2xl bg-[#064e3b] hover:bg-[#064e3b]/80 text-[#fbbf24] hover:text-white border border-[#fbbf24]/50 font-black text-xs flex items-center gap-2 cursor-pointer shadow-md"
+                  >
+                    <MessageSquare className="w-4 h-4 text-[#fbbf24]" />
+                    <span>استخراج كرسالة واتساب منسقة</span>
+                  </button>
+                </div>
 
                 <button
                   type="button"

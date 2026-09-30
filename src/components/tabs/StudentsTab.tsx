@@ -25,6 +25,7 @@ import {
 } from 'lucide-react';
 import { Student, StudentLevel, AppSettings, Halaqah, getThreePartNameValidation } from '../../types';
 import { QURAN_SURAHS } from '../../data/quranData';
+import { getPageOfAyah } from '../../data/quranPagesData';
 
 interface StudentsTabProps {
   students: Student[];
@@ -127,17 +128,12 @@ export const StudentsTab: React.FC<StudentsTabProps> = ({
   // Form fields
   const [formName, setFormName] = useState('');
   const [formPassword, setFormPassword] = useState('123');
-  const [formPhone, setFormPhone] = useState('');
   const [formAge, setFormAge] = useState<number>(11);
   const [formParentName, setFormParentName] = useState('');
   const [formParentPhones, setFormParentPhones] = useState<string[]>(['']);
   const [formSurahNum, setFormSurahNum] = useState<number>(78);
   const [formAyah, setFormAyah] = useState<number>(1);
-  const [formDailyNew, setFormDailyNew] = useState<string>('نصف وجه');
-  const [formDailyReview, setFormDailyReview] = useState<string>('وجه واحد');
-  const [formLevel, setFormLevel] = useState<StudentLevel>('متوسط');
   const [formHalaqahId, setFormHalaqahId] = useState<string>(activeHalaqahId || halaqahs[0]?.id || '');
-  const [formNotes, setFormNotes] = useState('');
   
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formError, setFormError] = useState('');
@@ -147,17 +143,12 @@ export const StudentsTab: React.FC<StudentsTabProps> = ({
     setEditingStudent(null);
     setFormName('');
     setFormPassword('123');
-    setFormPhone('');
     setFormAge(11);
     setFormParentName('');
     setFormParentPhones(['']);
     setFormSurahNum(78);
     setFormAyah(1);
-    setFormDailyNew('نصف وجه');
-    setFormDailyReview('وجه واحد');
-    setFormLevel('متوسط');
     setFormHalaqahId(activeHalaqahId && activeHalaqahId !== 'all' ? activeHalaqahId : '');
-    setFormNotes('');
     setFormError('');
     setIsAddModalOpen(true);
   };
@@ -167,17 +158,12 @@ export const StudentsTab: React.FC<StudentsTabProps> = ({
     setEditingStudent(student);
     setFormName(student.name);
     setFormPassword(student.password || '123');
-    setFormPhone(student.phone);
     setFormAge(student.age || 10);
     setFormParentName(student.parentName || '');
     setFormParentPhones(student.parentPhones && student.parentPhones.length > 0 ? [...student.parentPhones] : ['']);
     setFormSurahNum(student.currentSurah || 78);
     setFormAyah(student.currentAyah || 1);
-    setFormDailyNew(student.dailyNewTarget || 'نصف وجه');
-    setFormDailyReview(student.dailyReviewTarget || 'وجه واحد');
-    setFormLevel(student.level || 'متوسط');
     setFormHalaqahId(student.halaqahId || '');
-    setFormNotes(student.notes || '');
     setFormError('');
     setIsAddModalOpen(true);
   };
@@ -612,18 +598,6 @@ export const StudentsTab: React.FC<StudentsTabProps> = ({
                         <h3 className="text-sm font-bold text-white line-clamp-1">{student.name}</h3>
                         <div className="flex items-center gap-2 mt-0.5 text-xs text-[#86efac]/80 flex-wrap">
                           <span>{student.age} سنة</span>
-                          <span>•</span>
-                          <span
-                            className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                              student.level === 'قوي'
-                                ? 'bg-[#fbbf24]/20 text-[#fbbf24] border border-[#fbbf24]/30'
-                                : student.level === 'متوسط'
-                                ? 'bg-emerald-500/20 text-[#86efac] border border-emerald-500/30'
-                                : 'bg-amber-600/20 text-amber-300 border border-amber-600/30'
-                            }`}
-                          >
-                            {student.level}
-                          </span>
                           {(!student.halaqahId || student.halaqahId.trim() === '' || student.halaqahId === 'unassigned' || student.halaqahId === 'none') ? (
                             <>
                               <span>•</span>
@@ -672,14 +646,17 @@ export const StudentsTab: React.FC<StudentsTabProps> = ({
                       سورة {student.currentSurahName} (الآية {student.currentAyah})
                     </span>
                   </div>
-                  <div className="flex items-center justify-between text-[#f0f9f6]">
-                    <span className="text-[#86efac] font-medium">طاقة الحفظ اليومي:</span>
-                    <span className="text-emerald-300 font-semibold">{student.dailyNewTarget}</span>
-                  </div>
-                  <div className="flex items-center justify-between text-[#f0f9f6]">
-                    <span className="text-[#86efac] font-medium">طاقة المراجعة:</span>
-                    <span className="text-teal-300 font-semibold">{student.dailyReviewTarget}</span>
-                  </div>
+                  {(() => {
+                    const curPage = getPageOfAyah(student.currentSurah || 78, student.currentAyah || 1);
+                    return (
+                      <div className="flex items-center justify-between text-[#f0f9f6]">
+                        <span className="text-[#86efac] font-medium">الوجه الحالي بالمصحف:</span>
+                        <span className="text-emerald-300 font-bold">
+                          الوجه {curPage} من 604
+                        </span>
+                      </div>
+                    );
+                  })()}
                   <div className="flex items-center justify-between text-[#f0f9f6] pt-1.5 border-t border-[#065f46]/60">
                     <span className="text-[#86efac] font-medium">ولي الأمر:</span>
                     <span className="text-white font-medium">{student.parentName}</span>
