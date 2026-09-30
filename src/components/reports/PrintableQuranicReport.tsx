@@ -68,9 +68,122 @@ export const PrintableQuranicReport: React.FC<PrintableQuranicReportProps> = ({
   });
   const todayGregorian = todayDateObj.toLocaleDateString('en-GB');
 
-  // Trigger browser print dialog (configured to print only the printable document)
+  // Trigger clean browser print dialog with isolated iframe (prevents background bleed and centers perfectly)
   const handlePrint = () => {
-    window.print();
+    const printEl = document.getElementById('printable-quranic-document');
+    if (!printEl) {
+      window.print();
+      return;
+    }
+
+    // Create an isolated hidden iframe
+    const iframe = document.createElement('iframe');
+    iframe.style.position = 'fixed';
+    iframe.style.right = '0';
+    iframe.style.bottom = '0';
+    iframe.style.width = '0';
+    iframe.style.height = '0';
+    iframe.style.border = 'none';
+    iframe.id = 'omran-print-frame';
+    document.body.appendChild(iframe);
+
+    const doc = iframe.contentWindow?.document;
+    if (!doc) {
+      window.print();
+      return;
+    }
+
+    doc.open();
+    doc.write(`
+      <!DOCTYPE html>
+      <html lang="ar" dir="rtl">
+      <head>
+        <meta charset="utf-8" />
+        <title>وثيقة رسمية - منظومة عُمران</title>
+        <link rel="preconnect" href="https://fonts.googleapis.com">
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&family=Amiri:wght@400;700&display=swap" rel="stylesheet">
+        <style>
+          @page {
+            size: A4 portrait;
+            margin: 8mm 8mm 8mm 8mm;
+          }
+          * {
+            box-sizing: border-box;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
+          html, body {
+            margin: 0;
+            padding: 0;
+            background: #ffffff !important;
+            color: #0f172a !important;
+            font-family: 'Cairo', -apple-system, BlinkMacSystemFont, sans-serif;
+            direction: rtl;
+            text-align: right;
+          }
+          .print-wrapper {
+            width: 100%;
+            max-width: 194mm;
+            margin: 0 auto;
+            background: #ffffff !important;
+            padding: 4mm;
+          }
+          table {
+            width: 100%;
+            border-collapse: collapse;
+          }
+          th, td {
+            border: 1px solid #cbd5e1;
+            padding: 5px 8px;
+          }
+          .text-center { text-align: center; }
+          .text-right { text-align: right; }
+          .text-left { text-align: left; }
+          .font-bold { font-weight: 700; }
+          .font-black { font-weight: 900; }
+          .border { border: 1px solid #cbd5e1; }
+          .rounded-xl { border-radius: 12px; }
+          .rounded-lg { border-radius: 8px; }
+          .rounded-full { border-radius: 9999px; }
+          .p-2 { padding: 8px; }
+          .p-3 { padding: 12px; }
+          .mb-4 { margin-bottom: 16px; }
+          .mt-4 { margin-top: 16px; }
+          .grid { display: grid; }
+          .grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+          .grid-cols-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+          .gap-3 { gap: 12px; }
+          .gap-4 { gap: 16px; }
+          .flex { display: flex; }
+          .items-center { align-items: center; }
+          .justify-between { justify-content: space-between; }
+        </style>
+      </head>
+      <body>
+        <div class="print-wrapper">
+          ${printEl.innerHTML}
+        </div>
+      </body>
+      </html>
+    `);
+    doc.close();
+
+    setTimeout(() => {
+      try {
+        iframe.contentWindow?.focus();
+        iframe.contentWindow?.print();
+      } catch (err) {
+        console.warn('Iframe print error, falling back:', err);
+        window.print();
+      } finally {
+        setTimeout(() => {
+          if (document.body.contains(iframe)) {
+            document.body.removeChild(iframe);
+          }
+        }, 1500);
+      }
+    }, 450);
   };
 
   // Student specific data for individual report
@@ -378,7 +491,7 @@ export const PrintableQuranicReport: React.FC<PrintableQuranicReportProps> = ({
                         <th className="p-2 border border-slate-300">اسم الطالب</th>
                         <th className="p-2 border border-slate-300 w-24 text-center">حالة الحضور</th>
                         <th className="p-2 border border-slate-300">ملاحظات العذر / التبرير</th>
-                        <th className="p-2 border border-slate-300 w-28 text-center">توقيع المعلم</th>
+                        <th className="p-2 border border-slate-300 w-20 text-center">الاعتماد</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -401,7 +514,7 @@ export const PrintableQuranicReport: React.FC<PrintableQuranicReportProps> = ({
                               </span>
                             </td>
                             <td className="p-2 border border-slate-300 text-[11px] text-slate-600">{att?.note || '—'}</td>
-                            <td className="p-2 border border-slate-300 text-center text-slate-300 font-serif">معتمد</td>
+                            <td className="p-2 border border-slate-300 text-center text-emerald-800 font-bold text-[10px]">معتمد</td>
                           </tr>
                         );
                       })}
@@ -410,33 +523,25 @@ export const PrintableQuranicReport: React.FC<PrintableQuranicReportProps> = ({
                 </div>
               )}
 
-              {/* 3. OFFICIAL STAMP & SIGNATURE BLOCK */}
-              <div className="mt-8 pt-6 border-t-2 border-[#064e3b] grid grid-cols-3 gap-4 text-center text-xs">
-                {/* Teacher Signature */}
-                <div className="space-y-4">
-                  <span className="font-bold text-[#064e3b] block">المعلم المحفّظ:</span>
-                  <p className="font-bold text-slate-800 text-sm">{teacherName || settings.teacherName}</p>
-                  <div className="text-[10px] text-slate-400">التوقيع: ............................</div>
+              {/* 3. OFFICIAL ELECTRONIC CERTIFICATION & SEAL (بدون توقيع يدوي) */}
+              <div className="mt-6 pt-4 border-t-2 border-[#064e3b] flex items-center justify-between text-xs">
+                <div className="text-right space-y-1">
+                  <div className="font-bold text-[#064e3b] text-xs">الاعتماد الإلكتروني الرسمي:</div>
+                  <p className="text-[11px] text-slate-700">
+                    هذه الوثيقة صادرة ومعتمدة إلكترونياً من <strong className="text-[#064e3b]">{settings.complexName || 'منظومة عُمران'}</strong>
+                  </p>
+                  <p className="text-[10px] text-slate-500">
+                    تاريخ الاعتماد: {todayFormatted} • موافق {todayGregorian}
+                  </p>
                 </div>
 
                 {/* Official Circular Seal */}
-                <div className="flex flex-col items-center justify-center">
-                  <div className="w-20 h-20 rounded-full border-2 border-dashed border-[#b45309] flex flex-col items-center justify-center text-[#b45309] p-1 rotate-[-4deg]">
+                <div className="flex flex-col items-center justify-center shrink-0">
+                  <div className="w-16 h-16 rounded-full border-2 border-dashed border-[#b45309] flex flex-col items-center justify-center text-[#b45309] p-1 rotate-[-3deg]">
                     <span className="text-[8px] font-bold text-center">منظومة عُمران</span>
-                    <span className="text-[7px] text-[#064e3b] font-bold">الختم والاعتماد</span>
+                    <span className="text-[7px] text-[#064e3b] font-bold">معتمد إلكترونياً</span>
                     <span className="text-[7px] text-slate-400 font-mono">{todayGregorian}</span>
                   </div>
-                </div>
-
-                {/* Supervisor or Guardian Signature */}
-                <div className="space-y-4">
-                  <span className="font-bold text-[#064e3b] block">
-                    {documentType === 'individual' ? 'اطلاع وتوقيع ولي الأمر:' : 'المشرف العام على المجمع:'}
-                  </span>
-                  <p className="font-bold text-slate-800 text-sm">
-                    {documentType === 'individual' ? 'ولي أمر الطالب' : settings.complexName || 'إدارة المجمع'}
-                  </p>
-                  <div className="text-[10px] text-slate-400">التوقيع: ............................</div>
                 </div>
               </div>
 

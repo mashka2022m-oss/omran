@@ -981,7 +981,7 @@ export const DataBackupTab: React.FC<DataBackupTabProps> = ({
                 <h4 className="text-sm font-black text-white flex items-center gap-2">
                   <span>تهيئة وجاهزية الاستضافة على Netlify</span>
                   <span className="text-[10px] bg-emerald-500 text-[#064e3b] font-black px-2 py-0.5 rounded-full">
-                    مضبوطة بنسبة 100% 🚀
+                    مضبوطة ومكتملة بنسبة 100%
                   </span>
                 </h4>
                 <p className="text-[11px] text-[#86efac]">
@@ -1088,7 +1088,7 @@ export const DataBackupTab: React.FC<DataBackupTabProps> = ({
             >
               {complexes.map(c => (
                 <option key={c.id} value={c.id}>
-                  {c.name} {c.databaseConfig?.isCustom ? '⚡ (قاعدة منفصلة)' : '☁️ (قاعدة مركزية)'}
+                  {c.name} {c.databaseConfig?.isCustom ? '[قاعدة منفصلة]' : '[قاعدة مركزية]'}
                 </option>
               ))}
             </select>
@@ -1917,7 +1917,7 @@ export const DataBackupTab: React.FC<DataBackupTabProps> = ({
                     تم الانتهاء بنسبة 100% ✓
                   </span>
                   <h3 className="text-xl sm:text-2xl font-black text-white font-heading">
-                    تم إكمال ربط قاعدة البيانات بنجاح! 🎉
+                    تم إكمال ربط قاعدة البيانات بنجاح!
                   </h3>
                   <p className="text-xs sm:text-sm text-emerald-200 mt-2 max-w-md mx-auto leading-relaxed">
                     تم تسجيل الدخول وتوصيل وتفعيل قاعدة البيانات السحابية بالكامل، وكافة الجداول والبيانات متزامنة ومؤمنة سحابياً الآن.

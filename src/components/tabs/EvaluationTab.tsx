@@ -55,6 +55,8 @@ interface EvaluationTabProps {
   attendance: AttendanceRecord[];
   evaluations: StudentEvaluation[];
   criteria: EvaluationCriteria[];
+  isSupervisor?: boolean;
+  activeComplexId?: string;
   selectedStudentId?: string;
   onSaveEvaluation: (evaluation: StudentEvaluation) => Promise<void>;
   onSaveCriteria: (criteriaList: EvaluationCriteria[]) => Promise<void>;
@@ -73,6 +75,8 @@ export const EvaluationTab: React.FC<EvaluationTabProps> = ({
   attendance,
   evaluations,
   criteria,
+  isSupervisor = false,
+  activeComplexId,
   selectedStudentId,
   onSaveEvaluation,
   onSaveCriteria,
@@ -179,6 +183,7 @@ export const EvaluationTab: React.FC<EvaluationTabProps> = ({
   const [saveSuccessMsg, setSaveSuccessMsg] = useState('');
 
   // Criteria Management Modal state
+  const [isManageCriteriaListOpen, setIsManageCriteriaListOpen] = useState(false);
   const [isCriteriaModalOpen, setIsCriteriaModalOpen] = useState(false);
   const [editingCriteriaId, setEditingCriteriaId] = useState<string | null>(null);
   const [critToDelete, setCritToDelete] = useState<EvaluationCriteria | null>(null);
@@ -900,7 +905,7 @@ export const EvaluationTab: React.FC<EvaluationTabProps> = ({
         criteriaValues: criteriaValues || {},
         recitationDetails: {
           newMemorizationAchieved: todayNewDidNotRecite
-            ? `⚠️ لم يُسمّع: ${todayNewFormatted} (${todayNewDidNotReciteReason || 'لم يحفظ الورد'})`
+            ? `لم يُسمّع: ${todayNewFormatted} (${todayNewDidNotReciteReason || 'لم يحفظ الورد'})`
             : todayNewFormatted,
           reviewAchieved: reviewAchievedSummary || '',
           teacherNotes: teacherNotes || '',
@@ -1014,6 +1019,7 @@ export const EvaluationTab: React.FC<EvaluationTabProps> = ({
         type: newCritType,
         maxScore: newCritType === 'score' ? newCritMaxScore : undefined,
         options: optionsArray,
+        complexId: activeComplexId || undefined,
         isDefault: false
       };
       updatedList = [...criteria, newCrit];
@@ -1050,17 +1056,21 @@ export const EvaluationTab: React.FC<EvaluationTabProps> = ({
             <span>أرشيف الأيام السابقة للطالب ({studentEvaluationsHistory.length})</span>
           </button>
 
-          <button
-            onClick={handleOpenAddCriteria}
-            className="px-3.5 py-2 rounded-2xl bg-[#022c22] hover:bg-[#022c22]/80 border border-[#065f46] text-[#fbbf24] text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-all shadow-md"
-          >
-            <Sliders className="w-4 h-4 text-[#fbbf24]" />
-            <span>معايير التقييم</span>
-          </button>
+          {/* Criteria Management: Exclusively for Supervisors */}
+          {isSupervisor && (
+            <button
+              onClick={() => setIsManageCriteriaListOpen(true)}
+              className="px-3.5 py-2 rounded-2xl bg-[#022c22] hover:bg-[#022c22]/80 border border-[#065f46] text-[#fbbf24] text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-all shadow-md"
+              title="إدارة معايير التقييم للمجمع (خاص بالمشرفين)"
+            >
+              <Sliders className="w-4 h-4 text-[#fbbf24]" />
+              <span>معايير التقييم ({criteria.length})</span>
+            </button>
+          )}
         </div>
       </div>
 
-      {/* 📅 DATE SELECTOR & NAVIGATION BAR */}
+      {/* DATE SELECTOR & NAVIGATION BAR */}
       <div className="bg-[#022c22]/90 border border-[#065f46] rounded-2xl p-4 shadow-lg flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-xs font-bold text-[#86efac] flex items-center gap-1.5">
@@ -1523,7 +1533,7 @@ export const EvaluationTab: React.FC<EvaluationTabProps> = ({
                             )}
                           </div>
                           <div className="text-[10px] text-[#86efac] font-medium text-left">
-                            {isCompleted ? 'إتمام مبارك 🎉' : isNearing ? 'اقترب الختام 🌟' : 'مسيرة الحفظ'}
+                            {isCompleted ? 'إتمام مبارك' : isNearing ? 'اقترب الختام' : 'مسيرة الحفظ'}
                           </div>
                         </div>
 
@@ -1535,7 +1545,7 @@ export const EvaluationTab: React.FC<EvaluationTabProps> = ({
                             title="إطلاق ألعاب نارية احتفالاً بالطالب"
                           >
                             <Sparkles className="w-3.5 h-3.5" />
-                            <span>احتفال 🎉</span>
+                            <span>احتفال</span>
                           </button>
                         ) : isNearing ? (
                           <button
@@ -1592,22 +1602,22 @@ export const EvaluationTab: React.FC<EvaluationTabProps> = ({
                         {isCompleted ? (
                           <p className="text-amber-300 font-bold flex items-center gap-1.5">
                             <Sparkles className="w-4 h-4 text-[#fbbf24] shrink-0" />
-                            <span>مبارك للطالب {activeStudent.name}! أتم سورة {sInfo.name} بالكامل بحفظ متقن ومبارك، هنيئاً له هذا الشرف العظيم! 🎉</span>
+                            <span>مبارك للطالب {activeStudent.name}! أتم سورة {sInfo.name} بالكامل بحفظ متقن ومبارك، هنيئاً له هذا الشرف العظيم!</span>
                           </p>
                         ) : isNearing ? (
                           <p className="text-amber-200 font-bold flex items-center gap-1.5">
                             <Flame className="w-4 h-4 text-orange-400 shrink-0 animate-bounce" />
-                            <span>همّة وثبات يا بطل! اقتربت جداً من ختام سورة {sInfo.name}؛ بقيت {remainingAyahs} آيات فقط لتتوج بإتمامها! 🌟</span>
+                            <span>همّة وثبات يا بطل! اقتربت جداً من ختام سورة {sInfo.name}؛ بقيت {remainingAyahs} آيات فقط لتتوج بإتمامها!</span>
                           </p>
                         ) : isHalfway ? (
                           <p className="text-emerald-200 font-medium flex items-center gap-1.5">
                             <TrendingUp className="w-4 h-4 text-emerald-400 shrink-0" />
-                            <span>رائع! تجاوزت منتصف سورة {sInfo.name}، استمر بنفس العزيمة نحو إتمام السورة بإذن الله! 🚀</span>
+                            <span>رائع! تجاوزت منتصف سورة {sInfo.name}، استمر بنفس العزيمة نحو إتمام السورة بإذن الله!</span>
                           </p>
                         ) : (
                           <p className="text-emerald-200/80 font-medium flex items-center gap-1.5">
                             <BookOpen className="w-4 h-4 text-[#fbbf24] shrink-0" />
-                            <span>بداية مباركة في سورة {sInfo.name}، كل آية تحفظها نور في صدرك ورفعة لدرجاتك في الجنة. 📖</span>
+                            <span>بداية مباركة في سورة {sInfo.name}، كل آية تحفظها نور في صدرك ورفعة لدرجاتك في الجنة.</span>
                           </p>
                         )}
                       </div>
@@ -2415,27 +2425,131 @@ export const EvaluationTab: React.FC<EvaluationTabProps> = ({
                           </div>
                         )}
 
-                        {/* Score */}
-                        {crit.type === 'score' && (
-                          <div className="flex items-center gap-2">
-                            <input
-                              type="number"
-                              min={0}
-                              max={crit.maxScore || 10}
-                              value={val !== undefined ? val : crit.maxScore || 10}
-                              onChange={e =>
-                                setCriteriaValues(prev => ({
-                                  ...prev,
-                                  [crit.id]: Number(e.target.value)
-                                }))
-                              }
-                              className="w-20 bg-[#064e3b] border border-[#065f46] focus:border-[#fbbf24] rounded-2xl py-2 px-3 text-sm text-center text-[#fbbf24] font-black outline-none"
-                            />
-                            <span className="text-xs text-[#86efac]">
-                              / {crit.maxScore || 10} درجات
-                            </span>
-                          </div>
-                        )}
+                        {/* Score with Fast Dropdown and Presets */}
+                        {crit.type === 'score' && (() => {
+                          const maxScore = Math.max(1, crit.maxScore || 10);
+                          const currentScore = val !== undefined ? Number(val) : maxScore;
+
+                          return (
+                            <div className="space-y-2">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                {/* Fast Dropdown Selector from 0 to maxScore */}
+                                <select
+                                  value={currentScore}
+                                  onChange={e =>
+                                    setCriteriaValues(prev => ({
+                                      ...prev,
+                                      [crit.id]: Number(e.target.value)
+                                    }))
+                                  }
+                                  className="bg-[#064e3b] border-2 border-emerald-600/60 focus:border-[#fbbf24] text-[#fbbf24] font-black rounded-2xl py-2 px-3 text-sm outline-none cursor-pointer min-w-[110px]"
+                                  dir="rtl"
+                                >
+                                  {Array.from({ length: maxScore + 1 }, (_, i) => maxScore - i).map(num => (
+                                    <option key={num} value={num} className="bg-[#022c22] text-[#fbbf24]">
+                                      {num} {num === maxScore ? '(الدرجة الكاملة)' : num === 0 ? '(صفر)' : 'درجات'}
+                                    </option>
+                                  ))}
+                                </select>
+
+                                {/* Direct Manual Input */}
+                                <input
+                                  type="number"
+                                  min={0}
+                                  max={maxScore}
+                                  value={currentScore}
+                                  onChange={e =>
+                                    setCriteriaValues(prev => ({
+                                      ...prev,
+                                      [crit.id]: Math.min(maxScore, Math.max(0, Number(e.target.value)))
+                                    }))
+                                  }
+                                  className="w-16 bg-[#022c22] border border-[#065f46] focus:border-[#fbbf24] rounded-2xl py-2 px-2 text-sm text-center text-[#fbbf24] font-black outline-none"
+                                />
+
+                                <span className="text-xs text-[#86efac] font-bold">
+                                  من {maxScore} درجات
+                                </span>
+                              </div>
+
+                              {/* Instant Quick-Select Buttons */}
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setCriteriaValues(prev => ({
+                                      ...prev,
+                                      [crit.id]: maxScore
+                                    }))
+                                  }
+                                  className={`px-2.5 py-1 rounded-xl text-[11px] font-bold border transition-all cursor-pointer ${
+                                    currentScore === maxScore
+                                      ? 'bg-emerald-500 text-[#064e3b] border-emerald-400 font-black shadow-sm'
+                                      : 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30 hover:bg-emerald-500/25'
+                                  }`}
+                                  title="إعطاء الدرجة الكاملة"
+                                >
+                                  كاملة ({maxScore})
+                                </button>
+                                {maxScore > 1 && (
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setCriteriaValues(prev => ({
+                                        ...prev,
+                                        [crit.id]: Math.max(0, maxScore - 1)
+                                      }))
+                                    }
+                                    className={`px-2 py-1 rounded-xl text-[11px] font-bold border transition-all cursor-pointer ${
+                                      currentScore === maxScore - 1
+                                        ? 'bg-amber-400 text-[#064e3b] border-amber-300 font-black shadow-sm'
+                                        : 'bg-amber-500/15 text-amber-300 border-amber-500/30 hover:bg-amber-500/25'
+                                    }`}
+                                    title="حسم درجة واحدة"
+                                  >
+                                    -1 ({maxScore - 1})
+                                  </button>
+                                )}
+                                {maxScore > 2 && (
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setCriteriaValues(prev => ({
+                                        ...prev,
+                                        [crit.id]: Math.max(0, maxScore - 2)
+                                      }))
+                                    }
+                                    className={`px-2 py-1 rounded-xl text-[11px] font-bold border transition-all cursor-pointer ${
+                                      currentScore === maxScore - 2
+                                        ? 'bg-amber-400 text-[#064e3b] border-amber-300 font-black shadow-sm'
+                                        : 'bg-amber-500/15 text-amber-300 border-amber-500/30 hover:bg-amber-500/25'
+                                    }`}
+                                    title="حسم درجتين"
+                                  >
+                                    -2 ({maxScore - 2})
+                                  </button>
+                                )}
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setCriteriaValues(prev => ({
+                                      ...prev,
+                                      [crit.id]: 0
+                                    }))
+                                  }
+                                  className={`px-2 py-1 rounded-xl text-[11px] font-bold border transition-all cursor-pointer ${
+                                    currentScore === 0
+                                      ? 'bg-red-500 text-white border-red-400 font-black shadow-sm'
+                                      : 'bg-red-500/15 text-red-300 border-red-500/30 hover:bg-red-500/25'
+                                  }`}
+                                  title="صفر"
+                                >
+                                  صفر
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })()}
 
                         {/* Options */}
                         {crit.type === 'options' && crit.options && (
@@ -2552,6 +2666,127 @@ export const EvaluationTab: React.FC<EvaluationTabProps> = ({
           )}
         </div>
       </div>
+
+      {/* Manage Criteria List Modal for Supervisors */}
+      {isManageCriteriaListOpen && (
+        <div className="fixed inset-0 z-[9998] bg-black/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+          <div className="relative w-full max-w-lg bg-[#064e3b] border-2 border-[#fbbf24]/50 rounded-3xl shadow-2xl flex flex-col max-h-[90vh] my-auto overflow-hidden animate-fadeIn text-right">
+            {/* Header */}
+            <div className="flex items-center justify-between p-5 border-b border-[#065f46] shrink-0 bg-[#064e3b]">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-2xl bg-[#fbbf24]/20 border border-[#fbbf24]/40 text-[#fbbf24] flex items-center justify-center">
+                  <Sliders className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-white font-heading">
+                    إدارة معايير التقييم الخاصة بالمجمع
+                  </h3>
+                  <p className="text-xs text-[#86efac]/80">
+                    خاصة بالمشرفين: إضافة، تعديل، وحذف معايير التقييم
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setIsManageCriteriaListOpen(false)}
+                className="p-1.5 text-[#86efac] hover:text-white rounded-xl cursor-pointer hover:bg-[#022c22]"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Criteria List */}
+            <div className="p-5 overflow-y-auto flex-1 space-y-3">
+              <div className="flex items-center justify-between pb-2">
+                <span className="text-xs font-bold text-[#86efac]">
+                  المعايير المعتمدة حالياً ({criteria.length})
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsManageCriteriaListOpen(false);
+                    handleOpenAddCriteria();
+                  }}
+                  className="px-3.5 py-1.5 rounded-xl bg-[#fbbf24] hover:bg-[#f59e0b] text-[#064e3b] text-xs font-black flex items-center gap-1.5 shadow-sm cursor-pointer transition-all"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>إضافة معيار جديد</span>
+                </button>
+              </div>
+
+              {criteria.length === 0 ? (
+                <div className="p-8 text-center text-xs text-[#86efac]/70 bg-[#022c22]/60 rounded-2xl border border-[#065f46]">
+                  لا توجد معايير مخصصة بعد. اضغط على "إضافة معيار جديد" لإنشاء معايير المجمع.
+                </div>
+              ) : (
+                criteria.map(crit => (
+                  <div
+                    key={crit.id}
+                    className="p-3.5 rounded-2xl bg-[#022c22] border border-[#065f46] flex items-center justify-between gap-3"
+                  >
+                    <div>
+                      <div className="text-sm font-bold text-white flex items-center gap-2">
+                        <span>{crit.name}</span>
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-medium border border-emerald-500/30">
+                          {crit.type === 'score'
+                            ? `درجات (من ${crit.maxScore || 10})`
+                            : crit.type === 'stars'
+                            ? 'نجوم (5 نجوم)'
+                            : crit.type === 'options'
+                            ? 'خيارات مخصصة'
+                            : 'نصي'}
+                        </span>
+                      </div>
+                      {crit.type === 'options' && crit.options && (
+                        <div className="text-[11px] text-[#86efac]/70 mt-1">
+                          الخيارات: {crit.options.join(' ، ')}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsManageCriteriaListOpen(false);
+                          handleOpenEditCriteria(crit);
+                        }}
+                        className="p-2 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 transition-colors cursor-pointer"
+                        title="تعديل المعيار"
+                      >
+                        <Pencil className="w-4 h-4" />
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsManageCriteriaListOpen(false);
+                          setCritToDelete(crit);
+                        }}
+                        className="p-2 rounded-xl bg-red-500/15 hover:bg-red-500/25 text-red-300 border border-red-500/30 transition-colors cursor-pointer"
+                        title="حذف المعيار"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+
+            <div className="p-4 border-t border-[#065f46] shrink-0 bg-[#022c22]/95 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setIsManageCriteriaListOpen(false)}
+                className="px-5 py-2.5 rounded-2xl bg-[#064e3b] text-[#86efac] hover:text-white border border-[#065f46] text-xs font-bold cursor-pointer"
+              >
+                إغلاق
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Add / Edit Criteria Modal */}
       {isCriteriaModalOpen && (

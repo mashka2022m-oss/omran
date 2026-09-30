@@ -82,6 +82,7 @@ import { DataBackupTab } from './components/tabs/DataBackupTab';
 import { ExamsTab } from './components/tabs/ExamsTab';
 import { AccountsTab } from './components/tabs/AccountsTab';
 import { RecordingsTab } from './components/tabs/RecordingsTab';
+import { EditAccountModal } from './components/EditAccountModal';
 
 export function App() {
   // Authentication State
@@ -178,6 +179,7 @@ export function App() {
   });
   const [isMultiComplexModalOpen, setIsMultiComplexModalOpen] = useState(false);
   const [newlyAddedComplexName, setNewlyAddedComplexName] = useState<string | null>(null);
+  const [isEditAccountModalOpen, setIsEditAccountModalOpen] = useState(false);
 
   // Main Data States
   const [students, setStudents] = useState<Student[]>([]);
@@ -658,6 +660,17 @@ export function App() {
     return settings;
   }, [settings, isDeveloper, supervisedComplex, scopedHalaqahs, activeHalaqahId, assignedHalaqahs, currentTeacher, currentUser]);
 
+  // Scoped criteria: Specific to active complex if set
+  const scopedCriteria = useMemo(() => {
+    const complexId = activeComplex?.id;
+    if (!complexId) return criteria;
+
+    const matched = criteria.filter(c => c.complexId === complexId);
+    if (matched.length > 0) return matched;
+
+    return criteria.filter(c => !c.complexId);
+  }, [criteria, activeComplex]);
+
   // Auto-switch to assigned halaqah for teacher or valid complex halaqah for supervisor
   useEffect(() => {
     if (currentUser?.role === 'admin') {
@@ -1083,16 +1096,50 @@ export function App() {
     }
   };
 
-  // 8. Update Criteria
+  // 8. Update Criteria (scoped to active complex)
   const handleSaveCriteria = async (list: EvaluationCriteria[]) => {
-    setCriteria(list);
-    await OmranDataService.saveCriteriaList(list);
+    const complexId = activeComplex?.id || 'default-complex';
+    const taggedList = list.map(c => ({
+      ...c,
+      complexId: c.complexId || complexId
+    }));
+
+    const otherComplexCriteria = criteria.filter(c => c.complexId && c.complexId !== complexId);
+    const fullList = [...otherComplexCriteria, ...taggedList];
+
+    setCriteria(fullList);
+    await OmranDataService.saveCriteriaList(fullList);
   };
 
   const handleDeleteCriteria = async (id: string) => {
     await OmranDataService.deleteCriteria(id);
     const list = await OmranDataService.loadCriteria();
     setCriteria(list);
+  };
+
+  // Handler for current teacher/supervisor/developer editing their own account credentials
+  const handleSaveCurrentTeacherAccount = async (updatedTeacher: TeacherAccount) => {
+    await OmranDataService.saveTeacher(updatedTeacher);
+    const updatedList = await OmranDataService.loadTeachers();
+    setTeachers(updatedList);
+
+    // Sync session user
+    if (currentUser) {
+      setCurrentUser(prev => prev ? {
+        ...prev,
+        username: updatedTeacher.name || updatedTeacher.username
+      } : null);
+      try {
+        const stored = sessionStorage.getItem('omran_auth_user');
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          parsed.username = updatedTeacher.name || updatedTeacher.username;
+          sessionStorage.setItem('omran_auth_user', JSON.stringify(parsed));
+        }
+      } catch (e) {
+        // ignore
+      }
+    }
   };
 
   // 9. Update Student AI Plan Assignment & Position
@@ -1548,6 +1595,7 @@ export function App() {
         onOpenSettings={() => setIsSettingsModalOpen(true)}
         onOpenComplexManagement={isDeveloper ? () => setIsComplexModalOpen(true) : undefined}
         onOpenPrivacyPolicy={() => navigatePublic('privacy')}
+        onOpenEditAccount={() => setIsEditAccountModalOpen(true)}
       />
 
       <main className="max-w-7xl mx-auto px-4 lg:px-8 pt-6 relative space-y-6">
@@ -1758,7 +1806,9 @@ export function App() {
                 students={assignedDisplayedStudents}
                 attendance={displayedAttendance}
                 evaluations={displayedEvaluations}
-                criteria={criteria}
+                criteria={scopedCriteria}
+                isSupervisor={isSupervisor || isDeveloper}
+                activeComplexId={activeComplex?.id || 'default-complex'}
                 selectedStudentId={targetStudentForEval}
                 onSaveEvaluation={handleSaveEvaluation}
                 onSaveCriteria={handleSaveCriteria}
@@ -1941,6 +1991,18 @@ export function App() {
         isNewlyAdded={Boolean(newlyAddedComplexName)}
         newlyAddedComplexName={newlyAddedComplexName}
       />
+
+      {/* Edit Account Modal (for Teacher, Supervisor, and Developer) */}
+      {isEditAccountModalOpen && currentTeacher && (
+        <EditAccountModal
+          isOpen={isEditAccountModalOpen}
+          onClose={() => setIsEditAccountModalOpen(false)}
+          currentTeacher={currentTeacher}
+          allTeachers={teachers}
+          allStudents={students}
+          onSaveTeacherAccount={handleSaveCurrentTeacherAccount}
+        />
+      )}
     </div>
   );
 }

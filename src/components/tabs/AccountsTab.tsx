@@ -567,9 +567,9 @@ export const AccountsTab: React.FC<AccountsTabProps> = ({
                             className="w-full bg-[#022c22] border border-amber-500/40 hover:border-amber-400 rounded-lg px-2 py-1 text-[11px] text-amber-200 font-bold cursor-pointer focus:outline-none transition-colors"
                             title="ترقية أو تغيير رتبة وصلاحية هذا الحساب فورياً"
                           >
-                            <option value="developer" className="bg-[#064e3b] text-amber-300 font-bold">⭐ ترقية إلى: مبرمج ومطور</option>
-                            <option value="supervisor" className="bg-[#064e3b] text-emerald-200 font-bold">🛡️ ترقية إلى: معلم مشرف</option>
-                            <option value="teacher" className="bg-[#064e3b] text-emerald-300">📖 تعيين كـ: معلم حلقة</option>
+                            <option value="developer" className="bg-[#064e3b] text-amber-300 font-bold">ترقية إلى: مبرمج ومطور</option>
+                            <option value="supervisor" className="bg-[#064e3b] text-emerald-200 font-bold">ترقية إلى: معلم مشرف</option>
+                            <option value="teacher" className="bg-[#064e3b] text-emerald-300">تعيين كـ: معلم حلقة</option>
                           </select>
                         </div>
                       </div>
@@ -913,9 +913,9 @@ export const AccountsTab: React.FC<AccountsTabProps> = ({
                     }}
                     className="w-full bg-[#064e3b]/70 border border-[#065f46] rounded-xl px-3 py-2 text-[#fbbf24] font-bold outline-none focus:border-[#fbbf24] text-xs"
                   >
-                    <option value="developer" className="bg-[#022c22] text-amber-300 font-bold">⭐ مبرمج ومطور المنظومة (كامل الصلاحيات والتنقل بين كافة المجمعات)</option>
-                    <option value="supervisor" className="bg-[#022c22] text-emerald-200 font-bold">🛡️ معلم مشرف (إشراف كامل على مجمعه وحلقاته فقط - لا يتنقل)</option>
-                    <option value="teacher" className="bg-[#022c22] text-emerald-300">📖 معلم حلقة ومحفظ (مخصص لحلقاته فقط ضمن مجمعه)</option>
+                    <option value="developer" className="bg-[#022c22] text-amber-300 font-bold">مبرمج ومطور المنظومة (كامل الصلاحيات والتنقل بين كافة المجمعات)</option>
+                    <option value="supervisor" className="bg-[#022c22] text-emerald-200 font-bold">معلم مشرف (إشراف كامل على مجمعه وحلقاته فقط - لا يتنقل)</option>
+                    <option value="teacher" className="bg-[#022c22] text-emerald-300">معلم حلقة ومحفظ (مخصص لحلقاته فقط ضمن مجمعه)</option>
                   </select>
                 </div>
               </div>
@@ -961,7 +961,7 @@ export const AccountsTab: React.FC<AccountsTabProps> = ({
                   </div>
 
                   <div className="text-[11px] text-emerald-200/90 leading-relaxed bg-[#022c22]/80 p-2.5 rounded-xl border border-emerald-700/50">
-                    💡 <strong className="text-amber-300">قاعدة المنظومة:</strong> المعلم والمعلم المشرف يتبعان حصراً لمجمع قرآني واحد فقط وحلقاته، ولا يمكن ربطهما بأكثر من مجمع أو التنقل بين المجمعات، بينما المبرمج فقط هو من يمتلك صلاحية التنقل والإشراف الشامل.
+                    <strong className="text-amber-300">قاعدة المنظومة:</strong> المعلم والمعلم المشرف يتبعان حصراً لمجمع قرآني واحد فقط وحلقاته، ولا يمكن ربطهما بأكثر من مجمع أو التنقل بين المجمعات، بينما المبرمج فقط هو من يمتلك صلاحية التنقل والإشراف الشامل.
                   </div>
 
                   <div>

@@ -213,15 +213,15 @@ export const ReportsTab: React.FC<ReportsTabProps> = ({
     const separator = '_______________________________________';
     const lines: string[] = [];
 
-    lines.push(`📋 *تقرير الحفظ والمراجعة لجميع طلاب الحلقة إلى الآن*`);
+    lines.push(`*تقرير الحفظ والمراجعة لجميع طلاب الحلقة إلى الآن*`);
     if (settings.halaqahName) {
-      lines.push(`🕌 ${settings.halaqahName}`);
+      lines.push(`• الحلقة: ${settings.halaqahName}`);
     }
     if (settings.teacherName) {
-      lines.push(`👤 المشرف: ${settings.teacherName}`);
+      lines.push(`• المشرف: ${settings.teacherName}`);
     }
-    lines.push(`📅 التاريخ: ${new Date().toLocaleDateString('ar-SA')}`);
-    lines.push(`👥 إجمالي الطلاب: ${students.length} طالب`);
+    lines.push(`• التاريخ: ${new Date().toLocaleDateString('ar-SA')}`);
+    lines.push(`• إجمالي الطلاب: ${students.length} طالب`);
     lines.push(separator);
     lines.push('');
 
@@ -289,7 +289,7 @@ export const ReportsTab: React.FC<ReportsTabProps> = ({
       achievementsText: `أتم الطالب حفظ وتسميع السور المقررة بمستوى ${selectedStudent.level}، وسجل حضوراً لـ ${presents} يوماً بحلقة القرآن الكريم مع الالتزام بالمراجعة المستمرة.`,
       tajweedAssessment: 'أداء صوتي طيب مع إتقان المدود الأساسية وأحكام النون والميم الساكنتين ومخارج الحروف.',
       recommendations: 'الاستمرار في الاستماع اليومي للمصحف المعلم بمعدل 15 دقيقة والتكرار المنزلي مع المتابعة الأسرية.',
-      whatsappText: `السلام عليكم ورحمة الله وبركاته 🌿\nيسرنا في *${selectedStudent.halaqahName || settings.halaqahName || 'حلقة القرآن الكريم'}* مشاركتكم التقرير ${periodLabel} للطالب النجيب / *${selectedStudent.name}*.\n📊 نسبة الحضور: *${attendancePercentage}%* (${presents} يوم حضور)\n✨ المحفوظ الحالي: سورة ${selectedStudent.currentSurahName}\n🔗 للاطلاع على التقرير التفصيلي وملف الطالب الحي عبر الرابط:\n${portalUrl}\nمع تحيات المعلم المشرف: *${teacherName || settings.teacherName || 'إدارة الحلقة'}*`,
+      whatsappText: `السلام عليكم ورحمة الله وبركاته\nيسرنا في *${selectedStudent.halaqahName || settings.halaqahName || 'حلقة القرآن الكريم'}* مشاركتكم التقرير ${periodLabel} للطالب النجيب / *${selectedStudent.name}*.\n• نسبة الحضور: *${attendancePercentage}%* (${presents} يوم حضور)\n• المحفوظ الحالي: سورة ${selectedStudent.currentSurahName}\n• للاطلاع على التقرير التفصيلي وملف الطالب الحي عبر الرابط:\n${portalUrl}\nمع تحيات المعلم المشرف: *${teacherName || settings.teacherName || 'إدارة الحلقة'}*`,
       attendanceSummary
     };
 

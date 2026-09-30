@@ -188,30 +188,30 @@ export const ParentsWhatsAppTab: React.FC<ParentsWhatsAppTabProps> = ({
     const effectiveSender = customSender || senderName;
 
     // Construct clean, formatted WhatsApp message
-    let msg = `السلام عليكم ورحمة الله وبركاته 🌿\n`;
+    let msg = `السلام عليكم ورحمة الله وبركاته\n`;
     msg += `المكرم ولي أمر الطالب العزيز / *${student.name}* حفظه الله ورعاه\n`;
     msg += `نحيطكم علماً بتقرير متابعة الطالب في *${student.halaqahName || settings.halaqahName || 'حلقة القرآن الكريم'}* ليوم ${new Date().toLocaleDateString('ar-SA')}:\n\n`;
 
-    msg += `📌 *حالة الحضور اليوم:* ${status}\n\n`;
+    msg += `• *حالة الحضور اليوم:* ${status}\n\n`;
 
-    msg += `📖 *ما تم تسميعه وإنجازه اليوم في الحلقة بالتفصيل:*\n`;
-    msg += `🔹 *الحفظ الجديد اليوم:* ${todayNewText}\n`;
+    msg += `[ إنجاز وتسميع اليوم في الحلقة ]\n`;
+    msg += `• *الحفظ الجديد اليوم:* ${todayNewText}\n`;
     if (todayReviewText.includes('\n')) {
-      msg += `🔹 *المراجعة والتثبيت اليوم:*\n▫️ ${todayReviewText}\n`;
+      msg += `• *المراجعة والتثبيت اليوم:*\n- ${todayReviewText}\n`;
     } else {
-      msg += `🔹 *المراجعة والتثبيت اليوم:* ${todayReviewText}\n`;
+      msg += `• *المراجعة والتثبيت اليوم:* ${todayReviewText}\n`;
     }
-    msg += `💡 *ملاحظات وتوجيه المعلم:* ${teacherNote}\n\n`;
+    msg += `• *ملاحظات وتوجيه المعلم:* ${teacherNote}\n\n`;
 
-    msg += `🎯 *المقرر المطلوب تسميعه وحفظه لغدٍ بإذن الله تعالى:*\n`;
-    msg += `✨ *ورد الحفظ الجديد لغد:* ${tomNewText}\n`;
-    msg += `🔄 *ورد المراجعة والتثبيت لغد:* ${tomReviewText}\n`;
-    msg += `🎧 *القارئ المقترح للاستماع له بالمنزل:* ${sheikh}\n`;
-    msg += `📝 *توجيه المتابعة المنزلية:* ${homeNote}\n\n`;
+    msg += `[ المقرر المطلوب لليوم التالي بإذن الله ]\n`;
+    msg += `• *ورد الحفظ الجديد القادم:* ${tomNewText}\n`;
+    msg += `• *ورد المراجعة والتثبيت:* ${tomReviewText}\n`;
+    msg += `• *القارئ المقترح للاستماع له بالمنزل:* ${sheikh}\n`;
+    msg += `• *توجيه المتابعة المنزلية:* ${homeNote}\n\n`;
 
-    msg += `🔗 *لمتابعة ملف الطالب وخطة حفظه وسجل درجاته مباشرة عبر البوابة الحية، اضغط على الرابط:* \n`;
+    msg += `• *لمتابعة ملف الطالب وخطة حفظه وسجل درجاته مباشرة عبر البوابة الحية، اضغط على الرابط:* \n`;
     msg += `${portalUrl}\n\n`;
-    msg += `جزاكم الله خيراً ونفع بكم وبأبنائنا الكرام 🤲\n`;
+    msg += `جزاكم الله خيراً ونفع بكم وبأبنائنا الكرام\n`;
     msg += `معلم ومحفظ الحلقة: *${effectiveSender}*`;
 
     return msg;

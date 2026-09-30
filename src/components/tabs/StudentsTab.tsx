@@ -626,7 +626,7 @@ export const StudentsTab: React.FC<StudentsTabProps> = ({
                             <>
                               <span>•</span>
                               <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-500/25 text-amber-300 border border-amber-500/50">
-                                ⚠️ غير مرفق بحلقة
+                                غير مرفق بحلقة
                               </span>
                             </>
                           ) : (
@@ -1019,7 +1019,7 @@ export const StudentsTab: React.FC<StudentsTabProps> = ({
                       className="w-full bg-[#022c22] border border-[#065f46] focus:border-[#fbbf24] rounded-2xl py-2.5 px-3 text-sm text-[#f0f9f6] outline-none cursor-pointer"
                     >
                       <option value="" className="bg-[#064e3b] text-amber-300 font-bold">
-                        ⚠️ غير مرفق بحلقة بعد (في قائمة الانتظار)
+                        غير مرفق بحلقة بعد (في قائمة الانتظار)
                       </option>
                       {halaqahs.map(h => (
                         <option key={h.id} value={h.id} className="bg-[#064e3b] text-white">

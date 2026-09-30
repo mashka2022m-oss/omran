@@ -84,7 +84,7 @@ export const HomeTab: React.FC<HomeTabProps> = ({
               <span>لوحة المتابعة المشتركة للحلقة القرآنية</span>
             </div>
             <h2 className="text-2xl sm:text-3xl font-bold font-heading text-white">
-              مرحباً بك، <span className="text-[#fbbf24]">{displayTeacherName}</span> 🌿
+              مرحباً بك، <span className="text-[#fbbf24]">{displayTeacherName}</span>
             </h2>
             <p className="text-[#86efac]/90 text-sm mt-1 max-w-xl">
               تسميع وحفظ اليوم في {settings.halaqahName}. المنظومة مرتبطة سحابياً بحيث يتشارك جميع معلمي الحلقة نفس الطلاب والتقييمات فورياً ولحظياً.

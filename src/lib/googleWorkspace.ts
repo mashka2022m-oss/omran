@@ -68,6 +68,18 @@ export class PopupBlockedError extends Error {
   }
 }
 
+export class UnregisteredGoogleAccountError extends Error {
+  isUnregistered = true;
+  email: string;
+  constructor(email: string) {
+    super(
+      `أنت غير مسجل في المنظومة. الرجاء التسجيل أولاً أو التواصل مع المشرف العام.`
+    );
+    this.name = 'UnregisteredGoogleAccountError';
+    this.email = email;
+  }
+}
+
 // Normalize Arabic text for robust student name comparisons (hamzas, ta marbuta, spaces, tashkeel)
 export function normalizeArabicText(text: string): string {
   if (!text) return '';
@@ -1028,10 +1040,21 @@ export class GoogleWorkspaceService {
     }
 
     // 3. STRICT RULE: If Google account is NOT linked to any teacher or student in the system,
-    // NEVER auto-create a student. Reject with clear guidance message as requested.
-    throw new Error(
-      'عذراً، هذا الحساب غير مربوط بأي حساب في المنظومة. يرجى تسجيل الدخول باسم المستخدم وكلمة المرور أولاً ثم ربط حساب Google من داخل المنظومة.'
-    );
+    // IMMEDIATELY delete the newly created Firebase Auth user (so no orphan account remains), sign out, and throw UnregisteredGoogleAccountError.
+    try {
+      if (auth?.currentUser) {
+        try {
+          await auth.currentUser.delete();
+        } catch (delErr) {
+          console.warn('Could not delete auth user directly, falling back to sign out:', delErr);
+          await auth.signOut();
+        }
+      }
+    } catch {
+      // ignore auth deletion error
+    }
+
+    throw new UnregisteredGoogleAccountError(cleanEmail);
   }
 
   // Look up Google Form response for a student by their registered Google email/name and save score automatically
@@ -1392,12 +1415,12 @@ export class GoogleWorkspaceService {
     const descriptionText = [
       '۞ مَنَصَّةُ عُمْرَانَ لِحِلَقِ القُرْآنِ الكَرِيمِ ۞',
       '═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═',
-      `📖 عنوان الاختبار: ${exam.title}`,
-      `✨ إجمالي درجات الاختبار: ${exam.totalPoints} درجات`,
-      exam.description ? `📝 إرشادات وتوجيهات المعلم: ${exam.description}` : '',
+      `• عنوان الاختبار: ${exam.title}`,
+      `• إجمالي درجات الاختبار: ${exam.totalPoints} درجات`,
+      exam.description ? `• إرشادات وتوجيهات المعلم: ${exam.description}` : '',
       '═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═',
-      '📌 تعليمات هامة للطالب الكريم:',
-      '1. اكتب اسمك الثلاثي الكامل المسجل في منصة عمران بدقة لاحتساب درجاتك تلقائياً في لوحة الشرف.',
+      '【تعليمات هامة للطالب الكريم】:',
+      '1. اكتب اسمك الرباعي الكامل المسجل في منصة عمران بدقة لاحتساب درجاتك تلقائياً في لوحة الشرف.',
       '2. أجب عن كافة الأسئلة ثم اضغط زر (إرسال / Submit).',
       '3. ستنتقل درجاتك فوراً إلى سجلك في لوحة شرف المنصة بعد المزامنة.'
     ].filter(Boolean).join('\n');
@@ -1616,12 +1639,12 @@ export class GoogleWorkspaceService {
       const descriptionText = [
         '۞ مَنَصَّةُ عُمْرَانَ لِحِلَقِ القُرْآنِ الكَرِيمِ ۞',
         '═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═',
-        `📖 عنوان الاختبار: ${exam.title}`,
-        `✨ إجمالي درجات الاختبار: ${exam.totalPoints} درجات`,
-        exam.description ? `📝 إرشادات وتوجيهات المعلم: ${exam.description}` : '',
+        `• عنوان الاختبار: ${exam.title}`,
+        `• إجمالي درجات الاختبار: ${exam.totalPoints} درجات`,
+        exam.description ? `• إرشادات وتوجيهات المعلم: ${exam.description}` : '',
         '═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═',
-        '📌 تعليمات هامة للطالب الكريم:',
-        '1. اكتب اسمك الثلاثي الكامل المسجل في منصة عمران بدقة لاحتساب درجاتك تلقائياً في لوحة الشرف.',
+        '【تعليمات هامة للطالب الكريم】:',
+        '1. اكتب اسمك الرباعي الكامل المسجل في منصة عمران بدقة لاحتساب درجاتك تلقائياً في لوحة الشرف.',
         '2. أجب عن كافة الأسئلة ثم اضغط زر (إرسال / Submit).',
         '3. ستنتقل درجاتك فوراً إلى سجلك في لوحة شرف المنصة بعد المزامنة.'
       ].filter(Boolean).join('\n');

@@ -174,7 +174,7 @@ export const TeacherMultiComplexModal: React.FC<TeacherMultiComplexModalProps> =
                         )}
                         {isNewlyAddedItem && !isCurrent && (
                           <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-400/40">
-                            مضاف حديثاً 🌟
+                            مضاف حديثاً
                           </span>
                         )}
                       </div>
@@ -276,7 +276,7 @@ export const TeacherMultiComplexModal: React.FC<TeacherMultiComplexModalProps> =
 
           {/* Helpful Navigation hint */}
           <p className="text-center text-[11px] text-emerald-300/70 mt-3 font-medium">
-            💡 يمكنك دائماً التبديل الفوري بين مجمعاتك في أي لحظة من شريط التنقل العلوي بجوار اسم المجمع.
+            يمكنك دائماً التبديل الفوري بين مجمعاتك في أي لحظة من شريط التنقل العلوي بجوار اسم المجمع.
           </p>
         </div>
       </div>

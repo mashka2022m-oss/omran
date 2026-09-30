@@ -10,10 +10,11 @@ import {
   UserPlus,
   AlertCircle,
   CheckCircle2,
-  KeyRound
+  KeyRound,
+  X
 } from 'lucide-react';
 import { Student, UserRole, AppSettings, TeacherAccount, getThreePartNameValidation } from '../types';
-import { GoogleWorkspaceService } from '../lib/googleWorkspace';
+import { GoogleWorkspaceService, UnregisteredGoogleAccountError } from '../lib/googleWorkspace';
 
 interface LoginModalProps {
   onLoginSuccess: (user: { username: string; role: UserRole; studentId?: string; teacherId?: string }) => void;
@@ -53,6 +54,8 @@ export const LoginModal: React.FC<LoginModalProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isGoogleSigningIn, setIsGoogleSigningIn] = useState(false);
   const [googleError, setGoogleError] = useState('');
+  const [showUnregisteredModal, setShowUnregisteredModal] = useState(false);
+  const [unregisteredEmail, setUnregisteredEmail] = useState('');
 
   const handleGoogleUnifiedLogin = async () => {
     setGoogleError('');
@@ -81,7 +84,10 @@ export const LoginModal: React.FC<LoginModalProps> = ({
     } catch (err: any) {
       console.warn('Google Unified Sign-In notice:', err);
       const errMsg = err?.message || String(err);
-      if (err?.isPopupClosed || errMsg.includes('popup-closed')) {
+      if (err instanceof UnregisteredGoogleAccountError || err?.isUnregistered || errMsg.includes('غير مسجل')) {
+        setUnregisteredEmail(err?.email || '');
+        setShowUnregisteredModal(true);
+      } else if (err?.isPopupClosed || errMsg.includes('popup-closed')) {
         setGoogleError('تم إغلاق نافذة تسجيل الدخول من Google قبل استكمال التفويض. يرجى الضغط مرة أخرى والموافقة.');
       } else if (err?.isPopupBlocked || errMsg.includes('popup-blocked')) {
         setGoogleError('المتصفح حظر النافذة المنبثقة. يرجى السماح بالنوافذ المنبثقة لموقع المنصة.');
@@ -275,6 +281,76 @@ export const LoginModal: React.FC<LoginModalProps> = ({
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-4 relative z-10">
+      {/* Unregistered Google Account Modal / Alert */}
+      {showUnregisteredModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-md p-4 animate-in fade-in duration-200">
+          <div className="w-full max-w-md bg-[#064e3b] border-2 border-amber-400/60 rounded-3xl p-6 shadow-2xl shadow-emerald-950/80 text-right relative">
+            {/* Top Close (X) button */}
+            <button
+              type="button"
+              onClick={() => setShowUnregisteredModal(false)}
+              className="absolute top-4 left-4 p-2 rounded-xl text-slate-300 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+              title="إغلاق التنبيه"
+            >
+              <X className="w-5 h-5 text-amber-300" />
+            </button>
+
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-12 h-12 rounded-2xl bg-amber-500/20 border border-amber-500/40 text-amber-300 flex items-center justify-center shrink-0">
+                <AlertCircle className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-white font-heading">
+                  تنبيه تسجيل الدخول
+                </h3>
+                <p className="text-xs text-[#86efac]/80">
+                  فحص الحساب المعتمد في المنظومة
+                </p>
+              </div>
+            </div>
+
+            <div className="p-4 rounded-2xl bg-[#022c22]/90 border border-amber-500/30 text-amber-100 text-sm leading-relaxed mb-5">
+              <p className="font-bold text-amber-300 mb-1.5">
+                أنت غير مسجل في المنظومة.
+              </p>
+              <p className="text-xs text-emerald-100/90">
+                الرجاء تسجيل حساب جديد كطالب أولاً، أو التواصل مع المعلم / المشرف العام لربط حسابك.
+              </p>
+              {unregisteredEmail && (
+                <div className="mt-2.5 pt-2 border-t border-emerald-700/50 text-[11px] text-emerald-300 font-mono">
+                  البريد الإلكتروني: {unregisteredEmail}
+                </div>
+              )}
+            </div>
+
+            <div className="flex flex-col sm:flex-row items-center gap-2.5">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowUnregisteredModal(false);
+                  setActiveTab('register');
+                }}
+                className="w-full sm:flex-1 py-3 px-4 rounded-2xl bg-[#fbbf24] hover:bg-[#f59e0b] text-[#064e3b] font-black text-xs sm:text-sm shadow-md transition-all cursor-pointer text-center"
+              >
+                إنشاء حساب طالب الآن
+              </button>
+              {onBackToLanding && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowUnregisteredModal(false);
+                    onBackToLanding();
+                  }}
+                  className="w-full sm:flex-1 py-3 px-4 rounded-2xl bg-[#022c22] hover:bg-[#022c22]/70 text-amber-200 border border-emerald-600/50 text-xs sm:text-sm font-bold transition-all cursor-pointer text-center"
+                >
+                  الرجوع للواجهة الرئيسية
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {onBackToLanding && (
         <div className="w-full max-w-md mb-3 flex items-center justify-between text-xs">
           <button

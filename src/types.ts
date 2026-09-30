@@ -389,6 +389,7 @@ export interface EvaluationCriteria {
   maxScore?: number;
   options?: string[];
   isDefault?: boolean;
+  complexId?: string; // المجمع القرآني الخاص بهذا المعيار
 }
 
 export interface StudentEvaluation {
@@ -767,5 +768,28 @@ export function isValidThreePartName(
   roleLabel: 'طالب' | 'معلم' | 'مشرف' | 'شخص' = 'شخص'
 ): boolean {
   return getThreePartNameValidation(rawName, roleLabel).isValid;
+}
+
+/**
+ * Validates that an Arabic name has at least 4 meaningful components (الاسم الرباعي: الاسم الأول، واسم الأب، واسم الجد، واللقب أو اسم العائلة).
+ */
+export function getFourPartNameValidation(
+  fullName: string | null | undefined,
+  roleLabel: 'طالب' | 'معلم' | 'مشرف' | 'شخص' = 'شخص'
+): { isValid: boolean; message?: string; partsCount: number } {
+  const threePartRes = getThreePartNameValidation(fullName, roleLabel);
+  if (!threePartRes.isValid) {
+    return threePartRes;
+  }
+
+  if (threePartRes.partsCount < 4) {
+    return {
+      isValid: false,
+      partsCount: threePartRes.partsCount,
+      message: `الاسم المدخل ثلاثي فقط. يلزم كتابة الاسم الرباعي كاملاً (الاسم، اسم الأب، اسم الجد، واسم العائلة) لتجنب تشابه الأسماء.`
+    };
+  }
+
+  return { isValid: true, partsCount: threePartRes.partsCount };
 }
 

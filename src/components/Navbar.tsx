@@ -16,7 +16,8 @@ import {
   Building2,
   Workflow,
   CheckCircle,
-  X
+  X,
+  UserCog
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { UserRole, AppSettings, Halaqah, QuranComplex, TeacherAccount } from '../types';
@@ -48,6 +49,7 @@ interface NavbarProps {
   onOpenSettings?: () => void;
   onOpenComplexManagement?: () => void;
   onOpenPrivacyPolicy?: () => void;
+  onOpenEditAccount?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -76,7 +78,8 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenTeacherManagement,
   onOpenSettings,
   onOpenComplexManagement,
-  onOpenPrivacyPolicy
+  onOpenPrivacyPolicy,
+  onOpenEditAccount
 }) => {
   const todayArabic = new Intl.DateTimeFormat('ar-SA', {
     weekday: 'long',
@@ -358,8 +361,8 @@ export const Navbar: React.FC<NavbarProps> = ({
           )}
 
           {currentUser && (
-            <div className="flex items-center gap-2.5 bg-[#022c22]/80 border border-[#065f46] rounded-2xl px-3.5 py-1.5 shadow-inner">
-              <div className="w-8 h-8 rounded-xl bg-emerald-500/20 text-[#fbbf24] flex items-center justify-center text-sm font-bold border border-emerald-500/30">
+            <div className="flex items-center gap-2 bg-[#022c22]/80 border border-[#065f46] rounded-2xl px-2.5 sm:px-3.5 py-1.5 shadow-inner">
+              <div className="w-8 h-8 rounded-xl bg-emerald-500/20 text-[#fbbf24] flex items-center justify-center text-sm font-bold border border-emerald-500/30 shrink-0">
                 {currentUser.username.charAt(0)}
               </div>
               <div className="text-right hidden sm:block">
@@ -371,10 +374,23 @@ export const Navbar: React.FC<NavbarProps> = ({
                 </div>
               </div>
 
+              {/* Edit Account Button (for Teachers, Supervisors, and Developers) */}
+              {currentUser.role === 'admin' && onOpenEditAccount && (
+                <button
+                  type="button"
+                  onClick={onOpenEditAccount}
+                  title="تعديل بيانات الحساب (اسم المستخدم، كلمة المرور، والاسم الرباعي)"
+                  className="p-1.5 text-[#fbbf24] hover:text-white hover:bg-emerald-900/60 rounded-xl transition-colors cursor-pointer mr-1 flex items-center gap-1 text-[11px] font-bold"
+                >
+                  <UserCog className="w-4 h-4" />
+                  <span className="hidden md:inline">تعديل الحساب</span>
+                </button>
+              )}
+
               <button
                 onClick={onLogout}
                 title="تسجيل الخروج"
-                className="mr-2 p-1.5 text-slate-300 hover:text-red-400 hover:bg-white/5 rounded-xl transition-colors cursor-pointer"
+                className="mr-1 p-1.5 text-slate-300 hover:text-red-400 hover:bg-white/5 rounded-xl transition-colors cursor-pointer"
               >
                 <LogOut className="w-4 h-4" />
               </button>

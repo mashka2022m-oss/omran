@@ -170,11 +170,11 @@ export const PrivacyPolicyPage: React.FC<PrivacyPolicyPageProps> = ({
             <div className="p-4 rounded-2xl bg-[#022c22]/90 border border-emerald-500/40 font-bold text-amber-200">
               {activeLang === 'ar' ? (
                 <>
-                  📌 إقرار صريح لا لبس فيه: لا تقوم منظومة عُمْرَان ببيع، أو تأجير، أو مشاركة، أو نقل، أو الإفصاح عن أي بيانات مستخدمين شخصية أو بيانات تم استلامها من خدمات Google API إلى أي طرف ثالث، أو وسطاء بيانات، أو شركات إعلانية، أو جهات تجارية تحت أي ظرف كان.
+                  <span className="text-emerald-400 font-black">【إقرار صريح لا لبس فيه】</span> لا تقوم منظومة عُمْرَان ببيع، أو تأجير، أو مشاركة، أو نقل، أو الإفصاح عن أي بيانات مستخدمين شخصية أو بيانات تم استلامها من خدمات Google API إلى أي طرف ثالث، أو وسطاء بيانات، أو شركات إعلانية، أو جهات تجارية تحت أي ظرف كان.
                 </>
               ) : (
                 <>
-                  📌 Explicit Affirmation: Omran Quran Platform does NOT sell, rent, lease, share, transfer, or disclose any personal user data or information received from Google APIs to any third parties, data brokers, advertising platforms, or commercial partners under any circumstances.
+                  <span className="text-emerald-400 font-black">[Explicit Affirmation]</span> Omran Quran Platform does NOT sell, rent, lease, share, transfer, or disclose any personal user data or information received from Google APIs to any third parties, data brokers, advertising platforms, or commercial partners under any circumstances.
                 </>
               )}
             </div>

@@ -2641,7 +2641,7 @@ export const ExamsTab: React.FC<ExamsTabProps> = ({
                 هل أنت متأكد من رغبتك في حذف <strong className="text-[#fbbf24] font-bold">({filteredSubmissions.length})</strong> تسليم/رد معروض حالياً؟
               </p>
               <div className="p-3 rounded-xl bg-rose-950/40 border border-rose-500/30 text-[11px] text-rose-200 mt-2 text-right leading-relaxed">
-                ⚠️ تحذير: سيتم حذف جميع نتائج هذه التسليمات من السحابة وتفريغ الردود، مما يمكن الطلاب من إعادة الاختبار. لا يمكن التراجع عن هذا الإجراء.
+                <span className="font-bold text-amber-300">تنبيه هام:</span> سيتم حذف جميع نتائج هذه التسليمات من السحابة وتفريغ الردود، مما يمكن الطلاب من إعادة الاختبار. لا يمكن التراجع عن هذا الإجراء.
               </div>
             </div>
             <div className="flex items-center justify-center gap-3 pt-2">
