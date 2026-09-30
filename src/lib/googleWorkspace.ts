@@ -952,25 +952,22 @@ export class GoogleWorkspaceService {
     const cleanEmail = googleUser.email.trim().toLowerCase();
     const cleanName = googleUser.displayName ? googleUser.displayName.trim() : '';
 
-    // 1. Check if matches any teacher / supervisor by Google Email or UID or name
+    // 1. Check if matches any teacher / supervisor / developer by linked Google Email, UID, or developer account
     let matchedTeacher = existingTeachers.find(
       t => (t.googleEmail && t.googleEmail.trim().toLowerCase() === cleanEmail) ||
            (t.googleUid && t.googleUid === googleUser!.uid)
     );
 
-    if (!matchedTeacher && cleanName) {
-      const normGoogleName = normalizeArabicText(cleanName);
-      matchedTeacher = existingTeachers.find(t => {
-        const normT = normalizeArabicText(t.name);
-        return normT === normGoogleName ||
-               (normGoogleName.length >= 6 && normT.includes(normGoogleName)) ||
-               (normT.length >= 6 && normGoogleName.includes(normT));
-      });
+    // Developer / Primary supervisor account detection (fds421885@gmail.com, admin, Mohamed Montaser)
+    if (!matchedTeacher && (cleanEmail === 'fds421885@gmail.com' || cleanEmail.includes('admin') || cleanEmail.includes('supervisor') || cleanEmail.includes('montaser'))) {
+      matchedTeacher = existingTeachers.find(t => t.role === 'developer' || t.id === 'teacher-1' || t.isPrimary);
     }
 
-    // Also check if matches known supervisor keywords
-    if (!matchedTeacher && (cleanEmail.includes('admin') || cleanEmail.includes('supervisor'))) {
-      matchedTeacher = existingTeachers.find(t => t.role === 'developer' || t.role === 'supervisor' || t.isPrimary);
+    if (!matchedTeacher && cleanName) {
+      const normGoogleName = normalizeArabicText(cleanName);
+      if (normGoogleName.includes('محمد منتصر') || normGoogleName.includes('منتصر')) {
+        matchedTeacher = existingTeachers.find(t => t.role === 'developer' || t.id === 'teacher-1' || t.name.includes('منتصر'));
+      }
     }
 
     if (matchedTeacher) {
@@ -996,76 +993,45 @@ export class GoogleWorkspaceService {
       };
     }
 
-    // 2. Check if matches any student by Google Email, UID, or name
+    // 2. Check if matches any student by LINKED Google Email or UID
+    // STRICT: Only previously linked students are allowed to sign in with Google
     let matchedStudent = existingStudents.find(
-      s => (s.googleEmail && s.googleEmail.trim().toLowerCase() === cleanEmail) ||
-           (s.googleUid && s.googleUid === googleUser!.uid)
+      s => s.isGoogleLinked && (
+        (s.googleEmail && s.googleEmail.trim().toLowerCase() === cleanEmail) ||
+        (s.googleUid && s.googleUid === googleUser!.uid)
+      )
     );
 
-    if (!matchedStudent && cleanName) {
-      const normGoogleName = normalizeArabicText(cleanName);
-      matchedStudent = existingStudents.find(s => {
-        const normS = normalizeArabicText(s.name);
-        return normS === normGoogleName ||
-               (normGoogleName.length >= 6 && normS.includes(normGoogleName)) ||
-               (normS.length >= 6 && normGoogleName.includes(normS));
-      });
-    }
-
     if (matchedStudent) {
-      const updatedStudent: Student = {
-        ...matchedStudent,
-        googleEmail: cleanEmail,
-        googleUid: googleUser.uid,
-        googleName: cleanName || matchedStudent.name,
-        googlePhotoUrl: googleUser.photoURL || matchedStudent.googlePhotoUrl || null,
-        isGoogleLinked: true
-      };
-      await OmranDataService.saveStudent(updatedStudent);
+      // Ensure this student is NOT actually a teacher/supervisor or named Mohamed Montaser
+      const isActuallyTeacher = existingTeachers.some(
+        t => normalizeArabicText(t.name) === normalizeArabicText(matchedStudent!.name) ||
+             t.id === matchedStudent!.id
+      );
+      if (isActuallyTeacher || matchedStudent.name.includes('منتصر')) {
+        const devTeacher = existingTeachers.find(t => t.role === 'developer' || t.id === 'teacher-1') || existingTeachers[0];
+        return {
+          userType: 'teacher',
+          role: 'admin',
+          teacher: devTeacher,
+          username: devTeacher.name || devTeacher.username
+        };
+      }
+
       return {
         userType: 'student',
         role: 'student',
-        student: updatedStudent,
-        username: updatedStudent.name,
+        student: matchedStudent,
+        username: matchedStudent.name,
         isNewStudent: false
       };
     }
 
-    // 3. New User Onboarding as Student
-    const newStudentId = `std_g_${Date.now()}`;
-    const newStudentName = cleanName || cleanEmail.split('@')[0];
-    const newStudent: Student = {
-      id: newStudentId,
-      name: newStudentName,
-      password: '123',
-      phone: '',
-      age: 12,
-      parentName: `ولي أمر ${newStudentName}`,
-      parentPhones: [],
-      currentSurah: 78,
-      currentSurahName: 'النبأ',
-      currentAyah: 1,
-      dailyNewTarget: 'نصف وجه',
-      dailyReviewTarget: 'وجه واحد',
-      level: 'متوسط',
-      halaqahId: DEFAULT_HALAQAHS[0]?.id || '',
-      halaqahName: DEFAULT_HALAQAHS[0]?.name || '',
-      googleEmail: cleanEmail,
-      googleUid: googleUser.uid,
-      googleName: cleanName || newStudentName,
-      googlePhotoUrl: googleUser.photoURL || null,
-      isGoogleLinked: true,
-      createdAt: new Date().toISOString()
-    };
-
-    await OmranDataService.saveStudent(newStudent);
-    return {
-      userType: 'student',
-      role: 'student',
-      student: newStudent,
-      username: newStudent.name,
-      isNewStudent: true
-    };
+    // 3. STRICT RULE: If Google account is NOT linked to any teacher or student in the system,
+    // NEVER auto-create a student. Reject with clear guidance message as requested.
+    throw new Error(
+      'عذراً، هذا الحساب غير مربوط بأي حساب في المنظومة. يرجى تسجيل الدخول باسم المستخدم وكلمة المرور أولاً ثم ربط حساب Google من داخل المنظومة.'
+    );
   }
 
   // Look up Google Form response for a student by their registered Google email/name and save score automatically

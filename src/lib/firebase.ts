@@ -37,18 +37,12 @@ import {
   GoogleOAuthConfig,
   SurahRecording,
   RecordingsConfig,
-  StudentListeningLog
+  StudentListeningLog,
+  normalizeTeacherText
 } from '../types';
 
-// Web app's Firebase configuration matching user credentials
+// Web app's Firebase configuration from firebase-applet-config.json
 export const firebaseConfig = {
-  apiKey: "AIzaSyDEzjLSKGT89RkZk_r3PnWooCyuYok4pyc",
-  authDomain: "omran-ffbad.firebaseapp.com",
-  projectId: "omran-ffbad",
-  storageBucket: "omran-ffbad.firebasestorage.app",
-  messagingSenderId: "664438563645",
-  appId: "1:664438563645:web:91e693363dcec605291b54",
-  measurementId: "G-ME83CLHGKP",
   ...baseAppletConfig
 };
 
@@ -229,17 +223,19 @@ export const DEFAULT_SETTINGS: AppSettings = {
 export const INITIAL_TEACHERS: TeacherAccount[] = [
   {
     id: 'teacher-1',
-    name: 'المشرف العام',
+    name: 'م. محمد منتصر',
     username: 'admin',
     password: '123',
     phone: '0500000000',
-    title: 'المشرف والمطور العام',
+    title: 'المشرف والمعلم المبرمج والمطور العام',
     role: 'developer',
     isPrimary: true,
     complexId: 'complex-main',
     complexName: 'المجمع القرآني النموذجي',
     halaqahId: 'halaqah-main',
     halaqahName: 'حلقة القرآن الكريم',
+    googleEmail: 'fds421885@gmail.com',
+    isGoogleLinked: true,
     createdAt: new Date().toISOString()
   }
 ];
@@ -660,9 +656,13 @@ export class OmranDataService {
     const list: TeacherAccount[] = [];
     mergedMap.forEach(raw => {
       const cleanUser = (raw.username || '').trim().toLowerCase();
+      const cleanName = (raw.name || '').trim().toLowerCase();
       const isDev =
         cleanUser === 'admin' ||
         cleanUser === 'developer' ||
+        cleanUser === 'montaser' ||
+        cleanUser.includes('منتصر') ||
+        cleanName.includes('منتصر') ||
         raw.id === 'teacher-1' ||
         raw.role === 'developer';
 
@@ -672,12 +672,13 @@ export class OmranDataService {
 
       const title = raw.title || (
         role === 'developer'
-          ? 'المشرف والمطور العام'
+          ? 'المشرف والمعلم المبرمج والمطور العام'
           : (role === 'supervisor' ? 'معلم مشرف' : 'معلم حلقة ومحفظ')
       );
 
       const normalized: TeacherAccount = {
         ...raw,
+        name: isDev && !raw.name.includes('منتصر') ? 'م. محمد منتصر' : raw.name,
         role,
         isPrimary: role === 'developer' || role === 'supervisor',
         title
@@ -1110,7 +1111,20 @@ export class OmranDataService {
         mergedMap.set(s.id, s);
       }
     }
-    const merged = Array.from(mergedMap.values());
+    const merged = Array.from(mergedMap.values()).filter(s => {
+      const cleanName = (s.name || '').trim();
+      const norm = normalizeTeacherText(cleanName);
+      if (
+        norm.includes('محمد منتصر') ||
+        norm.includes('منتصر') ||
+        s.id === 'teacher-1' ||
+        (s.googleEmail && s.googleEmail.trim().toLowerCase() === 'fds421885@gmail.com')
+      ) {
+        deleteDoc(doc(db, 'students', s.id)).catch(() => {});
+        return false;
+      }
+      return true;
+    });
     setLocalCache(OMRAN_CACHE_KEYS.STUDENTS, merged);
     return merged;
   }
@@ -1465,7 +1479,21 @@ export class OmranDataService {
     try {
       return onSnapshot(collection(db, 'students'), snap => {
         const list: Student[] = [];
-        snap.forEach(d => list.push(d.data() as Student));
+        snap.forEach(d => {
+          const s = d.data() as Student;
+          const cleanName = (s.name || '').trim();
+          const norm = normalizeTeacherText(cleanName);
+          if (
+            norm.includes('محمد منتصر') ||
+            norm.includes('منتصر') ||
+            s.id === 'teacher-1' ||
+            (s.googleEmail && s.googleEmail.trim().toLowerCase() === 'fds421885@gmail.com')
+          ) {
+            deleteDoc(doc(db, 'students', s.id)).catch(() => {});
+            return;
+          }
+          list.push(s);
+        });
         callback(list);
       }, err => {
         handleFirestoreError(err, OperationType.LIST, 'students');

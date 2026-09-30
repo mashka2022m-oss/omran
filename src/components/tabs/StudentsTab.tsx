@@ -224,6 +224,19 @@ export const StudentsTab: React.FC<StudentsTabProps> = ({
       return;
     }
 
+    const cleanStudentName = formName.trim();
+    const normStudentName = cleanStudentName.toLowerCase().replace(/[أإآ]/g, 'ا').replace(/ة/g, 'ه').replace(/ى/g, 'ي');
+
+    // Check duplicate name against existing students
+    const duplicateStudent = students.find(
+      s => (!editingStudent || s.id !== editingStudent.id) &&
+           s.name.trim().toLowerCase().replace(/[أإآ]/g, 'ا').replace(/ة/g, 'ه').replace(/ى/g, 'ي') === normStudentName
+    );
+    if (duplicateStudent) {
+      setFormError(`عذراً، هذا الاسم (${cleanStudentName}) مسجل مسبقاً في المنظومة! يرجى كتابة الاسم الرباعي أو إضافة اسم العائلة والجد لتجنب تطابق الأسماء.`);
+      return;
+    }
+
     const selectedSurah = QURAN_SURAHS.find(s => s.number === Number(formSurahNum));
     const validParentPhones = formParentPhones.map(p => p.trim()).filter(p => p.length > 0);
     const chosenHalaqah = halaqahs.find(h => h.id === formHalaqahId);

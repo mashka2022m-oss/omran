@@ -77,18 +77,27 @@ export const isTeacherDeveloper = (
   userObj?: { username?: string; role?: string } | null
 ): boolean => {
   if (teacher) {
-    if (teacher.role === 'developer') return true;
+    if (teacher.role === 'developer' || teacher.id === 'teacher-1') return true;
     const cleanUser = (teacher.username || '').trim().toLowerCase();
+    const cleanName = (teacher.name || '').trim().toLowerCase();
     if (
       cleanUser === 'admin' ||
-      cleanUser === 'developer'
+      cleanUser === 'developer' ||
+      cleanUser === 'montaser' ||
+      cleanUser.includes('منتصر') ||
+      cleanName.includes('منتصر')
     ) {
       return true;
     }
   }
   if (userObj) {
     const cleanUser = (userObj.username || '').trim().toLowerCase();
-    if (cleanUser === 'admin' || cleanUser === 'developer') {
+    if (
+      cleanUser === 'admin' ||
+      cleanUser === 'developer' ||
+      cleanUser === 'montaser' ||
+      cleanUser.includes('منتصر')
+    ) {
       return true;
     }
   }

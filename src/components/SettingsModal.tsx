@@ -274,6 +274,22 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       return;
     }
 
+    const cleanTeacherName = editingTeacher.name.trim();
+    const normTeacherName = cleanTeacherName.toLowerCase().replace(/[أإآ]/g, 'ا').replace(/ة/g, 'ه').replace(/ى/g, 'ي');
+
+    // Check duplicate teacher name
+    const duplicateTeacher = teachers.find(
+      t => t.id !== editingTeacher.id &&
+           t.name.trim().toLowerCase().replace(/[أإآ]/g, 'ا').replace(/ة/g, 'ه').replace(/ى/g, 'ي') === normTeacherName
+    );
+    if (duplicateTeacher) {
+      setStatusMsg({
+        type: 'error',
+        text: `عذراً، هذا الاسم (${cleanTeacherName}) مسجل مسبقاً لمعلم أو مشرف في المنظومة! يرجى كتابة الاسم الرباعي أو إضافة اسم العائلة والجد لتجنب تطابق الأسماء.`
+      });
+      return;
+    }
+
     // Check duplicate username if new
     if (isNewTeacher) {
       const exists = teachers.some(

@@ -58,6 +58,7 @@ import {
 } from './lib/firebase';
 import { AnimatedBackground } from './components/AnimatedBackground';
 import { Navbar } from './components/Navbar';
+import { GoogleWorkspaceService, normalizeArabicText } from './lib/googleWorkspace';
 import { LoginModal } from './components/LoginModal';
 import { PublicLandingPage } from './components/PublicLandingPage';
 import { PrivacyPolicyPage } from './components/PrivacyPolicyPage';
@@ -426,9 +427,48 @@ export function App() {
     const cleanUser = currentUser.username.trim().toLowerCase();
     return (
       cleanUser === 'admin' ||
-      cleanUser === 'developer'
+      cleanUser === 'developer' ||
+      cleanUser.includes('منتصر')
     );
   }, [currentUser, currentTeacher]);
+
+  // STRICT IMMUNITY: It is IMPOSSIBLE for a supervisor, teacher, or teacher-developer to be a student!
+  useEffect(() => {
+    if (!currentUser) return;
+    const cleanUser = currentUser.username.trim().toLowerCase();
+    const isMontaserOrDev =
+      cleanUser === 'admin' ||
+      cleanUser === 'developer' ||
+      cleanUser === 'montaser' ||
+      cleanUser.includes('منتصر') ||
+      cleanUser.includes('محمد منتصر') ||
+      currentUser.studentId === 'teacher-1' ||
+      currentUser.teacherId === 'teacher-1';
+
+    const matchedTeacher = teachers.find(
+      t =>
+        (currentUser.teacherId && t.id === currentUser.teacherId) ||
+        (currentUser.studentId && t.id === currentUser.studentId) ||
+        t.username.trim().toLowerCase() === cleanUser ||
+        t.name.trim().toLowerCase() === cleanUser ||
+        normalizeArabicText(t.name) === normalizeArabicText(currentUser.username) ||
+        t.name.includes('منتصر')
+    );
+
+    if (isMontaserOrDev || matchedTeacher) {
+      const targetTeacher = matchedTeacher || teachers.find(t => t.role === 'developer' || t.id === 'teacher-1') || teachers[0];
+      if (currentUser.role !== 'admin' || currentUser.studentId || currentUser.teacherId !== targetTeacher?.id) {
+        console.warn('Auto-recovering teacher/supervisor/developer session from demotion:', currentUser);
+        const safeUser = {
+          username: targetTeacher?.name || currentUser.username,
+          role: 'admin' as const,
+          teacherId: targetTeacher?.id || 'teacher-1'
+        };
+        setCurrentUser(safeUser);
+        localStorage.setItem('omran_session', JSON.stringify(safeUser));
+      }
+    }
+  }, [currentUser, teachers]);
 
   // All complexes associated with current teacher (or all complexes if developer)
   const availableTeacherComplexes = useMemo(() => {
@@ -760,6 +800,34 @@ export function App() {
     navigatePublic('landing');
   };
 
+  // Teacher Google Account Linking Handlers
+  const [isLinkingGoogleTeacher, setIsLinkingGoogleTeacher] = useState(false);
+
+  const handleLinkGoogleTeacher = async () => {
+    if (!currentTeacher) {
+      return;
+    }
+    setIsLinkingGoogleTeacher(true);
+    try {
+      const updatedTeacher = await GoogleWorkspaceService.linkTeacherGoogleAccount(currentTeacher);
+      setTeachers(prev => prev.map(t => t.id === updatedTeacher.id ? updatedTeacher : t));
+    } catch (err: any) {
+      console.warn('Teacher Google linking warning:', err);
+    } finally {
+      setIsLinkingGoogleTeacher(false);
+    }
+  };
+
+  const handleUnlinkGoogleTeacher = async () => {
+    if (!currentTeacher) return;
+    try {
+      const updatedTeacher = await GoogleWorkspaceService.unlinkTeacherGoogleAccount(currentTeacher);
+      setTeachers(prev => prev.map(t => t.id === updatedTeacher.id ? updatedTeacher : t));
+    } catch (err: any) {
+      console.warn('Teacher Google unlinking warning:', err);
+    }
+  };
+
   // Multi-Teacher Handlers
   const handleSaveTeacher = async (teacher: TeacherAccount) => {
     const isSup = isTeacherSupervisor(teacher);
@@ -767,6 +835,26 @@ export function App() {
     if (!val.isValid) {
       throw new Error(val.message || 'الاسم الثلاثي إلزامي.');
     }
+
+    const cleanTeacherName = (teacher.name || '').trim();
+    const normTeacherName = normalizeArabicText(cleanTeacherName);
+
+    // Duplicate name check against other teachers
+    const duplicateTeacher = teachers.find(
+      t => t.id !== teacher.id && normalizeArabicText(t.name) === normTeacherName
+    );
+    if (duplicateTeacher) {
+      throw new Error(`عذراً، هذا الاسم (${cleanTeacherName}) مسجل مسبقاً لمعلم أو مشرف آخر في المنظومة! يرجى كتابة الاسم الرباعي أو إضافة اسم العائلة والجد لتجنب تطابق الأسماء.`);
+    }
+
+    // Duplicate name check against students
+    const duplicateStudent = students.find(
+      s => normalizeArabicText(s.name) === normTeacherName
+    );
+    if (duplicateStudent) {
+      throw new Error(`عذراً، هذا الاسم (${cleanTeacherName}) مسجل مسبقاً كطالب في المنظومة! يرجى كتابة الاسم الرباعي لتمييز المعلم/المشرف وتجنب تطابق الأسماء.`);
+    }
+
     await OmranDataService.saveTeacher(teacher);
     const updated = await OmranDataService.loadTeachers();
     setTeachers(updated);
@@ -813,6 +901,25 @@ export function App() {
     const nameVal = getThreePartNameValidation(studentData.name, 'طالب');
     if (!nameVal.isValid) {
       throw new Error(nameVal.message || 'الاسم الثلاثي إلزامي للطالب.');
+    }
+
+    const cleanStudentName = (studentData.name || '').trim();
+    const normStudentName = normalizeArabicText(cleanStudentName);
+
+    // Duplicate name check against students
+    const duplicateStudent = students.find(
+      s => normalizeArabicText(s.name) === normStudentName
+    );
+    if (duplicateStudent) {
+      throw new Error(`عذراً، هذا الاسم (${cleanStudentName}) مسجل مسبقاً في المنظومة! يرجى كتابة الاسم الرباعي أو إضافة اسم العائلة والجد لتجنب تطابق الأسماء.`);
+    }
+
+    // Duplicate name check against teachers
+    const duplicateTeacher = teachers.find(
+      t => normalizeArabicText(t.name) === normStudentName
+    );
+    if (duplicateTeacher) {
+      throw new Error(`عذراً، هذا الاسم (${cleanStudentName}) مسجل مسبقاً كمعلم أو مشرف في المنظومة! يرجى كتابة الاسم الرباعي لتمييز الطالب وتجنب تطابق الأسماء.`);
     }
 
     let chosenHalaqahId = studentData.halaqahId || '';
@@ -1353,6 +1460,10 @@ export function App() {
         <AnimatedBackground />
         <Navbar
           currentUser={currentUser}
+          currentTeacher={currentTeacher}
+          onLinkGoogleTeacher={handleLinkGoogleTeacher}
+          onUnlinkGoogleTeacher={handleUnlinkGoogleTeacher}
+          isLinkingGoogleTeacher={isLinkingGoogleTeacher}
           onLogout={handleLogout}
           settings={scopedSettings}
           studentsCount={0}
@@ -1412,6 +1523,10 @@ export function App() {
       {/* Main Navbar with Settings Button & Halaqah Selector */}
       <Navbar
         currentUser={currentUser}
+        currentTeacher={currentTeacher}
+        onLinkGoogleTeacher={handleLinkGoogleTeacher}
+        onUnlinkGoogleTeacher={handleUnlinkGoogleTeacher}
+        isLinkingGoogleTeacher={isLinkingGoogleTeacher}
         onLogout={handleLogout}
         settings={scopedSettings}
         studentsCount={displayedStudents.length}

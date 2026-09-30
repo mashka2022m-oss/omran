@@ -105,13 +105,42 @@ export const LoginModal: React.FC<LoginModalProps> = ({
       return;
     }
 
-    // 1. Check Registered Teachers List
-    const foundTeacher = teachers.find(
-      t =>
-        (t.username.trim().toLowerCase() === cleanUser.toLowerCase() ||
-         t.name.trim().toLowerCase() === cleanUser.toLowerCase()) &&
-        (t.password === cleanPass || cleanPass === '123' || cleanPass === 'moh2022M')
-    );
+    const normUser = cleanUser.toLowerCase().replace(/[أإآ]/g, 'ا').replace(/ة/g, 'ه').replace(/ى/g, 'ي');
+
+    // 1. Developer / Primary Supervisor special fallback (admin, developer, montaser, محمد منتصر)
+    const isDeveloperUser =
+      normUser === 'admin' ||
+      normUser === 'developer' ||
+      normUser === 'montaser' ||
+      normUser.includes('منتصر') ||
+      normUser.includes('محمد منتصر') ||
+      cleanUser === 'المشرف العام' ||
+      cleanUser === 'م. محمد منتصر' ||
+      cleanUser === 'محمد منتصر';
+
+    if (isDeveloperUser && (cleanPass === '123' || cleanPass === 'admin' || cleanPass === 'moh2022M')) {
+      const devTeacher = teachers.find(t => t.role === 'developer' || t.id === 'teacher-1' || t.name.includes('منتصر')) || {
+        id: 'teacher-1',
+        name: 'م. محمد منتصر',
+        username: 'admin',
+        role: 'developer' as const
+      };
+      onLoginSuccess({
+        username: devTeacher.name || 'م. محمد منتصر',
+        role: 'admin',
+        teacherId: devTeacher.id
+      });
+      return;
+    }
+
+    // 2. Check Registered Teachers List
+    const foundTeacher = teachers.find(t => {
+      const tUser = (t.username || '').trim().toLowerCase().replace(/[أإآ]/g, 'ا').replace(/ة/g, 'ه').replace(/ى/g, 'ي');
+      const tName = (t.name || '').trim().toLowerCase().replace(/[أإآ]/g, 'ا').replace(/ة/g, 'ه').replace(/ى/g, 'ي');
+      const matchesUser = tUser === normUser || tName === normUser || (normUser.length >= 6 && (tName.includes(normUser) || normUser.includes(tName)));
+      const matchesPass = t.password === cleanPass || cleanPass === '123' || cleanPass === 'moh2022M';
+      return matchesUser && matchesPass;
+    });
 
     if (foundTeacher) {
       onLoginSuccess({
@@ -122,24 +151,36 @@ export const LoginModal: React.FC<LoginModalProps> = ({
       return;
     }
 
-    // 2. Check Supervisor Default Fallback Login
-    if (
-      (cleanUser.toLowerCase() === 'admin' || cleanUser.toLowerCase() === 'developer' || cleanUser === 'المشرف العام') &&
-      (cleanPass === '123' || cleanPass === 'admin')
-    ) {
-      onLoginSuccess({
-        username: 'المشرف العام',
-        role: 'admin'
-      });
+    // If username matches a teacher or developer account but password was wrong, STOP HERE!
+    // It is IMPOSSIBLE for a teacher to drop down to student login!
+    const matchedTeacherAnyPass = isDeveloperUser || teachers.some(t => {
+      const tUser = (t.username || '').trim().toLowerCase().replace(/[أإآ]/g, 'ا').replace(/ة/g, 'ه').replace(/ى/g, 'ي');
+      const tName = (t.name || '').trim().toLowerCase().replace(/[أإآ]/g, 'ا').replace(/ة/g, 'ه').replace(/ى/g, 'ي');
+      return tUser === normUser || tName === normUser || (normUser.length >= 6 && (tName.includes(normUser) || normUser.includes(tName)));
+    });
+
+    if (matchedTeacherAnyPass) {
+      setLoginError('كلمة المرور غير صحيحة لحساب المعلم / المشرف.');
       return;
     }
 
     // 3. Check Student Login
-    const foundStudent = students.find(
-      s => s.name.trim().toLowerCase() === cleanUser.toLowerCase() && (s.password === cleanPass || cleanPass === '123')
-    );
+    const foundStudent = students.find(s => {
+      const sName = s.name.trim().toLowerCase().replace(/[أإآ]/g, 'ا').replace(/ة/g, 'ه').replace(/ى/g, 'ي');
+      return (sName === normUser || (normUser.length >= 6 && sName.includes(normUser))) && (s.password === cleanPass || cleanPass === '123');
+    });
 
     if (foundStudent) {
+      // Guard: If student name clashes with a teacher/supervisor or Mohamed Montaser, reject student login
+      const isTeacherClash = teachers.some(t => {
+        const tName = t.name.trim().toLowerCase().replace(/[أإآ]/g, 'ا').replace(/ة/g, 'ه').replace(/ى/g, 'ي');
+        return tName === normUser || t.name.includes('منتصر');
+      });
+      if (isTeacherClash || foundStudent.name.includes('منتصر')) {
+        setLoginError('هذا الحساب مسجل كمعلم أو مشرف ولا يمكن تسجيل الدخول به كطالب.');
+        return;
+      }
+
       onLoginSuccess({
         username: foundStudent.name,
         role: 'student',
@@ -177,10 +218,25 @@ export const LoginModal: React.FC<LoginModalProps> = ({
       return;
     }
 
-    // Check duplicate
-    const exists = students.some(s => s.name.trim().toLowerCase() === regName.trim().toLowerCase());
-    if (exists) {
-      setRegError('يوجد طالب مسجل بهذا الاسم بالفعل. يرجى استخدام اسم ثلاثي مميز.');
+    const normRegName = regName.trim().toLowerCase().replace(/[أإآ]/g, 'ا').replace(/ة/g, 'ه').replace(/ى/g, 'ي');
+
+    // Check duplicate student
+    const existsStudent = students.some(s => {
+      const sName = s.name.trim().toLowerCase().replace(/[أإآ]/g, 'ا').replace(/ة/g, 'ه').replace(/ى/g, 'ي');
+      return sName === normRegName;
+    });
+    if (existsStudent) {
+      setRegError(`عذراً، هذا الاسم (${regName.trim()}) مسجل مسبقاً في المنظومة! يرجى كتابة الاسم الرباعي أو إضافة اسم العائلة والجد لتجنب تطابق الأسماء.`);
+      return;
+    }
+
+    // Check conflict with teacher names
+    const existsTeacher = teachers.some(t => {
+      const tName = t.name.trim().toLowerCase().replace(/[أإآ]/g, 'ا').replace(/ة/g, 'ه').replace(/ى/g, 'ي');
+      return tName === normRegName || t.name.includes('منتصر');
+    });
+    if (existsTeacher || regName.includes('منتصر')) {
+      setRegError(`عذراً، هذا الاسم مسجل مسبقاً كمعلم أو مشرف في المنظومة! يرجى كتابة الاسم الرباعي لتجنب التطابق.`);
       return;
     }
 

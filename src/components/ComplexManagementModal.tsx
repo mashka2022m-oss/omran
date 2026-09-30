@@ -135,6 +135,20 @@ export const ComplexManagementModal: React.FC<ComplexManagementModalProps> = ({
           return;
         }
 
+        const cleanSupName = newSupervisorData.name.trim();
+        const normSupName = cleanSupName.toLowerCase().replace(/[أإآ]/g, 'ا').replace(/ة/g, 'ه').replace(/ى/g, 'ي');
+        const duplicateSup = teachers.find(
+          t => t.name.trim().toLowerCase().replace(/[أإآ]/g, 'ا').replace(/ة/g, 'ه').replace(/ى/g, 'ي') === normSupName
+        );
+        if (duplicateSup) {
+          setStatusMsg({
+            type: 'error',
+            text: `عذراً، هذا الاسم (${cleanSupName}) مسجل مسبقاً لمعلم أو مشرف في المنظومة! يرجى كتابة الاسم الرباعي أو إضافة اسم العائلة والجد لتجنب تطابق الأسماء.`
+          });
+          setIsSubmitting(false);
+          return;
+        }
+
         const newTeacher: TeacherAccount = {
           id: `teacher-${Date.now()}`,
           name: newSupervisorData.name.trim(),
