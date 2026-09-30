@@ -46,7 +46,8 @@ import {
   getTeacherHalaqahsInComplex,
   normalizeTeacherText,
   QuranComplex,
-  getThreePartNameValidation
+  getThreePartNameValidation,
+  IssuedCertificate
 } from './types';
 import {
   OmranDataService,
@@ -197,6 +198,7 @@ export function App() {
   const [googleAuthConfig, setGoogleAuthConfig] = useState<GoogleOAuthConfig>({ isLinked: false });
   const [recordings, setRecordings] = useState<SurahRecording[]>([]);
   const [recordingsConfig, setRecordingsConfig] = useState<RecordingsConfig>(DEFAULT_RECORDINGS_CONFIG);
+  const [certificates, setCertificates] = useState<IssuedCertificate[]>([]);
   const [isLoadingData, setIsLoadingData] = useState(true);
 
   // Parse URL on initial load and handle hash / search changes
@@ -287,7 +289,8 @@ export function App() {
         loadedGoogleOAuth,
         loadedRecordings,
         loadedRecordingsConfig,
-        loadedComplexes
+        loadedComplexes,
+        loadedCertificates
       ] = await Promise.all([
         OmranDataService.loadStudents(),
         OmranDataService.loadAttendance(),
@@ -304,7 +307,8 @@ export function App() {
         OmranDataService.loadGoogleOAuthConfig(),
         OmranDataService.loadRecordings(),
         OmranDataService.loadRecordingsConfig(),
-        OmranDataService.loadComplexes()
+        OmranDataService.loadComplexes(),
+        OmranDataService.loadCertificates()
       ]);
 
       setStudents(loadedStudents);
@@ -323,6 +327,7 @@ export function App() {
       setRecordings(loadedRecordings);
       setRecordingsConfig(loadedRecordingsConfig);
       setComplexes(loadedComplexes);
+      setCertificates(loadedCertificates);
     } catch (e) {
       console.warn('Initial data load notice:', e);
     } finally {
@@ -390,6 +395,9 @@ export function App() {
     const unsubRecordingsConfig = OmranDataService.subscribeRecordingsConfig(newConfig => {
       setRecordingsConfig(newConfig);
     });
+    const unsubCertificates = OmranDataService.subscribeCertificates(newCerts => {
+      setCertificates(newCerts);
+    });
 
     return () => {
       unsubStudents();
@@ -407,6 +415,7 @@ export function App() {
       unsubGoogle();
       unsubRecordings();
       unsubRecordingsConfig();
+      unsubCertificates();
     };
   }, []);
 
@@ -1319,6 +1328,33 @@ export function App() {
     setGoogleAuthConfig(cfg);
   };
 
+  // Certificate Handlers
+  const handleSaveCertificate = async (cert: IssuedCertificate) => {
+    await OmranDataService.saveCertificate(cert);
+    setCertificates(prev => [cert, ...prev.filter(c => c.id !== cert.id)]);
+  };
+
+  const handleSaveCertificates = async (newCerts: IssuedCertificate[]) => {
+    await OmranDataService.saveCertificates(newCerts);
+    setCertificates(prev => {
+      const map = new Map<string, IssuedCertificate>();
+      for (const c of newCerts) map.set(c.id, c);
+      for (const c of prev) if (!map.has(c.id)) map.set(c.id, c);
+      return Array.from(map.values()).sort(
+        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      );
+    });
+  };
+
+  const handleDeleteCertificate = async (certId: string) => {
+    setCertificates(prev => prev.filter(c => c.id !== certId));
+    try {
+      await OmranDataService.deleteCertificate(certId);
+    } catch (e) {
+      console.warn('Delete certificate notice:', e);
+    }
+  };
+
   // 14. Complexes Handlers (المجمعات القرآنية)
   const handleSaveComplex = async (complex: QuranComplex) => {
     await OmranDataService.saveComplex(complex);
@@ -1436,6 +1472,7 @@ export function App() {
             leaderboardSettings={leaderboardSettings || undefined}
             recordings={recordings}
             recordingsConfig={recordingsConfig}
+            certificates={certificates}
             isLoggedInStudent={!!currentUser}
             onLogout={handleLogout}
             onSaveSubmission={handleSaveSubmission}
@@ -1868,6 +1905,7 @@ export function App() {
                 onDeleteSubmission={handleDeleteSubmission}
                 onSaveLeaderboardSettings={handleSaveLeaderboardSettings}
                 onRefreshGoogleAuth={handleRefreshGoogleAuth}
+                onSaveCertificate={handleSaveCertificate}
               />
             )}
 
@@ -1881,6 +1919,13 @@ export function App() {
                 isDeveloper={isDeveloper}
                 activeHalaqahId={activeHalaqahId}
                 onUpdateSettings={handleUpdateSettings}
+                certificates={certificates}
+                onSaveCertificate={handleSaveCertificate}
+                onSaveCertificates={handleSaveCertificates}
+                onDeleteCertificate={handleDeleteCertificate}
+                selectedComplexId={selectedComplexId}
+                activeComplexName={activeComplex?.name || scopedSettings.complexName}
+                submissions={scopedSubmissions}
               />
             )}
 
@@ -1942,6 +1987,7 @@ export function App() {
                 settings={scopedSettings}
                 onUpdateSettings={handleUpdateSettings}
                 teacherName={currentTeacher?.name || currentUser?.username || scopedSettings.teacherName}
+                certificates={certificates}
               />
             )}
 

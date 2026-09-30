@@ -238,6 +238,33 @@
         "timestamp": { "type": "string", "maxLength": 50 }
       },
       "required": ["id", "studentId", "surahNumber", "completedCount"]
+    },
+    "IssuedCertificate": {
+      "title": "IssuedCertificate",
+      "description": "شهادات التميز والإتقان القرآني الصادرة للطلاب",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "studentId": { "type": "string", "maxLength": 128 },
+        "studentName": { "type": "string", "maxLength": 150 },
+        "halaqahId": { "type": "string", "maxLength": 128 },
+        "halaqahName": { "type": "string", "maxLength": 150 },
+        "complexId": { "type": "string", "maxLength": 128 },
+        "complexName": { "type": "string", "maxLength": 150 },
+        "occasion": { "type": "string", "maxLength": 100 },
+        "occasionText": { "type": "string", "maxLength": 1000 },
+        "templateId": { "type": "string", "maxLength": 128 },
+        "templateName": { "type": "string", "maxLength": 150 },
+        "templateType": { "type": "string", "maxLength": 50 },
+        "signatureMode": { "type": "string", "maxLength": 50 },
+        "teacherName": { "type": "string", "maxLength": 100 },
+        "supervisorName": { "type": "string", "maxLength": 100 },
+        "dateArabic": { "type": "string", "maxLength": 50 },
+        "dateGregorian": { "type": "string", "maxLength": 50 },
+        "createdAt": { "type": "string", "maxLength": 50 },
+        "createdByName": { "type": "string", "maxLength": 100 }
+      },
+      "required": ["id", "studentId", "studentName", "occasion", "templateId"]
     }
   },
   "firestore": {
@@ -296,6 +323,10 @@
     "/listening_logs/{logId}": {
       "schema": "StudentListeningLog",
       "description": "سجلات استماع الطلاب للسور والتكرار اليومي"
+    },
+    "/certificates/{certificateId}": {
+      "schema": "IssuedCertificate",
+      "description": "شهادات التكريم والتميز والإتقان القرآني"
     },
     "/test/{testId}": {
       "schema": {

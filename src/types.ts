@@ -509,6 +509,7 @@ export interface FullBackupData {
   recordings?: SurahRecording[];
   recordingsConfig?: RecordingsConfig;
   listeningLogs?: StudentListeningLog[];
+  certificates?: IssuedCertificate[];
 }
 
 export interface ComplexBackupData {
@@ -521,6 +522,7 @@ export interface ComplexBackupData {
   evaluations: StudentEvaluation[];
   violations?: BehaviorViolation[];
   exams?: Exam[];
+  certificates?: IssuedCertificate[];
 }
 
 export type ExamQuestionType = 'multiple_choice' | 'true_false' | 'essay' | 'short_answer';
@@ -873,5 +875,28 @@ export type CertificateOccasion =
   | 'اجتياز اختبار قرآني'
   | 'مواظبة وانضباط قرآني'
   | 'مناسبة مخصصة';
+
+export interface IssuedCertificate {
+  id: string;
+  studentId: string;
+  studentName: string;
+  halaqahId?: string;
+  halaqahName?: string;
+  complexId?: string;
+  complexName?: string;
+  occasion: CertificateOccasion | string;
+  occasionText: string;
+  templateId: string;
+  templateName: string;
+  templateType: 'ready' | 'custom';
+  customTemplateImageUrl?: string;
+  signatureMode: 'auto' | 'custom' | 'none';
+  teacherName?: string;
+  supervisorName?: string;
+  dateArabic: string;
+  dateGregorian: string;
+  createdAt: string;
+  createdByName?: string;
+}
 
 

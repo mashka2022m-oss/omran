@@ -26,7 +26,10 @@ import {
   Calendar,
   Layers,
   X,
-  FileText
+  FileText,
+  BookmarkCheck,
+  Check,
+  Filter
 } from 'lucide-react';
 import {
   Student,
@@ -34,6 +37,8 @@ import {
   AppSettings,
   CustomCertificateTemplate,
   CertificateOccasion,
+  IssuedCertificate,
+  ExamSubmission,
   getStudentParentPhone
 } from '../../types';
 import { QURAN_SURAHS, getSurahInfo } from '../../data/quranData';
@@ -49,6 +54,13 @@ interface CertificatesTabProps {
   isDeveloper: boolean;
   activeHalaqahId?: string;
   onUpdateSettings?: (settings: AppSettings) => Promise<void>;
+  certificates?: IssuedCertificate[];
+  onSaveCertificate?: (cert: IssuedCertificate) => Promise<void>;
+  onSaveCertificates?: (certs: IssuedCertificate[]) => Promise<void>;
+  onDeleteCertificate?: (certId: string) => Promise<void>;
+  selectedComplexId?: string;
+  activeComplexName?: string;
+  submissions?: ExamSubmission[];
 }
 
 // 10 Distinctive Arabic Calligraphic Fonts
@@ -149,15 +161,124 @@ export const CertificatesTab: React.FC<CertificatesTabProps> = ({
   isSupervisor,
   isDeveloper,
   activeHalaqahId,
-  onUpdateSettings
+  onUpdateSettings,
+  certificates = [],
+  onSaveCertificate,
+  onSaveCertificates,
+  onDeleteCertificate,
+  selectedComplexId,
+  activeComplexName,
+  submissions = []
 }) => {
-  // Navigation Sub-Tabs
-  const [activeSubTab, setActiveSubTab] = useState<'issue' | 'builder' | 'templates'>('issue');
+  // Navigation Sub-Tabs ('issue' | 'archive' | 'builder' | 'templates')
+  const [activeSubTab, setActiveSubTab] = useState<'issue' | 'archive' | 'builder' | 'templates'>('issue');
 
   // Load custom templates (Dual persistence)
   const [customTemplates, setCustomTemplates] = useState<CustomCertificateTemplate[]>(() => {
     return getLocalCache<CustomCertificateTemplate[]>('omran_certificates_templates', []);
   });
+
+  // Local certificates fallback
+  const [localCertificates, setLocalCertificates] = useState<IssuedCertificate[]>(() => {
+    return getLocalCache<IssuedCertificate[]>(OMRAN_CACHE_KEYS.CERTIFICATES, []);
+  });
+
+  // Track deleted certificate IDs locally to ensure instantaneous and permanent deletion
+  const [deletedCertIds, setDeletedCertIds] = useState<Set<string>>(() => new Set());
+
+  // Success Popup Modal ("تم حفظ الشهادة منبثقة ويضغط تم ويديه لنماذجي")
+  const [savedPopupModal, setSavedPopupModal] = useState<{
+    isOpen: boolean;
+    studentName?: string;
+    count?: number;
+  } | null>(null);
+
+  // Automatically integrate passed exam submissions as certificates in the archive
+  const examCertificates = useMemo<IssuedCertificate[]>(() => {
+    if (!submissions || submissions.length === 0) return [];
+    return submissions
+      .filter(sub => (sub.percentage && sub.percentage >= 60) || sub.isPassed || (sub.totalScoreEarned && sub.totalScoreEarned > 0))
+      .map(sub => {
+        const pct = sub.percentage;
+        const gradeLabel = pct >= 90 ? 'ممتاز مرتفع مع مرتبة الشرف' : (pct >= 80 ? 'جيد جداً مرتفع' : (pct >= 65 ? 'جيد' : 'اجتياز معتمد'));
+        const dateObj = sub.submittedAt ? new Date(sub.submittedAt) : new Date();
+        const dateArabic = new Intl.DateTimeFormat('ar-SA', { dateStyle: 'long' }).format(dateObj);
+        const dateGregorian = dateObj.toISOString().split('T')[0];
+        return {
+          id: `cert_exam_${sub.id}`,
+          studentId: sub.studentId,
+          studentName: sub.studentName,
+          halaqahId: sub.halaqahId,
+          halaqahName: sub.halaqahName,
+          complexId: sub.complexId || selectedComplexId,
+          complexName: sub.complexName || activeComplexName || settings.complexName || 'منظومة عُمران',
+          occasion: 'اجتياز اختبار قرآني',
+          occasionText: `اجتياز اختبار (${sub.examTitle}) بنتيجة ${sub.totalScoreEarned} من ${sub.maxPossibleScore} (${pct}%) • ${gradeLabel}`,
+          templateId: 'platform_emerald_royal',
+          templateName: 'شهادة اجتياز اختبار قرآني',
+          templateType: 'ready',
+          signatureMode: 'auto',
+          dateArabic,
+          dateGregorian,
+          createdAt: sub.submittedAt || new Date().toISOString(),
+          createdByName: 'نظام الاختبارات القرآنية'
+        } as IssuedCertificate;
+      });
+  }, [submissions, selectedComplexId, activeComplexName, settings.complexName]);
+
+  // Combined certificates list with exam certificates, excluding deleted ones
+  const allCertificates = useMemo(() => {
+    const combinedMap = new Map<string, IssuedCertificate>();
+    const baseList = (certificates && certificates.length > 0) ? certificates : localCertificates;
+    for (const c of baseList) {
+      if (c?.id && !deletedCertIds.has(c.id)) {
+        combinedMap.set(c.id, c);
+      }
+    }
+    for (const ec of examCertificates) {
+      if (ec?.id && !deletedCertIds.has(ec.id) && !combinedMap.has(ec.id)) {
+        combinedMap.set(ec.id, ec);
+      }
+    }
+    return Array.from(combinedMap.values()).sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
+  }, [certificates, localCertificates, deletedCertIds, examCertificates]);
+
+  // Saved confirmation toast ("تم حفظ الشهادة")
+  const [savedSuccessToast, setSavedSuccessToast] = useState<string | null>(null);
+  const [isSavingCert, setIsSavingCert] = useState(false);
+  const [savedStudentIds, setSavedStudentIds] = useState<Set<string>>(new Set());
+
+  // In-app Delete Confirmation Modal (solves window.confirm issue in iframes)
+  const [deleteConfirmModal, setDeleteConfirmModal] = useState<{
+    isOpen: boolean;
+    type: 'template' | 'certificate';
+    id: string;
+    title: string;
+  } | null>(null);
+
+  // Archive filters
+  const [archiveSearch, setArchiveSearch] = useState('');
+  const [archiveHalaqahFilter, setArchiveHalaqahFilter] = useState('all');
+  const [archiveOccasionFilter, setArchiveOccasionFilter] = useState('all');
+
+  // Filtered Archive Certificates
+  const filteredArchiveCertificates = useMemo(() => {
+    return allCertificates.filter(cert => {
+      const q = archiveSearch.trim().toLowerCase();
+      const matchSearch =
+        !q ||
+        cert.studentName.toLowerCase().includes(q) ||
+        (cert.occasion && cert.occasion.toLowerCase().includes(q)) ||
+        (cert.occasionText && cert.occasionText.toLowerCase().includes(q)) ||
+        (cert.halaqahName && cert.halaqahName.toLowerCase().includes(q)) ||
+        (cert.complexName && cert.complexName.toLowerCase().includes(q));
+      const matchHalaqah = archiveHalaqahFilter === 'all' || cert.halaqahId === archiveHalaqahFilter;
+      const matchOccasion = archiveOccasionFilter === 'all' || cert.occasion === archiveOccasionFilter;
+      return matchSearch && matchHalaqah && matchOccasion;
+    });
+  }, [allCertificates, archiveSearch, archiveHalaqahFilter, archiveOccasionFilter]);
 
   // Save custom templates to local cache & cloud settings
   const saveCustomTemplates = async (updated: CustomCertificateTemplate[]) => {
@@ -251,8 +372,40 @@ export const CertificatesTab: React.FC<CertificatesTabProps> = ({
 
   // Selected students objects
   const targetStudents = useMemo(() => {
-    return students.filter(s => selectedStudentIds.includes(s.id));
-  }, [students, selectedStudentIds]);
+    const list = students.filter(s => selectedStudentIds.includes(s.id));
+    if (list.length > 0) return list;
+    // Fallback: if student selected from archive but not in current filtered student list
+    if (selectedStudentIds.length > 0) {
+      const fallbackList: Student[] = [];
+      for (const id of selectedStudentIds) {
+        const found = allCertificates.find(c => c.studentId === id);
+        if (found) {
+          fallbackList.push({
+            id: found.studentId,
+            name: found.studentName,
+            complexId: found.complexId,
+            halaqahId: found.halaqahId,
+            halaqahName: found.halaqahName,
+            points: 0,
+            currentSurah: 1,
+            currentSurahName: 'الفاتحة',
+            currentAyah: 1,
+            createdAt: found.createdAt
+          } as unknown as Student);
+        }
+      }
+      if (fallbackList.length > 0) return fallbackList;
+    }
+    return list;
+  }, [students, selectedStudentIds, allCertificates]);
+
+  // Whether the current preview student's certificate is already saved
+  const isCurrentStudentSaved = useMemo(() => {
+    const curStd = targetStudents[previewStudentIndex];
+    if (!curStd) return false;
+    if (savedStudentIds.has(curStd.id)) return true;
+    return allCertificates.some(c => c.studentId === curStd.id && c.occasion === occasion);
+  }, [targetStudents, previewStudentIndex, savedStudentIds, allCertificates, occasion]);
 
   // Selected template object
   const activeTemplate = useMemo(() => {
@@ -448,14 +601,220 @@ export const CertificatesTab: React.FC<CertificatesTabProps> = ({
     setActiveSubTab('builder');
   };
 
-  // Delete custom template
-  const handleDeleteTemplate = async (id: string) => {
-    if (!window.confirm('هل أنت متأكد من رغبتك في حذف هذا النموذج؟')) return;
-    const updated = customTemplates.filter(t => t.id !== id);
-    await saveCustomTemplates(updated);
-    if (selectedTemplateId === id) {
-      setSelectedTemplateId('platform_emerald_royal');
+  // Confirm and execute deletion (Zero window.confirm, 100% works in iframes)
+  const confirmDeleteAction = async () => {
+    if (!deleteConfirmModal) return;
+    const { type, id } = deleteConfirmModal;
+    try {
+      if (type === 'template') {
+        const updated = customTemplates.filter(t => t.id !== id);
+        await saveCustomTemplates(updated);
+        if (selectedTemplateId === id) {
+          setSelectedTemplateId('platform_emerald_royal');
+        }
+        setCopiedNotification('تم حذف النموذج بنجاح.');
+        setTimeout(() => setCopiedNotification(null), 4000);
+      } else if (type === 'certificate') {
+        // 1. Instantly track as deleted so it immediately vanishes from the UI
+        setDeletedCertIds(prev => new Set([...prev, id]));
+        // 2. Instantly filter from local state
+        setLocalCertificates(prev => prev.filter(c => c.id !== id));
+        // 3. Clean from localStorage
+        try {
+          const stored = getLocalCache<IssuedCertificate[]>(OMRAN_CACHE_KEYS.CERTIFICATES, []);
+          setLocalCache(OMRAN_CACHE_KEYS.CERTIFICATES, stored.filter(c => c.id !== id));
+        } catch (e) {}
+        // 4. Notify parent / Firestore
+        if (onDeleteCertificate) {
+          try {
+            await onDeleteCertificate(id);
+          } catch (e) {
+            console.warn('onDeleteCertificate notice:', e);
+          }
+        } else {
+          try {
+            await OmranDataService.deleteCertificate(id);
+          } catch (e) {
+            console.warn('OmranDataService.deleteCertificate notice:', e);
+          }
+        }
+        setCopiedNotification('تم حذف الشهادة بنجاح.');
+        setSavedSuccessToast('تم حذف الشهادة بنجاح');
+        setTimeout(() => {
+          setCopiedNotification(null);
+          setSavedSuccessToast(null);
+        }, 4000);
+      }
+    } catch (err) {
+      console.error('Delete error:', err);
+    } finally {
+      setDeleteConfirmModal(null);
     }
+  };
+
+  // Open Delete Confirmation Modal for Template
+  const handleDeleteTemplate = (id: string, name?: string) => {
+    const tpl = customTemplates.find(t => t.id === id);
+    setDeleteConfirmModal({
+      isOpen: true,
+      type: 'template',
+      id,
+      title: name || tpl?.name || 'النموذج المخصص'
+    });
+  };
+
+  // Open Delete Confirmation Modal for Certificate
+  const handleDeleteCertificateClick = (cert: IssuedCertificate) => {
+    setDeleteConfirmModal({
+      isOpen: true,
+      type: 'certificate',
+      id: cert.id,
+      title: `شهادة الطالب: ${cert.studentName} (${cert.occasion})`
+    });
+  };
+
+  // Build IssuedCertificate payload
+  const createCertificatePayload = (student: Student): IssuedCertificate => {
+    const halaqahName = student.halaqahName || settings.halaqahName;
+    const complexName = activeComplexName || settings.complexName || 'منظومة عُمران';
+    const teacherTitle = signatureMode === 'custom'
+      ? customTeacherName
+      : (student.halaqahName ? `معلم ${student.halaqahName}` : settings.teacherName);
+    const supervisorTitle = signatureMode === 'custom'
+      ? customSupervisorName
+      : (complexName ? `مشرف ${complexName}` : 'المشرف العام');
+
+    return {
+      id: `cert_${student.id}_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      studentId: student.id,
+      studentName: student.name,
+      halaqahId: student.halaqahId || activeHalaqahId,
+      halaqahName,
+      complexId: selectedComplexId || settings.complexName,
+      complexName,
+      occasion,
+      occasionText: getOccasionDescription(),
+      templateId: selectedTemplateId,
+      templateName: activeTemplate.data.name,
+      templateType: activeTemplate.type,
+      customTemplateImageUrl: activeTemplate.type === 'custom' ? activeTemplate.data.imageUrl : undefined,
+      signatureMode,
+      teacherName: signatureMode !== 'none' ? teacherTitle : undefined,
+      supervisorName: signatureMode !== 'none' ? supervisorTitle : undefined,
+      dateArabic: todayArabic,
+      dateGregorian: todayGregorian,
+      createdAt: new Date().toISOString(),
+      createdByName: currentUserName
+    };
+  };
+
+  // Save single student's certificate
+  const handleSaveCertificateForStudent = async (student: Student) => {
+    if (!student) return;
+    setIsSavingCert(true);
+    try {
+      const cert = createCertificatePayload(student);
+      if (onSaveCertificate) {
+        await onSaveCertificate(cert);
+      } else {
+        await OmranDataService.saveCertificate(cert);
+      }
+      setLocalCertificates(prev => [cert, ...prev.filter(c => c.id !== cert.id)]);
+      setSavedStudentIds(prev => new Set([...prev, student.id]));
+      setSavedSuccessToast('تم حفظ الشهادة');
+      setSavedPopupModal({
+        isOpen: true,
+        studentName: student.name,
+        count: 1
+      });
+      setTimeout(() => setSavedSuccessToast(null), 4000);
+    } catch (err) {
+      console.error('Failed to save certificate:', err);
+      setSavedSuccessToast('حدث خطأ أثناء حفظ الشهادة');
+      setTimeout(() => setSavedSuccessToast(null), 4000);
+    } finally {
+      setIsSavingCert(false);
+    }
+  };
+
+  // Save all target students certificates
+  const handleSaveAllCertificates = async () => {
+    if (targetStudents.length === 0) return;
+    setIsSavingCert(true);
+    try {
+      const certsToSave = targetStudents.map(s => createCertificatePayload(s));
+      if (onSaveCertificates) {
+        await onSaveCertificates(certsToSave);
+      } else {
+        await OmranDataService.saveCertificates(certsToSave);
+      }
+      setLocalCertificates(prev => {
+        const map = new Map<string, IssuedCertificate>();
+        for (const c of certsToSave) map.set(c.id, c);
+        for (const c of prev) if (!map.has(c.id)) map.set(c.id, c);
+        return Array.from(map.values()).sort(
+          (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+        );
+      });
+      setSavedStudentIds(new Set(targetStudents.map(s => s.id)));
+      setSavedSuccessToast('تم حفظ الشهادة');
+      setSavedPopupModal({
+        isOpen: true,
+        count: targetStudents.length
+      });
+      setTimeout(() => setSavedSuccessToast(null), 4000);
+    } catch (err) {
+      console.error('Failed to save certificates:', err);
+      setSavedSuccessToast('حدث خطأ أثناء حفظ الشهادات');
+      setTimeout(() => setSavedSuccessToast(null), 4000);
+    } finally {
+      setIsSavingCert(false);
+    }
+  };
+
+  // Preview Archive certificate
+  const handleOpenPreviewFromArchive = (cert: IssuedCertificate) => {
+    setSelectedStudentIds([cert.studentId]);
+    setSelectedTemplateId(cert.templateId);
+    setOccasion(cert.occasion as any);
+    setCustomOccasionText(cert.occasionText);
+    setSignatureMode(cert.signatureMode || 'auto');
+    if (cert.teacherName) setCustomTeacherName(cert.teacherName);
+    if (cert.supervisorName) setCustomSupervisorName(cert.supervisorName);
+    setPreviewStudentIndex(0);
+    setIsGeneratedModalOpen(true);
+  };
+
+  // Download PDF from Archive
+  const handleDownloadArchiveSinglePdf = async (cert: IssuedCertificate) => {
+    setIsExporting(true);
+    setExportStatusText('جاري تجهيز وتحميل ملف الـ PDF...');
+    try {
+      const student: Student = students.find(s => s.id === cert.studentId) || ({
+        id: cert.studentId,
+        name: cert.studentName,
+        halaqahId: cert.halaqahId,
+        halaqahName: cert.halaqahName
+      } as any);
+      const { pdf, file } = await generateSinglePdfDoc(student, 0);
+      pdf.save(file.name);
+    } catch (err) {
+      console.error('Failed to generate PDF:', err);
+    } finally {
+      setIsExporting(false);
+      setExportStatusText(null);
+    }
+  };
+
+  // WhatsApp share from Archive
+  const handleSendWhatsAppForArchive = async (cert: IssuedCertificate) => {
+    const student: Student = students.find(s => s.id === cert.studentId) || ({
+      id: cert.studentId,
+      name: cert.studentName,
+      halaqahId: cert.halaqahId,
+      halaqahName: cert.halaqahName
+    } as any);
+    await handleSendWhatsApp(student, 0);
   };
 
   // ---------------------------------------------------------------------------
@@ -543,9 +902,9 @@ export const CertificatesTab: React.FC<CertificatesTabProps> = ({
       ctx.font = "bold 34px 'Amiri', serif";
       ctx.fillText('بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ', width / 2, 130);
 
-      // 2. Quranic Ayah
+      // 2. Quranic Ayah with correct orientation brackets
       ctx.font = "24px 'Amiri', serif";
-      ctx.fillText('﴿ يَرْفَعِ اللَّهُ الَّذِينَ آمَنُوا مِنكُمْ وَالَّذِينَ أُوتُوا الْعِلْمَ دَرَجَاتٍ ﴾', width / 2, 195);
+      ctx.fillText('\uFD3E يَرْفَعِ اللَّهُ الَّذِينَ آمَنُوا مِنكُمْ وَالَّذِينَ أُوتُوا الْعِلْمَ دَرَجَاتٍ \uFD3F', width / 2, 195);
 
       // 3. Title
       ctx.font = "900 58px 'Cairo', sans-serif";
@@ -586,23 +945,24 @@ export const CertificatesTab: React.FC<CertificatesTabProps> = ({
         ctx.fillText(`المشرف العام: ${sName}`, 260, 920);
       }
 
-      // 9. Platform Seal
+      // 9. Platform Seal in bottom-left corner (never collides with signatures or text)
       ctx.textAlign = 'center';
       ctx.fillStyle = activeTemplate.data.accentColor;
       ctx.beginPath();
-      ctx.arc(width / 2, 940, 60, 0, Math.PI * 2);
+      ctx.arc(180, 1050, 55, 0, Math.PI * 2);
       ctx.fill();
 
       ctx.fillStyle = activeTemplate.data.id === 'platform_imperial_gold' ? '#ffffff' : '#064e3b';
-      ctx.font = "bold 18px 'Cairo', sans-serif";
-      ctx.fillText('منظومة عُمران', width / 2, 935);
-      ctx.font = "bold 15px 'Cairo', sans-serif";
-      ctx.fillText('معتمد إلكترونياً', width / 2, 960);
+      ctx.font = "bold 16px 'Cairo', sans-serif";
+      ctx.fillText('منظومة عُمران', 180, 1042);
+      ctx.font = "bold 13px 'Cairo', sans-serif";
+      ctx.fillText('معتمد إلكترونياً', 180, 1065);
 
-      // 10. Dates
+      // 10. Dates (Centered cleanly along the bottom)
       ctx.font = "20px 'Cairo', sans-serif";
       ctx.fillStyle = activeTemplate.data.textColor;
-      ctx.fillText(`تاريخ الإصدار: ${todayArabic} • الموافق: ${todayGregorian}`, width / 2, 1080);
+      ctx.textAlign = 'center';
+      ctx.fillText(`تاريخ الإصدار: ${todayArabic} • الموافق: ${todayGregorian}`, width / 2 + 50, 1055);
     }
 
     return canvas;
@@ -776,7 +1136,7 @@ ${occasionText}
         </div>
 
         {/* Sub-Tabs Switcher */}
-        <div className="flex items-center gap-1.5 bg-[#022c22] p-1.5 rounded-2xl border border-[#065f46] shrink-0">
+        <div className="flex items-center gap-1.5 bg-[#022c22] p-1.5 rounded-2xl border border-[#065f46] shrink-0 flex-wrap">
           <button
             type="button"
             onClick={() => setActiveSubTab('issue')}
@@ -788,6 +1148,19 @@ ${occasionText}
           >
             <Award className="w-4 h-4" />
             <span>إصدار الشهادات</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveSubTab('archive')}
+            className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+              activeSubTab === 'archive'
+                ? 'bg-[#fbbf24] text-[#064e3b] font-black shadow-md'
+                : 'text-[#86efac] hover:text-white hover:bg-[#064e3b]/50'
+            }`}
+          >
+            <BookmarkCheck className="w-4 h-4" />
+            <span>الشهادات المحفوظة ({allCertificates.length})</span>
           </button>
 
           <button
@@ -822,6 +1195,22 @@ ${occasionText}
           </button>
         </div>
       </div>
+
+      {savedSuccessToast && (
+        <div className="p-4 rounded-2xl bg-gradient-to-r from-emerald-800 to-green-800 text-white border-2 border-emerald-400 text-sm font-bold flex items-center justify-between gap-3 shadow-2xl animate-fade-in">
+          <div className="flex items-center gap-2.5">
+            <CheckCircle2 className="w-6 h-6 text-amber-300 shrink-0" />
+            <span className="text-base">{savedSuccessToast}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setSavedSuccessToast(null)}
+            className="text-white/80 hover:text-white cursor-pointer p-1"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
 
       {copiedNotification && (
         <div className="p-4 rounded-2xl bg-emerald-900/90 text-emerald-100 border border-emerald-500 text-xs flex items-center gap-2 shadow-lg animate-fade-in">
@@ -1279,24 +1668,259 @@ ${occasionText}
                   يرجى تحديد طالب واحد على الأقل في الخطوة (1) للمتابعة.
                 </div>
               ) : (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setPreviewStudentIndex(0);
-                    setIsGeneratedModalOpen(true);
-                  }}
-                  className="w-full py-3.5 px-4 rounded-2xl bg-gradient-to-r from-[#fbbf24] via-amber-400 to-[#f59e0b] hover:brightness-110 text-[#064e3b] font-black text-sm flex items-center justify-center gap-2 shadow-lg shadow-amber-500/20 cursor-pointer transition-all active:scale-95"
-                >
-                  <Award className="w-5 h-5" />
-                  <span>إنشاء الشهادات والمعاينة الآن ({selectedStudentIds.length})</span>
-                </button>
+                <div className="space-y-2.5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPreviewStudentIndex(0);
+                      setIsGeneratedModalOpen(true);
+                    }}
+                    className="w-full py-3.5 px-4 rounded-2xl bg-gradient-to-r from-[#fbbf24] via-amber-400 to-[#f59e0b] hover:brightness-110 text-[#064e3b] font-black text-sm flex items-center justify-center gap-2 shadow-lg shadow-amber-500/20 cursor-pointer transition-all active:scale-95"
+                  >
+                    <Award className="w-5 h-5" />
+                    <span>إنشاء الشهادات والمعاينة الآن ({selectedStudentIds.length})</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    disabled={isSavingCert}
+                    onClick={async () => {
+                      await handleSaveAllCertificates();
+                      setPreviewStudentIndex(0);
+                      setIsGeneratedModalOpen(true);
+                    }}
+                    className="w-full py-2.5 px-4 rounded-2xl bg-[#064e3b] hover:bg-[#064e3b]/80 border border-[#fbbf24]/50 text-white font-bold text-xs flex items-center justify-center gap-2 cursor-pointer shadow-md transition-all active:scale-95"
+                  >
+                    <CheckCircle2 className="w-4 h-4 text-[#fbbf24]" />
+                    <span>{isSavingCert ? 'جاري حفظ الشهادة...' : `حفظ الشهادات ومعاينتها فوراً (${selectedStudentIds.length})`}</span>
+                  </button>
+                </div>
               )}
 
               <p className="text-[11px] text-[#86efac]/70 text-center leading-relaxed">
-                فور الضغط، ستظهر معاينة تفاعلية لكافة الشهادات مع خيارات التنزيل كملفات PDF منفصلة، أو ملف مجمع، أو صور PNG عالية الجودة.
+                فور الضغط، ستظهر معاينة تفاعلية لكافة الشهادات مع خيارات التنزيل كملفات PDF منفصلة، أو ملف مجمع، أو صور PNG عالية الجودة وحفظها مباشرة.
               </p>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* ===================================================================== */}
+      {/* SUBTAB: SAVED CERTIFICATES ARCHIVE                                    */}
+      {/* ===================================================================== */}
+      {activeSubTab === 'archive' && (
+        <div className="bg-[#022c22] p-6 rounded-3xl border border-[#065f46] shadow-xl space-y-6">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-4 border-b border-[#065f46]">
+            <div>
+              <h3 className="text-lg font-bold text-white font-heading flex items-center gap-2">
+                <BookmarkCheck className="w-5 h-5 text-[#fbbf24]" />
+                <span>سجل الشهادات المحفوظة والمعتمدة للمجمع ({allCertificates.length})</span>
+              </h3>
+              <p className="text-xs text-[#86efac]/90 mt-1">
+                أرشيف كامل لكافة شهادات التميز والإتقان التي تم إنشاؤها وحفظها لطلاب الحلقات، مع إمكانية المعاينة، الطباعة، التحميل، والمشاركة وحذف الشهادة بكل سهولة.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setActiveSubTab('issue')}
+              className="px-4 py-2 rounded-xl bg-[#fbbf24] hover:bg-amber-400 text-[#064e3b] font-black text-xs flex items-center gap-1.5 shadow-md cursor-pointer transition-all"
+            >
+              <Plus className="w-4 h-4" />
+              <span>إصدار وحفظ شهادة جديدة</span>
+            </button>
+          </div>
+
+          {/* Search & Filters */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="relative">
+              <Search className="w-4 h-4 text-[#86efac] absolute right-3 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                value={archiveSearch}
+                onChange={e => setArchiveSearch(e.target.value)}
+                placeholder="ابحث باسم الطالب أو المناسبة..."
+                className="w-full bg-[#064e3b]/50 border border-[#065f46] rounded-2xl pr-9 pl-3 py-2 text-xs text-white outline-none focus:border-[#fbbf24]"
+              />
+            </div>
+
+            {halaqahs.length > 0 && (
+              <select
+                value={archiveHalaqahFilter}
+                onChange={e => setArchiveHalaqahFilter(e.target.value)}
+                className="w-full bg-[#064e3b]/50 border border-[#065f46] rounded-2xl px-3 py-2 text-xs text-white outline-none focus:border-[#fbbf24]"
+              >
+                <option value="all">كافة الحلقات القرآنية</option>
+                {halaqahs.map(h => (
+                  <option key={h.id} value={h.id}>
+                    {h.name}
+                  </option>
+                ))}
+              </select>
+            )}
+
+            <select
+              value={archiveOccasionFilter}
+              onChange={e => setArchiveOccasionFilter(e.target.value)}
+              className="w-full bg-[#064e3b]/50 border border-[#065f46] rounded-2xl px-3 py-2 text-xs text-white outline-none focus:border-[#fbbf24]"
+            >
+              <option value="all">كافة المناسبات والتكريمات</option>
+              {[
+                'شكر وتقدير وتميز',
+                'إتمام جزء من القرآن الكريم',
+                'إتمام سورة من القرآن الكريم',
+                'اجتياز اختبار قرآني',
+                'مواظبة وانضباط قرآني',
+                'مناسبة مخصصة'
+              ].map(occ => (
+                <option key={occ} value={occ}>
+                  {occ}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {allCertificates.length === 0 ? (
+            <div className="p-12 text-center space-y-3 bg-[#064e3b]/20 rounded-3xl border border-dashed border-[#065f46]">
+              <div className="w-14 h-14 rounded-2xl bg-[#064e3b] text-[#fbbf24] flex items-center justify-center mx-auto shadow-md">
+                <Award className="w-7 h-7" />
+              </div>
+              <h4 className="text-sm font-bold text-white">لم يتم حفظ أي شهادة بعد</h4>
+              <p className="text-xs text-[#86efac]/70 max-w-md mx-auto">
+                عندما يقوم المجمع أو المعلم بإصدار الشهادات والضغط على "حفظ الشهادة"، سيتم أرشفة الشهادات تلقائياً هنا في قاعدة البيانات لتكون محفوظة وموثقة دائماً.
+              </p>
+              <button
+                type="button"
+                onClick={() => setActiveSubTab('issue')}
+                className="px-5 py-2.5 rounded-2xl bg-[#fbbf24] text-[#064e3b] font-black text-xs cursor-pointer shadow-md mt-2"
+              >
+                إصدار وحفظ أول شهادة الآن
+              </button>
+            </div>
+          ) : filteredArchiveCertificates.length === 0 ? (
+            <div className="p-8 text-center text-xs text-[#86efac]/70 bg-[#064e3b]/20 rounded-2xl border border-[#065f46]">
+              لا توجد شهادات مطابقة لخيارات البحث والفلترة.
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+              {filteredArchiveCertificates.map(cert => (
+                <div
+                  key={cert.id}
+                  className="bg-[#022c22] border-2 border-[#065f46] hover:border-[#fbbf24] rounded-3xl overflow-hidden shadow-xl hover:shadow-2xl transition-all duration-300 flex flex-col justify-between group"
+                >
+                  {/* Live Visual Certificate Preview (كأنها معاينة واسم الطالب والبيانات المكتوبة موجودة) */}
+                  <div
+                    className="w-full aspect-[1.414/1] relative p-3 sm:p-4 flex flex-col justify-between text-center select-none overflow-hidden border-b border-[#065f46]"
+                    style={{
+                      backgroundImage: cert.customTemplateImageUrl ? `url(${cert.customTemplateImageUrl})` : undefined,
+                      backgroundSize: '100% 100%',
+                      backgroundRepeat: 'no-repeat',
+                      backgroundPosition: 'center',
+                      backgroundColor: cert.templateType === 'ready'
+                        ? (cert.templateId === 'platform_imperial_gold' ? '#fef9c3' : (cert.templateId === 'platform_classic_heritage' ? '#fffefb' : (cert.templateId === 'platform_celestial_sapphire' ? '#0f172a' : '#022c22')))
+                        : '#064e3b'
+                    }}
+                  >
+                    {/* Inner gold frame */}
+                    <div className="absolute inset-1.5 border border-[#fbbf24]/50 rounded-xl pointer-events-none" />
+
+                    {/* Top Header */}
+                    <div className="relative z-10 pt-0.5">
+                      <div className="text-[8.5px] font-serif font-bold text-[#fbbf24]">
+                        بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ
+                      </div>
+                      <div className="text-[10px] sm:text-[11px] font-heading font-black text-[#fbbf24] mt-0.5">
+                        {cert.occasion === 'اجتياز اختبار قرآني' ? 'شَهَادَةُ اجْتِيَازِ وَتَفَوُّقِ فِي الاخْتِبَارِ' : 'شَهَادَةُ تَمَيُّزٍ وَإِتْقَانٍ قُرْآنِيٍّ'}
+                      </div>
+                    </div>
+
+                    {/* Center Student Name in large calligraphic font */}
+                    <div className="relative z-10 my-auto py-1">
+                      <p className="text-[8px] sm:text-[9px] opacity-80" style={{ color: cert.templateId === 'platform_imperial_gold' || cert.templateId === 'platform_classic_heritage' ? '#064e3b' : '#86efac' }}>
+                        تُمنح للطالب النجيب:
+                      </p>
+                      <div
+                        className="font-quran text-lg sm:text-2xl font-black py-0.5 leading-tight truncate px-2"
+                        style={{ color: cert.templateId === 'platform_imperial_gold' ? '#b45309' : '#fbbf24' }}
+                      >
+                        {cert.studentName}
+                      </div>
+                      <p
+                        className="text-[8px] sm:text-[9px] leading-tight line-clamp-2 px-2 opacity-90 max-w-xs mx-auto font-medium"
+                        style={{ color: cert.templateId === 'platform_imperial_gold' || cert.templateId === 'platform_classic_heritage' ? '#1c1917' : '#ffffff' }}
+                      >
+                        {cert.occasionText || cert.occasion}
+                      </p>
+                    </div>
+
+                    {/* Bottom details: Signatures & Bottom-Left Seal */}
+                    <div className="relative z-10 pt-1 border-t border-white/20 flex items-center justify-between text-[8px] px-1"
+                      style={{ color: cert.templateId === 'platform_imperial_gold' || cert.templateId === 'platform_classic_heritage' ? '#064e3b' : '#86efac' }}
+                    >
+                      <div className="text-right truncate max-w-[65%]">
+                        <span>{cert.halaqahName || 'الحلقة'} • {cert.dateArabic || cert.dateGregorian}</span>
+                      </div>
+
+                      {/* Seal positioned in bottom-left */}
+                      <div className="flex items-center gap-1 font-bold text-[#fbbf24] bg-black/40 px-1.5 py-0.5 rounded-md shrink-0">
+                        <Award className="w-3 h-3 text-[#fbbf24]" />
+                        <span>معتمد</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Card Bottom Meta & Actions */}
+                  <div className="p-3 bg-[#064e3b]/30 space-y-2">
+                    <div className="flex items-center justify-between gap-1 text-xs">
+                      <span className="font-bold text-white truncate">{cert.studentName}</span>
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#022c22] text-[#fbbf24] border border-[#065f46] shrink-0 font-medium">
+                        {cert.occasion}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-1.5 pt-1 border-t border-[#065f46]/50">
+                      <button
+                        type="button"
+                        onClick={() => handleOpenPreviewFromArchive(cert)}
+                        className="flex-1 py-1.5 rounded-xl bg-[#fbbf24] hover:bg-amber-400 text-[#064e3b] font-black text-xs flex items-center justify-center gap-1 cursor-pointer transition-all"
+                        title="معاينة الشهادة وطباعتها بدقة فائقة"
+                      >
+                        <Eye className="w-3.5 h-3.5" />
+                        <span>معاينة</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleDownloadArchiveSinglePdf(cert)}
+                        className="p-1.5 rounded-xl bg-[#022c22] hover:bg-[#064e3b] text-[#86efac] hover:text-white border border-[#065f46] cursor-pointer transition-colors"
+                        title="تنزيل كـ PDF فاخر"
+                      >
+                        <Download className="w-4 h-4 text-emerald-400" />
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleSendWhatsAppForArchive(cert)}
+                        className="p-1.5 rounded-xl bg-emerald-900/60 hover:bg-emerald-800 text-emerald-200 hover:text-white border border-emerald-600/40 cursor-pointer transition-colors"
+                        title="إرسال عبر الواتساب لولي الأمر"
+                      >
+                        <Send className="w-4 h-4 text-emerald-300" />
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteCertificateClick(cert)}
+                        className="p-1.5 rounded-xl bg-red-950/60 hover:bg-red-900 text-red-300 hover:text-red-100 border border-red-500/40 cursor-pointer transition-colors"
+                        title="حذف هذه الشهادة نهائياً"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -1735,7 +2359,7 @@ ${occasionText}
 
                       <button
                         type="button"
-                        onClick={() => handleDeleteTemplate(tpl.id)}
+                        onClick={() => handleDeleteTemplate(tpl.id, tpl.name)}
                         className="p-1.5 rounded-xl bg-red-950/60 text-red-300 hover:text-red-100 border border-red-500/40 cursor-pointer"
                         title="حذف هذا النموذج"
                       >
@@ -1757,7 +2381,7 @@ ${occasionText}
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-md p-2 sm:p-4 overflow-y-auto">
           <div className="bg-[#022c22] border-2 border-[#fbbf24]/50 rounded-3xl w-full max-w-5xl max-h-[96vh] flex flex-col shadow-2xl overflow-hidden text-right">
             {/* Modal Top Bar */}
-            <div className="bg-gradient-to-r from-[#064e3b] via-[#022c22] to-[#064e3b] px-6 py-4 border-b border-[#065f46] flex items-center justify-between gap-4 shrink-0">
+            <div className="bg-gradient-to-r from-[#064e3b] via-[#022c22] to-[#064e3b] px-6 py-4 border-b border-[#065f46] flex flex-wrap items-center justify-between gap-4 shrink-0">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-[#fbbf24]/20 border border-[#fbbf24]/40 text-[#fbbf24] flex items-center justify-center shadow-sm">
                   <Award className="w-5 h-5" />
@@ -1772,14 +2396,60 @@ ${occasionText}
                 </div>
               </div>
 
-              {/* Close Button */}
-              <button
-                type="button"
-                onClick={() => setIsGeneratedModalOpen(false)}
-                className="p-2 text-[#86efac] hover:text-white hover:bg-white/10 rounded-xl transition-colors cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
+              <div className="flex items-center gap-2">
+                {/* Save Current Student Certificate Button */}
+                <button
+                  type="button"
+                  disabled={isSavingCert}
+                  onClick={async () => {
+                    const curStd = targetStudents[previewStudentIndex] || targetStudents[0];
+                    if (curStd) {
+                      await handleSaveCertificateForStudent(curStd);
+                    }
+                  }}
+                  className={`px-3.5 py-1.5 rounded-xl font-bold text-xs flex items-center gap-1.5 shadow-md cursor-pointer transition-all active:scale-95 ${
+                    isCurrentStudentSaved
+                      ? 'bg-emerald-600 hover:bg-emerald-500 text-white border border-emerald-400'
+                      : 'bg-gradient-to-r from-[#fbbf24] to-amber-500 hover:brightness-110 text-[#064e3b]'
+                  }`}
+                  title="حفظ الشهادة وتوثيقها في الأرشيف"
+                >
+                  <CheckCircle2 className="w-4 h-4" />
+                  <span>
+                    {isSavingCert
+                      ? 'جاري الحفظ...'
+                      : isCurrentStudentSaved
+                      ? 'تم حفظ الشهادة ✓'
+                      : 'حفظ الشهادة'}
+                  </span>
+                </button>
+
+                {/* Save All Certificates (if multiple) */}
+                {targetStudents.length > 1 && (
+                  <button
+                    type="button"
+                    disabled={isSavingCert}
+                    onClick={async () => {
+                      await handleSaveAllCertificates();
+                    }}
+                    className="px-3.5 py-1.5 rounded-xl bg-[#064e3b] hover:bg-[#064e3b]/80 border border-[#fbbf24]/50 text-white font-bold text-xs flex items-center gap-1.5 cursor-pointer shadow-md transition-all active:scale-95"
+                    title="حفظ كافة الشهادات المعروضة دفعة واحدة"
+                  >
+                    <BookmarkCheck className="w-4 h-4 text-[#fbbf24]" />
+                    <span>{isSavingCert ? 'جاري الحفظ...' : `حفظ الكل (${targetStudents.length})`}</span>
+                  </button>
+                )}
+
+                {/* Close Button */}
+                <button
+                  type="button"
+                  onClick={() => setIsGeneratedModalOpen(false)}
+                  className="p-2 text-[#86efac] hover:text-white hover:bg-white/10 rounded-xl transition-colors cursor-pointer mr-1"
+                  title="إغلاق نافذة المعاينة"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
             </div>
 
             {/* Students Switcher Pagination Bar (if multiple students) */}
@@ -1827,18 +2497,54 @@ ${occasionText}
               </div>
             )}
 
+            {/* Notification / Status Banner inside Modal (Prominently displays "تم حفظ الشهادة") */}
+            {savedSuccessToast && (
+              <div className="mx-4 sm:mx-6 mt-3 p-3.5 rounded-2xl bg-gradient-to-r from-emerald-900 via-green-800 to-emerald-900 text-white border-2 border-emerald-400 text-sm font-bold flex items-center justify-between gap-3 shadow-2xl animate-fade-in shrink-0">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-xl bg-emerald-700/80 border border-emerald-400/60 flex items-center justify-center shrink-0">
+                    <CheckCircle2 className="w-5 h-5 text-[#fbbf24]" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-black text-white">{savedSuccessToast}</p>
+                    <p className="text-[11px] text-emerald-200 font-normal">
+                      تم توثيق الشهادة وتأكيد حفظها رسمياً في أرشيف المجمع وسجل الطالب الإلكتروني
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsGeneratedModalOpen(false);
+                      setActiveSubTab('archive');
+                    }}
+                    className="px-3 py-1.5 rounded-xl bg-white/20 hover:bg-white/30 text-white text-xs font-bold transition-all cursor-pointer"
+                  >
+                    عرض في الأرشيف
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSavedSuccessToast(null)}
+                    className="text-white/80 hover:text-white p-1 cursor-pointer"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            )}
+
             {/* Certificate Preview Body */}
             <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-[#011a14] flex justify-center items-center">
               {(() => {
                 const curStudent = targetStudents[previewStudentIndex] || targetStudents[0];
                 const halaqahName = curStudent.halaqahName || settings.halaqahName;
-                const complexName = settings.complexName || 'منظومة عُمران';
+                const complexName = activeComplexName || settings.complexName || 'منظومة عُمران';
                 const teacherTitle = signatureMode === 'custom'
                   ? customTeacherName
                   : (curStudent.halaqahName ? `معلم ${curStudent.halaqahName}` : settings.teacherName);
                 const supervisorTitle = signatureMode === 'custom'
                   ? customSupervisorName
-                  : (settings.complexName ? `مشرف ${settings.complexName}` : 'المشرف العام');
+                  : (complexName ? `مشرف ${complexName}` : 'المشرف العام');
 
                 return (
                   <div
@@ -2000,13 +2706,40 @@ ${occasionText}
 
             {/* Modal Bottom Actions Bar */}
             <div className="p-4 bg-[#022c22] border-t border-[#065f46] flex flex-wrap items-center justify-between gap-3 shrink-0">
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+                {/* Save Certificate Button */}
+                <button
+                  type="button"
+                  disabled={isSavingCert}
+                  onClick={async () => {
+                    const curStd = targetStudents[previewStudentIndex] || targetStudents[0];
+                    if (curStd) {
+                      await handleSaveCertificateForStudent(curStd);
+                    }
+                  }}
+                  className={`px-4 py-2.5 rounded-xl font-black text-xs flex items-center gap-1.5 shadow-md cursor-pointer transition-all active:scale-95 ${
+                    isCurrentStudentSaved
+                      ? 'bg-emerald-600 hover:bg-emerald-500 text-white border border-emerald-400'
+                      : 'bg-gradient-to-r from-[#fbbf24] via-amber-400 to-[#f59e0b] hover:brightness-110 text-[#064e3b]'
+                  }`}
+                  title="حفظ الشهادة وتوثيقها في الأرشيف"
+                >
+                  <CheckCircle2 className="w-4 h-4" />
+                  <span>
+                    {isSavingCert
+                      ? 'جاري الحفظ...'
+                      : isCurrentStudentSaved
+                      ? 'تم حفظ الشهادة بنجاح ✓'
+                      : 'حفظ الشهادة'}
+                  </span>
+                </button>
+
                 {/* Download as Image PNG */}
                 <button
                   type="button"
                   disabled={isExporting}
                   onClick={() => handleDownloadSinglePNG(targetStudents[previewStudentIndex], previewStudentIndex)}
-                  className="px-4 py-2 rounded-xl bg-[#064e3b] hover:bg-[#064e3b]/80 disabled:opacity-50 text-[#86efac] hover:text-white border border-[#065f46] font-bold text-xs flex items-center gap-1.5 cursor-pointer transition-all"
+                  className="px-4 py-2.5 rounded-xl bg-[#064e3b] hover:bg-[#064e3b]/80 disabled:opacity-50 text-[#86efac] hover:text-white border border-[#065f46] font-bold text-xs flex items-center gap-1.5 cursor-pointer transition-all"
                   title="تنزيل الشهادة كصورة PNG عالية الدقة"
                 >
                   <Download className="w-4 h-4 text-emerald-400" />
@@ -2018,7 +2751,7 @@ ${occasionText}
                   type="button"
                   disabled={isExporting}
                   onClick={() => handleDownloadSinglePDF(targetStudents[previewStudentIndex], previewStudentIndex)}
-                  className="px-4 py-2 rounded-xl bg-[#064e3b] hover:bg-[#064e3b]/80 disabled:opacity-50 text-[#86efac] hover:text-white border border-[#065f46] font-bold text-xs flex items-center gap-1.5 cursor-pointer transition-all"
+                  className="px-4 py-2.5 rounded-xl bg-[#064e3b] hover:bg-[#064e3b]/80 disabled:opacity-50 text-[#86efac] hover:text-white border border-[#065f46] font-bold text-xs flex items-center gap-1.5 cursor-pointer transition-all"
                   title="تنزيل شهادة هذا الطالب كـ PDF منفصل"
                 >
                   <Printer className="w-4 h-4 text-amber-300" />
@@ -2031,7 +2764,7 @@ ${occasionText}
                     type="button"
                     disabled={isExporting}
                     onClick={handleDownloadAllMergedPDF}
-                    className="px-4 py-2 rounded-xl bg-emerald-900/80 hover:bg-emerald-800 disabled:opacity-50 text-emerald-100 border border-emerald-600/50 font-bold text-xs flex items-center gap-1.5 cursor-pointer transition-all"
+                    className="px-4 py-2.5 rounded-xl bg-emerald-900/80 hover:bg-emerald-800 disabled:opacity-50 text-emerald-100 border border-emerald-600/50 font-bold text-xs flex items-center gap-1.5 cursor-pointer transition-all"
                     title="تنزيل كافة الشهادات في ملف PDF واحد مجمع"
                   >
                     <FileText className="w-4 h-4 text-[#fbbf24]" />
@@ -2053,6 +2786,49 @@ ${occasionText}
                   <span>{isExporting ? 'جاري تجهيز الشهادة...' : 'إرسال عبر واتساب (ملف PDF)'}</span>
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* In-app Delete Confirmation Modal (100% works in iframes and mobile) */}
+      {deleteConfirmModal && deleteConfirmModal.isOpen && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/85 backdrop-blur-md p-4 animate-fade-in">
+          <div className="bg-[#022c22] border-2 border-red-500/60 rounded-3xl w-full max-w-md p-6 shadow-2xl text-right space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-2xl bg-red-950/80 border border-red-500/50 flex items-center justify-center text-red-400 shrink-0">
+                <Trash2 className="w-6 h-6" />
+              </div>
+              <div>
+                <h4 className="text-lg font-bold text-white font-heading">
+                  {deleteConfirmModal.type === 'template' ? 'تأكيد حذف النموذج المخصص' : 'تأكيد حذف الشهادة'}
+                </h4>
+                <p className="text-xs text-red-300 mt-0.5">
+                  تنبيه: سيتم الحذف نهائياً من قاعدة البيانات والأرشيف
+                </p>
+              </div>
+            </div>
+
+            <div className="p-3.5 rounded-2xl bg-[#011a14] border border-red-500/20 text-xs text-white/90 leading-relaxed">
+              هل أنت متأكد من رغبتك في حذف <strong className="text-amber-300 font-bold">{deleteConfirmModal.title}</strong>؟
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setDeleteConfirmModal(null)}
+                className="px-4 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white font-medium text-xs cursor-pointer transition-colors"
+              >
+                إلغاء الأمر
+              </button>
+              <button
+                type="button"
+                onClick={confirmDeleteAction}
+                className="px-5 py-2.5 rounded-xl bg-red-600 hover:bg-red-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-lg shadow-red-900/40 cursor-pointer transition-all active:scale-95"
+              >
+                <Trash2 className="w-4 h-4" />
+                <span>نعم، احذف نهائياً</span>
+              </button>
             </div>
           </div>
         </div>

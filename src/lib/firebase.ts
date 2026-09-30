@@ -38,6 +38,7 @@ import {
   SurahRecording,
   RecordingsConfig,
   StudentListeningLog,
+  IssuedCertificate,
   normalizeTeacherText
 } from '../types';
 
@@ -529,7 +530,8 @@ export const OMRAN_CACHE_KEYS = {
   HALAQAHS: 'omran_halaqahs_data',
   VIOLATIONS: 'omran_violations_data',
   EXAMS: 'omran_exams_data',
-  SUBMISSIONS: 'omran_submissions_data'
+  SUBMISSIONS: 'omran_submissions_data',
+  CERTIFICATES: 'omran_certificates_data'
 };
 
 // Safe Local Cache Getter with fallback
@@ -2140,6 +2142,7 @@ export class OmranDataService {
       recordings,
       recordingsConfig,
       listeningLogs,
+      certificates: await OmranDataService.loadCertificates(),
       userAccounts: [
         {
           id: 'admin-1',
@@ -2150,6 +2153,136 @@ export class OmranDataService {
         }
       ]
     };
+  }
+
+  // =========================================================================
+  // Certificate System Operations
+  // =========================================================================
+
+  // Sanitize Certificate object
+  static sanitizeCertificate(cert: any): IssuedCertificate {
+    return {
+      id: String(cert.id || `cert_${Date.now()}`),
+      studentId: String(cert.studentId || ''),
+      studentName: String(cert.studentName || ''),
+      halaqahId: cert.halaqahId ? String(cert.halaqahId) : undefined,
+      halaqahName: cert.halaqahName ? String(cert.halaqahName) : undefined,
+      complexId: cert.complexId ? String(cert.complexId) : undefined,
+      complexName: cert.complexName ? String(cert.complexName) : undefined,
+      occasion: String(cert.occasion || 'شكر وتقدير وتميز'),
+      occasionText: String(cert.occasionText || ''),
+      templateId: String(cert.templateId || 'platform_emerald_royal'),
+      templateName: String(cert.templateName || ''),
+      templateType: cert.templateType === 'custom' ? 'custom' : 'ready',
+      customTemplateImageUrl: cert.customTemplateImageUrl ? String(cert.customTemplateImageUrl) : undefined,
+      signatureMode: cert.signatureMode || 'auto',
+      teacherName: cert.teacherName ? String(cert.teacherName) : undefined,
+      supervisorName: cert.supervisorName ? String(cert.supervisorName) : undefined,
+      dateArabic: String(cert.dateArabic || ''),
+      dateGregorian: String(cert.dateGregorian || ''),
+      createdAt: String(cert.createdAt || new Date().toISOString()),
+      createdByName: cert.createdByName ? String(cert.createdByName) : undefined
+    };
+  }
+
+  // Load Certificates with Dual Persistence
+  static async loadCertificates(): Promise<IssuedCertificate[]> {
+    const local = getLocalCache<IssuedCertificate[]>(OMRAN_CACHE_KEYS.CERTIFICATES, []);
+    let cloudList: IssuedCertificate[] = [];
+    try {
+      const snap = await getDocs(collection(db, 'certificates'));
+      snap.forEach(d => {
+        const raw = d.data();
+        cloudList.push(OmranDataService.sanitizeCertificate({ ...raw, id: d.id || raw.id }));
+      });
+    } catch (e) {
+      handleFirestoreError(e, OperationType.LIST, 'certificates');
+    }
+
+    const mergedMap = new Map<string, IssuedCertificate>();
+    for (const c of local) {
+      if (c?.id) mergedMap.set(c.id, OmranDataService.sanitizeCertificate(c));
+    }
+    for (const c of cloudList) {
+      if (c?.id) mergedMap.set(c.id, c);
+    }
+
+    const merged = Array.from(mergedMap.values());
+    merged.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    setLocalCache(OMRAN_CACHE_KEYS.CERTIFICATES, merged);
+    return merged;
+  }
+
+  // Save Single Certificate directly in Firestore & Cache
+  static async saveCertificate(cert: IssuedCertificate): Promise<void> {
+    const cleanCert = OmranDataService.sanitizeCertificate(cert);
+    const local = getLocalCache<IssuedCertificate[]>(OMRAN_CACHE_KEYS.CERTIFICATES, []);
+    const updated = [cleanCert, ...local.filter(c => c.id !== cleanCert.id)];
+    setLocalCache(OMRAN_CACHE_KEYS.CERTIFICATES, updated);
+
+    try {
+      await setDoc(doc(db, 'certificates', cleanCert.id), cleanFirestoreData(cleanCert));
+    } catch (e) {
+      handleFirestoreError(e, OperationType.WRITE, `certificates/${cleanCert.id}`);
+      throw e;
+    }
+  }
+
+  // Save Batch Certificates
+  static async saveCertificates(certs: IssuedCertificate[]): Promise<void> {
+    if (!certs || certs.length === 0) return;
+    const cleanList = certs.map(c => OmranDataService.sanitizeCertificate(c));
+
+    const local = getLocalCache<IssuedCertificate[]>(OMRAN_CACHE_KEYS.CERTIFICATES, []);
+    const map = new Map<string, IssuedCertificate>();
+    for (const c of local) if (c?.id) map.set(c.id, c);
+    for (const c of cleanList) if (c?.id) map.set(c.id, c);
+    const merged = Array.from(map.values()).sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
+    setLocalCache(OMRAN_CACHE_KEYS.CERTIFICATES, merged);
+
+    try {
+      await Promise.allSettled(
+        cleanList.map(item => setDoc(doc(db, 'certificates', item.id), cleanFirestoreData(item)))
+      );
+    } catch (e) {
+      handleFirestoreError(e, OperationType.WRITE, 'certificates');
+    }
+  }
+
+  // Delete Certificate from Firestore & Cache
+  static async deleteCertificate(certId: string): Promise<void> {
+    const local = getLocalCache<IssuedCertificate[]>(OMRAN_CACHE_KEYS.CERTIFICATES, []);
+    const updated = local.filter(c => c.id !== certId);
+    setLocalCache(OMRAN_CACHE_KEYS.CERTIFICATES, updated);
+
+    try {
+      await deleteDoc(doc(db, 'certificates', certId));
+    } catch (e) {
+      console.warn(`Firestore delete doc notice for certificates/${certId} (deleted locally):`, e);
+      // Do not rethrow so UI deletion is not blocked by remote permission limits
+    }
+  }
+
+  // Subscribe to Certificates in real time
+  static subscribeCertificates(callback: (certs: IssuedCertificate[]) => void): () => void {
+    try {
+      return onSnapshot(collection(db, 'certificates'), snap => {
+        const list: IssuedCertificate[] = [];
+        snap.forEach(d => {
+          const raw = d.data();
+          list.push(OmranDataService.sanitizeCertificate({ ...raw, id: d.id || raw.id }));
+        });
+        list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+        setLocalCache(OMRAN_CACHE_KEYS.CERTIFICATES, list);
+        callback(list);
+      }, err => {
+        handleFirestoreError(err, OperationType.LIST, 'certificates');
+      });
+    } catch (e) {
+      return () => {};
+    }
   }
 
   // Import / Restore Full Database directly into Firestore (replaces existing data)
@@ -2193,6 +2326,7 @@ export class OmranDataService {
     const recordingsList = Array.isArray(backup.recordings) ? backup.recordings : [];
     const recordingsConfig = backup.recordingsConfig || DEFAULT_RECORDINGS_CONFIG;
     const listeningLogsList = Array.isArray(backup.listeningLogs) ? backup.listeningLogs : [];
+    const certificatesList = Array.isArray(backup.certificates) ? backup.certificates : [];
 
     // Helper to safely clear collections to guarantee complete replacement of data
     const clearCol = async (colName: string) => {
@@ -2219,7 +2353,8 @@ export class OmranDataService {
       clearCol('exams'),
       clearCol('exam_submissions'),
       clearCol('surah_recordings'),
-      clearCol('listening_logs')
+      clearCol('listening_logs'),
+      clearCol('certificates')
     ]);
 
     // Persist new data directly to Firestore concurrently
@@ -2261,6 +2396,9 @@ export class OmranDataService {
       }
       for (const log of listeningLogsList) {
         if (log?.id) promises.push(setDoc(doc(db, 'listening_logs', log.id), log));
+      }
+      for (const cert of certificatesList) {
+        if (cert?.id) promises.push(setDoc(doc(db, 'certificates', cert.id), cert));
       }
 
       if (settingsData) {

@@ -364,7 +364,6 @@ export const AttendanceTab: React.FC<AttendanceTabProps> = ({
 
   const handleDeleteTemplate = async (templateId: string) => {
     if (!onUpdateSettings || !settings) return;
-    if (!window.confirm('هل أنت متأكد من رغبتك في حذف قالب هذه الرسالة؟')) return;
 
     const updatedTemplates = absenceTemplates.filter(t => t.id !== templateId);
     await onUpdateSettings({
