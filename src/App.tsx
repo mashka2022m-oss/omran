@@ -412,12 +412,17 @@ export function App() {
   const currentTeacher = useMemo(() => {
     if (!currentUser || currentUser.role !== 'admin') return null;
     const cleanUser = currentUser.username.trim().toLowerCase();
-    const tid = currentUser.teacherId || currentUser.studentId;
+    const tid = currentUser.teacherId;
+    if (tid) {
+      const matchById = teachers.find(t => t.id === tid);
+      if (matchById) return matchById;
+    }
     return teachers.find(
-      t => (tid && t.id === tid) ||
-           t.username.trim().toLowerCase() === cleanUser ||
-           t.name.trim().toLowerCase() === cleanUser
-    );
+      t =>
+        t.username.trim().toLowerCase() === cleanUser ||
+        t.name.trim().toLowerCase() === cleanUser ||
+        normalizeArabicText(t.name) === normalizeArabicText(currentUser.username)
+    ) || null;
   }, [currentUser, teachers]);
 
   // Check Developer / System Administrator
@@ -434,7 +439,7 @@ export function App() {
     );
   }, [currentUser, currentTeacher]);
 
-  // STRICT IMMUNITY: It is IMPOSSIBLE for a supervisor, teacher, or teacher-developer to be a student!
+  // STRICT IMMUNITY: Protect teachers and supervisors from demotion, without hijacking other teachers' accounts
   useEffect(() => {
     if (!currentUser) return;
     const cleanUser = currentUser.username.trim().toLowerCase();
@@ -442,29 +447,40 @@ export function App() {
       cleanUser === 'admin' ||
       cleanUser === 'developer' ||
       cleanUser === 'montaser' ||
-      cleanUser.includes('منتصر') ||
-      cleanUser.includes('محمد منتصر') ||
-      currentUser.studentId === 'teacher-1' ||
-      currentUser.teacherId === 'teacher-1';
+      cleanUser.includes('منتصر');
 
-    const matchedTeacher = teachers.find(
-      t =>
-        (currentUser.teacherId && t.id === currentUser.teacherId) ||
-        (currentUser.studentId && t.id === currentUser.studentId) ||
-        t.username.trim().toLowerCase() === cleanUser ||
-        t.name.trim().toLowerCase() === cleanUser ||
-        normalizeArabicText(t.name) === normalizeArabicText(currentUser.username) ||
-        t.name.includes('منتصر')
-    );
+    // 1. Resolve the specific teacher account belonging to the active session
+    let matchedTeacher: TeacherAccount | undefined;
+    if (currentUser.teacherId) {
+      matchedTeacher = teachers.find(t => t.id === currentUser.teacherId);
+    }
+    if (!matchedTeacher) {
+      matchedTeacher = teachers.find(
+        t =>
+          t.username.trim().toLowerCase() === cleanUser ||
+          t.name.trim().toLowerCase() === cleanUser ||
+          normalizeArabicText(t.name) === normalizeArabicText(currentUser.username)
+      );
+    }
 
-    if (isMontaserOrDev || matchedTeacher) {
-      const targetTeacher = matchedTeacher || teachers.find(t => t.role === 'developer' || t.id === 'teacher-1') || teachers[0];
-      if (currentUser.role !== 'admin' || currentUser.studentId || currentUser.teacherId !== targetTeacher?.id) {
-        console.warn('Auto-recovering teacher/supervisor/developer session from demotion:', currentUser);
+    // 2. Only if the logged in user is explicitly developer/Montaser and no other teacher was matched
+    if (!matchedTeacher && isMontaserOrDev) {
+      matchedTeacher = teachers.find(t => t.role === 'developer' || t.id === 'teacher-1');
+    }
+
+    // 3. If a valid teacher account is matched, preserve their role as admin and ensure no demotion to student
+    if (matchedTeacher) {
+      const needsUpdate =
+        currentUser.role !== 'admin' ||
+        Boolean(currentUser.studentId) ||
+        currentUser.teacherId !== matchedTeacher.id;
+
+      if (needsUpdate) {
+        console.warn('Preserving exact teacher account session integrity for:', matchedTeacher.name);
         const safeUser = {
-          username: targetTeacher?.name || currentUser.username,
+          username: matchedTeacher.name || matchedTeacher.username,
           role: 'admin' as const,
-          teacherId: targetTeacher?.id || 'teacher-1'
+          teacherId: matchedTeacher.id
         };
         setCurrentUser(safeUser);
         localStorage.setItem('omran_session', JSON.stringify(safeUser));
@@ -504,12 +520,15 @@ export function App() {
   const isSupervisor = useMemo(() => {
     if (!currentUser || currentUser.role !== 'admin') return false;
     if (isDeveloper) return true;
-    if (activeComplex && currentTeacher) {
-      if (activeComplex.supervisorTeacherId && activeComplex.supervisorTeacherId === currentTeacher.id) return true;
-      if (activeComplex.supervisorTeacherName && currentTeacher.name &&
-          normalizeTeacherText(activeComplex.supervisorTeacherName) === normalizeTeacherText(currentTeacher.name)) return true;
-    }
     if (currentTeacher) {
+      // STRICT: If role is explicitly teacher, they are strictly a regular teacher, NEVER supervisor
+      if (currentTeacher.role === 'teacher') return false;
+      if (currentTeacher.role === 'supervisor') return true;
+      if (activeComplex) {
+        if (activeComplex.supervisorTeacherId && activeComplex.supervisorTeacherId === currentTeacher.id) return true;
+        if (activeComplex.supervisorTeacherName && currentTeacher.name &&
+            normalizeTeacherText(activeComplex.supervisorTeacherName) === normalizeTeacherText(currentTeacher.name)) return true;
+      }
       return isTeacherSupervisor(currentTeacher);
     }
     const cleanUser = currentUser.username.trim().toLowerCase();

@@ -143,7 +143,12 @@ export const LoginModal: React.FC<LoginModalProps> = ({
     const foundTeacher = teachers.find(t => {
       const tUser = (t.username || '').trim().toLowerCase().replace(/[أإآ]/g, 'ا').replace(/ة/g, 'ه').replace(/ى/g, 'ي');
       const tName = (t.name || '').trim().toLowerCase().replace(/[أإآ]/g, 'ا').replace(/ة/g, 'ه').replace(/ى/g, 'ي');
-      const matchesUser = tUser === normUser || tName === normUser || (normUser.length >= 6 && (tName.includes(normUser) || normUser.includes(tName)));
+      const matchesUser =
+        tUser === normUser ||
+        tName === normUser ||
+        t.username.trim().toLowerCase() === cleanUser.toLowerCase() ||
+        t.name.trim().toLowerCase() === cleanUser.toLowerCase();
+
       const matchesPass = t.password === cleanPass || cleanPass === '123' || cleanPass === 'moh2022M';
       return matchesUser && matchesPass;
     });
@@ -162,7 +167,12 @@ export const LoginModal: React.FC<LoginModalProps> = ({
     const matchedTeacherAnyPass = isDeveloperUser || teachers.some(t => {
       const tUser = (t.username || '').trim().toLowerCase().replace(/[أإآ]/g, 'ا').replace(/ة/g, 'ه').replace(/ى/g, 'ي');
       const tName = (t.name || '').trim().toLowerCase().replace(/[أإآ]/g, 'ا').replace(/ة/g, 'ه').replace(/ى/g, 'ي');
-      return tUser === normUser || tName === normUser || (normUser.length >= 6 && (tName.includes(normUser) || normUser.includes(tName)));
+      return (
+        tUser === normUser ||
+        tName === normUser ||
+        t.username.trim().toLowerCase() === cleanUser.toLowerCase() ||
+        t.name.trim().toLowerCase() === cleanUser.toLowerCase()
+      );
     });
 
     if (matchedTeacherAnyPass) {
@@ -177,12 +187,13 @@ export const LoginModal: React.FC<LoginModalProps> = ({
     });
 
     if (foundStudent) {
-      // Guard: If student name clashes with a teacher/supervisor or Mohamed Montaser, reject student login
+      // Guard: If student username or name clashes with an actual teacher account, reject student login
       const isTeacherClash = teachers.some(t => {
-        const tName = t.name.trim().toLowerCase().replace(/[أإآ]/g, 'ا').replace(/ة/g, 'ه').replace(/ى/g, 'ي');
-        return tName === normUser || t.name.includes('منتصر');
+        const tUser = (t.username || '').trim().toLowerCase().replace(/[أإآ]/g, 'ا').replace(/ة/g, 'ه').replace(/ى/g, 'ي');
+        const tName = (t.name || '').trim().toLowerCase().replace(/[أإآ]/g, 'ا').replace(/ة/g, 'ه').replace(/ى/g, 'ي');
+        return tUser === normUser || tName === normUser;
       });
-      if (isTeacherClash || foundStudent.name.includes('منتصر')) {
+      if (isTeacherClash || normUser === 'admin' || normUser === 'developer' || normUser.includes('منتصر')) {
         setLoginError('هذا الحساب مسجل كمعلم أو مشرف ولا يمكن تسجيل الدخول به كطالب.');
         return;
       }
@@ -239,9 +250,9 @@ export const LoginModal: React.FC<LoginModalProps> = ({
     // Check conflict with teacher names
     const existsTeacher = teachers.some(t => {
       const tName = t.name.trim().toLowerCase().replace(/[أإآ]/g, 'ا').replace(/ة/g, 'ه').replace(/ى/g, 'ي');
-      return tName === normRegName || t.name.includes('منتصر');
+      return tName === normRegName;
     });
-    if (existsTeacher || regName.includes('منتصر')) {
+    if (existsTeacher || normRegName.includes('منتصر') || normRegName === 'admin' || normRegName === 'developer') {
       setRegError(`عذراً، هذا الاسم مسجل مسبقاً كمعلم أو مشرف في المنظومة! يرجى كتابة الاسم الرباعي لتجنب التطابق.`);
       return;
     }

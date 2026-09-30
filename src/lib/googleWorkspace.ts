@@ -1016,11 +1016,20 @@ export class GoogleWorkspaceService {
 
     if (matchedStudent) {
       // Ensure this student is NOT actually a teacher/supervisor or named Mohamed Montaser
-      const isActuallyTeacher = existingTeachers.some(
-        t => normalizeArabicText(t.name) === normalizeArabicText(matchedStudent!.name) ||
-             t.id === matchedStudent!.id
+      const actualTeacher = existingTeachers.find(
+        t => t.id === matchedStudent!.id ||
+             (t.googleEmail && t.googleEmail.trim().toLowerCase() === cleanEmail) ||
+             normalizeArabicText(t.name) === normalizeArabicText(matchedStudent!.name)
       );
-      if (isActuallyTeacher || matchedStudent.name.includes('منتصر')) {
+      if (actualTeacher) {
+        return {
+          userType: 'teacher',
+          role: 'admin',
+          teacher: actualTeacher,
+          username: actualTeacher.name || actualTeacher.username
+        };
+      }
+      if (matchedStudent.name.includes('منتصر') || cleanName.includes('منتصر')) {
         const devTeacher = existingTeachers.find(t => t.role === 'developer' || t.id === 'teacher-1') || existingTeachers[0];
         return {
           userType: 'teacher',
