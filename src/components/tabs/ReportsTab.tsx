@@ -22,7 +22,10 @@ import {
   UserCheck,
   UserX,
   Trophy,
-  ChevronLeft
+  ChevronLeft,
+  MessageSquare,
+  Send,
+  Copy
 } from 'lucide-react';
 import { Student, AttendanceRecord, StudentEvaluation, AppSettings, getStudentParentPhone } from '../../types';
 import { getSurahInfo } from '../../data/quranData';
@@ -76,6 +79,12 @@ export const ReportsTab: React.FC<ReportsTabProps> = ({
   const [studentForPrint, setStudentForPrint] = useState<Student | undefined>(undefined);
   const [targetStudentIdsForPrint, setTargetStudentIdsForPrint] = useState<string[]>([]);
 
+  // Modal 4: Text Message Export
+  const [isTextMessageModalOpen, setIsTextMessageModalOpen] = useState(false);
+  const [generatedReportText, setGeneratedReportText] = useState('');
+  const [textMessageStudent, setTextMessageStudent] = useState<Student | null>(null);
+  const [textMessageCopied, setTextMessageCopied] = useState(false);
+
   // Search in Student Roster
   const [studentSearchQuery, setStudentSearchQuery] = useState('');
 
@@ -99,12 +108,27 @@ export const ReportsTab: React.FC<ReportsTabProps> = ({
     const latest = studentEvals[0];
     const sInfo = getSurahInfo(std.currentSurah || 78);
 
-    const latestNew = latest?.recitationDetails?.todayNewItem
-      ? `سورة ${getSurahInfo(latest.recitationDetails.todayNewItem.surahNumber).name} (${latest.recitationDetails.todayNewItem.fromAyah || 1}-${latest.recitationDetails.todayNewItem.toAyah || 1})`
-      : latest?.recitationDetails?.newMemorizationAchieved || `سورة ${std.currentSurahName || sInfo.name} (${std.currentAyah || 1})`;
+    const todayNew = latest?.recitationDetails?.todayNewItem;
+    let latestNew = latest?.recitationDetails?.newMemorizationAchieved || `سورة ${std.currentSurahName || sInfo.name} (${std.currentAyah || 1})`;
+    if (todayNew) {
+      const s1 = getSurahInfo(todayNew.surahNumber || 78);
+      const s2 = todayNew.toSurahNumber ? getSurahInfo(todayNew.toSurahNumber) : s1;
+      if (todayNew.toSurahNumber && todayNew.toSurahNumber !== todayNew.surahNumber) {
+        latestNew = `من سورة ${s1.name} (آية ${todayNew.fromAyah || 1}) إلى سورة ${s2.name} (آية ${todayNew.toAyah || 1})`;
+      } else {
+        latestNew = `سورة ${s1.name} (${todayNew.fromAyah || 1}-${todayNew.toAyah || 1})`;
+      }
+    }
 
     const latestReview = latest?.recitationDetails?.todayReviewItems && latest.recitationDetails.todayReviewItems.length > 0
-      ? latest.recitationDetails.todayReviewItems.map(item => `سورة ${getSurahInfo(item.surahNumber).name} (${item.fromAyah || 1}-${item.toAyah || 1})`).join(' • ')
+      ? latest.recitationDetails.todayReviewItems.map(item => {
+          const s1 = getSurahInfo(item.surahNumber || 78);
+          const s2 = item.toSurahNumber ? getSurahInfo(item.toSurahNumber) : s1;
+          if (item.toSurahNumber && item.toSurahNumber !== item.surahNumber) {
+            return `من سورة ${s1.name} (آية ${item.fromAyah || 1}) إلى سورة ${s2.name} (آية ${item.toAyah || 1})`;
+          }
+          return `سورة ${s1.name} (${item.fromAyah || 1}-${item.toAyah || 1})`;
+        }).join(' • ')
       : latest?.recitationDetails?.reviewAchieved || 'المراجعة المقررة';
 
     return {
@@ -121,6 +145,86 @@ export const ReportsTab: React.FC<ReportsTabProps> = ({
   const handlePrintSingleStudent = (std: Student) => {
     setStudentForPrint(std);
     setPrintDocumentType('individual');
+  };
+
+  // Generate formatted Arabic text report for WhatsApp or copying
+  const handleGenerateTextMessage = (std?: Student) => {
+    const today = new Intl.DateTimeFormat('ar-SA', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    }).format(new Date());
+
+    const timeframeLabel = customReportTimeframe === 'weekly'
+      ? 'التقرير الأسبوعي'
+      : (customReportTimeframe === 'monthly' ? 'التقرير الشهري' : 'السجل القرآني الشامل');
+
+    const complex = settings.complexName || 'منظومة عُمران لإدارة المجمعات القرآنية';
+    const teacher = teacherName || settings.teacherName || 'معلم الحلقة';
+
+    let msg = `🌿 *${timeframeLabel}* 🌿\n`;
+    msg += `🏛️ ${complex}\n`;
+    msg += `📅 تاريخ التقرير: ${today}\n`;
+    msg += `👨‍🏫 إشراف المعلم: ${teacher}\n`;
+    msg += `------------------------------------\n\n`;
+
+    let targetList: Student[] = [];
+    if (std) {
+      targetList = [std];
+    } else if (customReportTargetMode === 'single') {
+      const found = students.find(s => s.id === customSingleStudentId) || students[0];
+      if (found) targetList = [found];
+    } else if (customReportTargetMode === 'selected') {
+      targetList = students.filter(s => customSelectedStudentIds.includes(s.id));
+    } else {
+      targetList = students;
+    }
+
+    targetList.forEach((st, idx) => {
+      const parentPhone = getStudentParentPhone(st);
+      const recData = getStudentLatestRecitations(st);
+      const stAtt = attendance.filter(a => a.studentId === st.id);
+      const pres = stAtt.filter(a => a.status === 'حاضر').length;
+      const abs = stAtt.filter(a => a.status === 'غائب').length;
+      const attPct = stAtt.length > 0 ? Math.round((pres / stAtt.length) * 100) : 100;
+      const pagesInfo = calculateStudentCompletedPages(st, evaluations);
+      const latestEval = evaluations.find(e => e.studentId === st.id);
+      const evalScore = latestEval ? (Object.values(latestEval.criteriaValues || {})[0] || 'متقن') : 'منتظم';
+
+      msg += `⭐ *الطالب (${idx + 1}): ${st.name}*\n`;
+      msg += `📖 الحلقة: ${st.halaqahName || settings.halaqahName}\n`;
+
+      if (customFields.includeMemorization) {
+        msg += `• الحفظ الجديد: ${recData.latestNew}\n`;
+        msg += `• المراجعة والتثبيت: ${recData.latestReview}\n`;
+      }
+      if (customFields.includePagesAndVerses) {
+        msg += `• إجمالي الأوجه المنجزة: ${pagesInfo.totalPagesCount} وجه | النقاط: ${st.points || 0} نقطة\n`;
+      }
+      if (customFields.includeAttendance) {
+        msg += `• نسبة المواظبة: ${attPct}% (حاضر: ${pres} ، غائب: ${abs})\n`;
+      }
+      if (customFields.includeEvaluations) {
+        msg += `• مستوى التقييم والإتقان: ${evalScore}\n`;
+      }
+      if (customFields.includeTeacherNotes && (latestEval?.recitationDetails?.teacherNotes || st.notes)) {
+        msg += `• توجيهات المعلم: ${latestEval?.recitationDetails?.teacherNotes || st.notes}\n`;
+      }
+      if (customFields.includeParentPhone && parentPhone) {
+        msg += `• هاتف ولي الأمر: ${parentPhone}\n`;
+      }
+      msg += `\n`;
+    });
+
+    msg += `------------------------------------\n`;
+    msg += `✅ *معتمد إلكترونياً* من إدارة المنظومة\n`;
+    msg += `﴿ وَرَتِّلِ الْقُرْآنَ تَرْتِيلًا ﴾`;
+
+    setGeneratedReportText(msg);
+    setTextMessageStudent(std || (targetList.length === 1 ? targetList[0] : null));
+    setIsTextMessageModalOpen(true);
+    setTextMessageCopied(false);
   };
 
   // Open custom builder print
@@ -369,6 +473,16 @@ export const ReportsTab: React.FC<ReportsTabProps> = ({
                 </div>
 
                 <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleGenerateTextMessage(student)}
+                    className="px-3 py-2 rounded-xl bg-[#022c22] hover:bg-[#064e3b] text-[#fbbf24] border border-[#fbbf24]/50 text-xs font-black flex items-center gap-1.5 shadow-md cursor-pointer transition-all"
+                    title="استخراج تقرير الطالب كرسالة نصية منسقة للواتساب"
+                  >
+                    <MessageSquare className="w-4 h-4 text-[#fbbf24]" />
+                    <span>رسالة التقرير</span>
+                  </button>
+
                   <button
                     type="button"
                     onClick={() => {
@@ -829,15 +943,29 @@ export const ReportsTab: React.FC<ReportsTabProps> = ({
             </div>
 
             {/* Footer */}
-            <div className="p-4 border-t border-[#065f46] shrink-0 bg-[#022c22]/95 flex justify-between items-center">
-              <button
-                type="button"
-                onClick={handlePrintCustomReport}
-                className="px-6 py-2.5 rounded-2xl bg-gradient-to-r from-[#fbbf24] to-[#f59e0b] hover:brightness-110 text-[#064e3b] font-black text-xs sm:text-sm flex items-center gap-2 shadow-lg cursor-pointer transition-all"
-              >
-                <Printer className="w-4 h-4" />
-                <span>استخراج وطباعة تقرير PDF فاخر بالثيم الرسمي</span>
-              </button>
+            <div className="p-4 border-t border-[#065f46] shrink-0 bg-[#022c22]/95 flex flex-wrap justify-between items-center gap-3">
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handlePrintCustomReport}
+                  className="px-5 py-2.5 rounded-2xl bg-gradient-to-r from-[#fbbf24] to-[#f59e0b] hover:brightness-110 text-[#064e3b] font-black text-xs sm:text-sm flex items-center gap-2 shadow-lg cursor-pointer transition-all"
+                >
+                  <Printer className="w-4 h-4" />
+                  <span>استخراج PDF فاخر</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsCustomReportModalOpen(false);
+                    handleGenerateTextMessage();
+                  }}
+                  className="px-4 py-2.5 rounded-2xl bg-[#064e3b] hover:bg-[#064e3b]/80 text-[#fbbf24] hover:text-white border border-[#fbbf24]/50 font-black text-xs sm:text-sm flex items-center gap-2 shadow-md cursor-pointer transition-all"
+                >
+                  <MessageSquare className="w-4 h-4 text-[#fbbf24]" />
+                  <span>استخراج كرسالة منسقة (واتساب)</span>
+                </button>
+              </div>
 
               <button
                 type="button"
@@ -846,6 +974,104 @@ export const ReportsTab: React.FC<ReportsTabProps> = ({
               >
                 إلغاء
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL 4: FORMATTED TEXT MESSAGE REPORT PREVIEW & SEND                    */}
+      {/* ========================================================================= */}
+      {isTextMessageModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4 overflow-y-auto">
+          <div className="bg-[#022c22] border-2 border-[#fbbf24]/50 rounded-3xl w-full max-w-2xl flex flex-col shadow-2xl overflow-hidden text-right">
+            {/* Header */}
+            <div className="bg-gradient-to-r from-[#064e3b] via-[#022c22] to-[#064e3b] px-6 py-4 border-b border-[#065f46] flex items-center justify-between gap-4">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-xl bg-[#fbbf24]/20 border border-[#fbbf24]/40 text-[#fbbf24] flex items-center justify-center">
+                  <MessageSquare className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-white font-heading">
+                    تقرير المتابعة كرسالة نصية منسقة
+                  </h3>
+                  <p className="text-[11px] text-[#86efac]">
+                    جاهزة للنسخ والمشاركة المباشرة عبر الواتساب مع أولياء الأمور
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setIsTextMessageModalOpen(false)}
+                className="p-2 text-[#86efac] hover:text-white hover:bg-white/10 rounded-xl cursor-pointer transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Message Body */}
+            <div className="p-6 space-y-4">
+              <div className="bg-[#011a14] border border-[#065f46] rounded-2xl p-4 max-h-96 overflow-y-auto font-mono text-xs sm:text-sm text-emerald-100 whitespace-pre-wrap leading-relaxed select-text" dir="rtl">
+                {generatedReportText}
+              </div>
+
+              {textMessageCopied && (
+                <div className="p-3 rounded-xl bg-emerald-950/80 border border-emerald-500 text-xs text-emerald-200 flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                  <span>تم نسخ نص التقرير بالكامل للحافظة بنجاح! يمكنك الآن لصقه في أي محادثة.</span>
+                </div>
+              )}
+            </div>
+
+            {/* Footer Actions */}
+            <div className="p-4 bg-[#022c22]/95 border-t border-[#065f46] flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    navigator.clipboard.writeText(generatedReportText);
+                    setTextMessageCopied(true);
+                    setTimeout(() => setTextMessageCopied(false), 3000);
+                  }}
+                  className="px-4 py-2.5 rounded-xl bg-[#064e3b] hover:bg-[#064e3b]/80 text-[#86efac] hover:text-white border border-[#065f46] font-bold text-xs flex items-center gap-2 cursor-pointer transition-all"
+                >
+                  <Copy className="w-4 h-4 text-[#fbbf24]" />
+                  <span>{textMessageCopied ? 'تم النسخ!' : 'نسخ الرسالة بالكامل'}</span>
+                </button>
+              </div>
+
+              <div className="flex items-center gap-2">
+                {textMessageStudent ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const parentPhone = getStudentParentPhone(textMessageStudent);
+                      const cleanPhone = parentPhone ? parentPhone.replace(/\D/g, '') : '';
+                      if (cleanPhone) {
+                        window.open(`https://wa.me/${cleanPhone}?text=${encodeURIComponent(generatedReportText)}`, '_blank');
+                      } else {
+                        window.open(`https://wa.me/?text=${encodeURIComponent(generatedReportText)}`, '_blank');
+                      }
+                    }}
+                    className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-green-600 hover:brightness-110 text-white font-black text-xs flex items-center gap-2 shadow-md cursor-pointer transition-all"
+                  >
+                    <Send className="w-4 h-4" />
+                    <span>إرسال عبر واتساب لولي الأمر</span>
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      window.open(`https://wa.me/?text=${encodeURIComponent(generatedReportText)}`, '_blank');
+                    }}
+                    className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-green-600 hover:brightness-110 text-white font-black text-xs flex items-center gap-2 shadow-md cursor-pointer transition-all"
+                  >
+                    <Send className="w-4 h-4" />
+                    <span>مشاركة عبر واتساب</span>
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         </div>

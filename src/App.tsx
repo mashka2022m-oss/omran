@@ -19,7 +19,8 @@ import {
   FileText,
   Headphones,
   UserCog,
-  Building2
+  Building2,
+  ClipboardList
 } from 'lucide-react';
 import {
   Student,
@@ -82,6 +83,7 @@ import { DataBackupTab } from './components/tabs/DataBackupTab';
 import { ExamsTab } from './components/tabs/ExamsTab';
 import { AccountsTab } from './components/tabs/AccountsTab';
 import { RecordingsTab } from './components/tabs/RecordingsTab';
+import { CertificatesTab } from './components/tabs/CertificatesTab';
 import { EditAccountModal } from './components/EditAccountModal';
 
 export function App() {

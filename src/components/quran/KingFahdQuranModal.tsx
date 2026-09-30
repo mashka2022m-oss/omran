@@ -74,6 +74,28 @@ export const KingFahdQuranModal: React.FC<KingFahdQuranModalProps> = ({
   const [searchPageInput, setSearchPageInput] = useState<string>('');
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
   const modalContainerRef = useRef<HTMLDivElement | null>(null);
+  const mushafScrollRef = useRef<HTMLDivElement | null>(null);
+
+  // Target Ayah and Surah to focus and scroll down to on this page
+  const targetSurahNum = useMemo(() => {
+    if (activeHighlight && getPageOfAyah(activeHighlight.surahNumber, activeHighlight.fromAyah) === currentPage) {
+      return activeHighlight.surahNumber;
+    }
+    if (getPageOfAyah(initialSurah, initialAyah) === currentPage) {
+      return initialSurah;
+    }
+    return pageInfo.startSurah;
+  }, [activeHighlight, currentPage, initialSurah, initialAyah, pageInfo]);
+
+  const targetAyahNum = useMemo(() => {
+    if (activeHighlight && getPageOfAyah(activeHighlight.surahNumber, activeHighlight.fromAyah) === currentPage) {
+      return activeHighlight.fromAyah;
+    }
+    if (getPageOfAyah(initialSurah, initialAyah) === currentPage) {
+      return initialAyah;
+    }
+    return pageInfo.startAyah;
+  }, [activeHighlight, currentPage, initialSurah, initialAyah, pageInfo]);
 
   // Sync starting page when modal opens
   useEffect(() => {
@@ -272,6 +294,21 @@ export const KingFahdQuranModal: React.FC<KingFahdQuranModalProps> = ({
     return sections;
   }, [pageInfo, quranMap, activeHighlight]);
 
+  // Auto-scroll directly down to the targeted ayah when modal opens or page/item changes
+  useEffect(() => {
+    if (!isOpen) return;
+    const timer = setTimeout(() => {
+      const targetEl = document.getElementById(`mushaf-ayah-${targetSurahNum}-${targetAyahNum}`) ||
+                       document.querySelector('.ayah-primary-target') ||
+                       document.querySelector('.ayah-highlighted');
+      if (targetEl) {
+        targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }, 280);
+
+    return () => clearTimeout(timer);
+  }, [isOpen, currentPage, targetSurahNum, targetAyahNum, pageSections]);
+
   if (!isOpen) return null;
 
   return (
@@ -424,7 +461,7 @@ export const KingFahdQuranModal: React.FC<KingFahdQuranModalProps> = ({
         {/* ========================================================================= */}
         {/* 3. MAIN MUSHAF PAGE CANVAS (KING FAHD GEOMETRIC FRAME)                    */}
         {/* ========================================================================= */}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-6 flex flex-col items-center justify-start bg-gradient-to-b from-[#022c22] via-[#011e17] to-[#022c22] relative">
+        <div ref={mushafScrollRef} className="flex-1 overflow-y-auto p-4 sm:p-6 flex flex-col items-center justify-start bg-gradient-to-b from-[#022c22] via-[#011e17] to-[#022c22] relative scroll-smooth">
           {/* Authentic Islamic Page Frame (الإطار الزخرفي للمصحف الشريف) */}
           <div className="w-full max-w-3xl bg-[#fffef5] text-[#1c1917] rounded-3xl p-6 sm:p-10 shadow-2xl border-4 border-[#064e3b] ring-4 ring-[#fbbf24]/50 relative transition-all">
             {/* Top Page Header (Juz, Surah, Page Number) */}
@@ -476,12 +513,16 @@ export const KingFahdQuranModal: React.FC<KingFahdQuranModalProps> = ({
                       dir="rtl"
                     >
                       {sec.ayahs.map(ayah => {
+                        const isTargetAyah = sec.surahNumber === targetSurahNum && ayah.ayahNumber === targetAyahNum;
                         return (
                           <React.Fragment key={ayah.ayahNumber}>
                             <span
-                              className={`transition-all rounded-lg px-1 inline ${
-                                ayah.isHighlighted
-                                  ? 'bg-[#fbbf24]/35 text-[#064e3b] font-bold shadow-[0_0_8px_rgba(251,191,36,0.3)] ring-1 ring-[#d97706]'
+                              id={`mushaf-ayah-${sec.surahNumber}-${ayah.ayahNumber}`}
+                              className={`transition-all rounded-lg px-1.5 py-0.5 inline duration-300 ${
+                                isTargetAyah
+                                  ? 'ayah-primary-target bg-[#fbbf24] text-[#064e3b] font-black shadow-[0_0_18px_rgba(251,191,36,0.65)] ring-2 ring-[#b45309]'
+                                  : ayah.isHighlighted
+                                  ? 'ayah-highlighted bg-[#fbbf24]/35 text-[#064e3b] font-bold shadow-[0_0_8px_rgba(251,191,36,0.3)] ring-1 ring-[#d97706]'
                                   : 'hover:bg-amber-100/60'
                               }`}
                               title={`سورة ${sec.surahInfo.name} - آية ${ayah.ayahNumber}`}

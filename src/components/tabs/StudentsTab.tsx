@@ -249,40 +249,40 @@ export const StudentsTab: React.FC<StudentsTabProps> = ({
           ...editingStudent,
           name: formName.trim(),
           password: formPassword.trim() || '123',
-          phone: formPhone.trim(),
+          phone: editingStudent.phone || validParentPhones[0] || '',
           age: formAge,
           parentName: formParentName.trim() || `ولي أمر ${formName.trim()}`,
-          parentPhones: validParentPhones.length > 0 ? validParentPhones : [formPhone.trim()],
-          parentPhone: validParentPhones[0] || formPhone.trim(),
+          parentPhones: validParentPhones.length > 0 ? validParentPhones : (editingStudent.parentPhones || []),
+          parentPhone: validParentPhones[0] || editingStudent.parentPhone || '',
           currentSurah: Number(formSurahNum),
           currentSurahName: selectedSurah?.name || 'النبأ',
           currentAyah: Number(formAyah),
-          dailyNewTarget: formDailyNew,
-          dailyReviewTarget: formDailyReview,
-          level: formLevel,
+          dailyNewTarget: editingStudent.dailyNewTarget || 'نصف وجه',
+          dailyReviewTarget: editingStudent.dailyReviewTarget || 'وجه واحد',
+          level: editingStudent.level || 'متوسط',
           halaqahId: formHalaqahId,
           halaqahName: assignedHalaqahName,
-          notes: formNotes
+          notes: editingStudent.notes || ''
         };
         await onUpdateStudent(updated);
       } else {
         await onAddStudent({
           name: formName.trim(),
           password: formPassword.trim() || '123',
-          phone: formPhone.trim(),
+          phone: validParentPhones[0] || '',
           age: formAge,
           parentName: formParentName.trim() || `ولي أمر ${formName.trim()}`,
-          parentPhones: validParentPhones.length > 0 ? validParentPhones : [formPhone.trim()],
-          parentPhone: validParentPhones[0] || formPhone.trim(),
+          parentPhones: validParentPhones.length > 0 ? validParentPhones : [''],
+          parentPhone: validParentPhones[0] || '',
           currentSurah: Number(formSurahNum),
           currentSurahName: selectedSurah?.name || 'النبأ',
           currentAyah: Number(formAyah),
-          dailyNewTarget: formDailyNew,
-          dailyReviewTarget: formDailyReview,
-          level: formLevel,
+          dailyNewTarget: 'نصف وجه',
+          dailyReviewTarget: 'وجه واحد',
+          level: 'متوسط',
           halaqahId: formHalaqahId,
           halaqahName: assignedHalaqahName,
-          notes: formNotes
+          notes: ''
         });
       }
       setIsAddModalOpen(false);
@@ -825,35 +825,20 @@ export const StudentsTab: React.FC<StudentsTabProps> = ({
                   </div>
                 </div>
 
-                {/* Row 2: Credentials & Student Phone */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-semibold text-[#86efac] mb-1 text-right">
-                      كلمة مرور حساب الطالب <span className="text-xs text-[#86efac]/70">(للبوابة)</span>
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      value={formPassword}
-                      onChange={e => setFormPassword(e.target.value)}
-                      placeholder="كلمة مرور للدخول"
-                      className="w-full bg-[#022c22] border border-[#065f46] focus:border-[#fbbf24] rounded-2xl py-2.5 px-3.5 text-sm text-[#f0f9f6] outline-none transition-colors"
-                      dir="ltr"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-[#86efac] mb-1 text-right">
-                      رقم هاتف الطالب <span className="text-xs text-[#86efac]/70">(اختياري)</span>
-                    </label>
-                    <input
-                      type="tel"
-                      value={formPhone}
-                      onChange={e => setFormPhone(e.target.value)}
-                      placeholder="05xxxxxxxx"
-                      className="w-full bg-[#022c22] border border-[#065f46] focus:border-[#fbbf24] rounded-2xl py-2.5 px-3.5 text-sm text-[#f0f9f6] outline-none transition-colors"
-                      dir="ltr"
-                    />
-                  </div>
+                {/* Row 2: Credentials */}
+                <div>
+                  <label className="block text-xs font-semibold text-[#86efac] mb-1 text-right">
+                    كلمة مرور حساب الطالب <span className="text-xs text-[#86efac]/70">(لتسجيل الدخول إلى البوابة)</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={formPassword}
+                    onChange={e => setFormPassword(e.target.value)}
+                    placeholder="كلمة مرور للدخول"
+                    className="w-full bg-[#022c22] border border-[#065f46] focus:border-[#fbbf24] rounded-2xl py-2.5 px-3.5 text-sm text-[#f0f9f6] outline-none transition-colors"
+                    dir="ltr"
+                  />
                 </div>
 
                 {/* Row 3: Parent Info & Multiple Parent Phones */}
@@ -954,61 +939,6 @@ export const StudentsTab: React.FC<StudentsTabProps> = ({
                   </div>
                 </div>
 
-                {/* Row 5: Capabilities & Level */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <div>
-                    <label className="block text-xs font-semibold text-[#86efac] mb-1 text-right">
-                      طاقة الحفظ الجديد يومياً
-                    </label>
-                    <select
-                      value={formDailyNew}
-                      onChange={e => setFormDailyNew(e.target.value)}
-                      className="w-full bg-[#022c22] border border-[#065f46] focus:border-[#fbbf24] rounded-2xl py-2.5 px-3 text-sm text-[#f0f9f6] outline-none"
-                    >
-                      <option value="3 آيات" className="bg-[#064e3b]">3 آيات</option>
-                      <option value="5 آيات" className="bg-[#064e3b]">5 آيات</option>
-                      <option value="نصف وجه" className="bg-[#064e3b]">نصف وجه</option>
-                      <option value="وجه كامل" className="bg-[#064e3b]">وجه كامل</option>
-                      <option value="وجهين" className="bg-[#064e3b]">وجهين</option>
-                      <option value="سورة قصيرة كاملة" className="bg-[#064e3b]">سورة قصيرة كاملة</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-semibold text-[#86efac] mb-1 text-right">
-                      طاقة المراجعة يومياً
-                    </label>
-                    <select
-                      value={formDailyReview}
-                      onChange={e => setFormDailyReview(e.target.value)}
-                      className="w-full bg-[#022c22] border border-[#065f46] focus:border-[#fbbf24] rounded-2xl py-2.5 px-3 text-sm text-[#f0f9f6] outline-none"
-                    >
-                      <option value="سورة قصيرة" className="bg-[#064e3b]">سورة قصيرة</option>
-                      <option value="وجه واحد" className="bg-[#064e3b]">وجه واحد</option>
-                      <option value="ربع حزب" className="bg-[#064e3b]">ربع حزب</option>
-                      <option value="نصف حزب" className="bg-[#064e3b]">نصف حزب</option>
-                      <option value="حزب كامل" className="bg-[#064e3b]">حزب كامل</option>
-                      <option value="نصف جزء" className="bg-[#064e3b]">نصف جزء</option>
-                      <option value="جزء كامل" className="bg-[#064e3b]">جزء كامل</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-semibold text-[#86efac] mb-1 text-right">
-                      مستوى الطالب <span className="text-red-400">*</span>
-                    </label>
-                    <select
-                      value={formLevel}
-                      onChange={e => setFormLevel(e.target.value as StudentLevel)}
-                      className="w-full bg-[#022c22] border border-[#065f46] focus:border-[#fbbf24] rounded-2xl py-2.5 px-3 text-sm text-[#fbbf24] outline-none font-bold"
-                    >
-                      <option value="ضعيف" className="bg-[#064e3b]">ضعيف (يحتاج تيسير وتكرار)</option>
-                      <option value="متوسط" className="bg-[#064e3b]">متوسط (وتيرة متوازنة)</option>
-                      <option value="قوي" className="bg-[#064e3b]">قوي (متميز وسريع الحفظ)</option>
-                    </select>
-                  </div>
-                </div>
-
                 {/* Halaqah Selection (if multi-halaqah exists) */}
                 {halaqahs.length > 0 && (
                   <div>
@@ -1031,21 +961,6 @@ export const StudentsTab: React.FC<StudentsTabProps> = ({
                     </select>
                   </div>
                 )}
-
-                {/* Row 6: Notes */}
-                <div>
-                  <label className="block text-xs font-semibold text-[#86efac] mb-1 text-right">
-                    ملاحظات المعلم (نقاط القوة، الصعوبات، أحكام التجويد)
-                  </label>
-                  <textarea
-                    rows={2}
-                    value={formNotes}
-                    onChange={e => setFormNotes(e.target.value)}
-                    placeholder="اكتب أي ملاحظات خاصة حول الطالب، الحفظ، ومخارج الحروف..."
-                    className="w-full bg-[#022c22] border border-[#065f46] focus:border-[#fbbf24] rounded-2xl py-2 px-3 text-sm text-[#f0f9f6] outline-none resize-none"
-                    dir="rtl"
-                  />
-                </div>
               </div>
 
               {/* Pinned Modal Footer */}

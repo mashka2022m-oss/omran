@@ -39,7 +39,9 @@ import {
   Medal,
   Crown,
   Download,
-  Info
+  Info,
+  Printer,
+  X
 } from 'lucide-react';
 import {
   Exam,
@@ -52,7 +54,8 @@ import {
   Halaqah,
   LeaderboardSettings,
   LeaderboardScope,
-  GoogleOAuthConfig
+  GoogleOAuthConfig,
+  getStudentParentPhone
 } from '../../types';
 import { GoogleWorkspaceService } from '../../lib/googleWorkspace';
 import { OmranDataService } from '../../lib/firebase';
@@ -137,6 +140,11 @@ export const ExamsTab: React.FC<ExamsTabProps> = ({
   const [isDeletingSubmission, setIsDeletingSubmission] = useState(false);
   const [isConfirmingBulkDelete, setIsConfirmingBulkDelete] = useState(false);
   const [isBulkDeletingSubmissions, setIsBulkDeletingSubmissions] = useState(false);
+
+  // Student Exam Certificate Modal State
+  const [selectedCertSubmission, setSelectedCertSubmission] = useState<ExamSubmission | null>(null);
+  const [isCertModalOpen, setIsCertModalOpen] = useState(false);
+  const [certNotification, setCertNotification] = useState<string | null>(null);
 
   // Correction Modal State
   const [selectedSubmissionForGrading, setSelectedSubmissionForGrading] = useState<ExamSubmission | null>(null);
@@ -1601,6 +1609,17 @@ export const ExamsTab: React.FC<ExamsTabProps> = ({
                         </td>
                         <td className="p-4 text-center">
                           <div className="flex items-center justify-center gap-2">
+                            <button
+                              onClick={() => {
+                                setSelectedCertSubmission(sub);
+                                setIsCertModalOpen(true);
+                              }}
+                              className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-amber-400 to-amber-500 hover:brightness-110 text-[#064e3b] font-black text-xs transition-all cursor-pointer shadow-md flex items-center gap-1.5"
+                              title="استخراج شهادة اجتياز ونتيجة الاختبار للطالب"
+                            >
+                              <Award className="w-3.5 h-3.5" />
+                              <span>استخراج شهادة</span>
+                            </button>
                             <button
                               onClick={() => handleOpenGrading(sub)}
                               className="px-3 py-1.5 rounded-xl bg-[#fbbf24] hover:bg-[#f59e0b] text-[#064e3b] font-black text-xs transition-all cursor-pointer shadow-md"
@@ -3190,6 +3209,155 @@ export const ExamsTab: React.FC<ExamsTabProps> = ({
               >
                 إغلاق
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* EXAM CERTIFICATE MODAL                                                    */}
+      {/* ========================================================================= */}
+      {isCertModalOpen && selectedCertSubmission && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-md p-2 sm:p-4 overflow-y-auto">
+          <div className="bg-[#022c22] border-2 border-[#fbbf24]/50 rounded-3xl w-full max-w-3xl max-h-[96vh] flex flex-col shadow-2xl overflow-hidden text-right">
+            {/* Top Bar */}
+            <div className="bg-gradient-to-r from-[#064e3b] via-[#022c22] to-[#064e3b] px-6 py-4 border-b border-[#065f46] flex items-center justify-between gap-4 shrink-0">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-xl bg-[#fbbf24]/20 border border-[#fbbf24]/40 text-[#fbbf24] flex items-center justify-center">
+                  <Award className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-white font-heading">
+                    شهادة اجتياز ونتيجة الاختبار القرآني
+                  </h3>
+                  <p className="text-[11px] text-[#86efac]">
+                    للطالب: {selectedCertSubmission.studentName} • {selectedCertSubmission.examTitle}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsCertModalOpen(false);
+                  setSelectedCertSubmission(null);
+                }}
+                className="p-2 text-[#86efac] hover:text-white hover:bg-white/10 rounded-xl transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Certificate Preview Card */}
+            <div className="p-4 sm:p-6 overflow-y-auto flex-1 flex justify-center items-center bg-[#011a14]">
+              {(() => {
+                const sub = selectedCertSubmission;
+                const pct = sub.percentage;
+                const gradeLabel = pct >= 90 ? 'ممتاز مرتفع مع مرتبة الشرف' : (pct >= 80 ? 'جيد جداً مرتفع' : (pct >= 65 ? 'جيد' : 'اجتياز معتمد'));
+                const studentObj = students.find(s => s.id === sub.studentId || s.name === sub.studentName);
+                const parentPhone = studentObj ? getStudentParentPhone(studentObj) : '';
+                const cleanPhone = parentPhone ? parentPhone.replace(/\D/g, '') : '';
+                const todayFormatted = formatArabicDateTime(sub.submittedAt) || new Intl.DateTimeFormat('ar-SA', { dateStyle: 'long' }).format(new Date());
+
+                return (
+                  <div
+                    id="exam-printable-certificate"
+                    className="w-full max-w-[720px] aspect-[1.414/1] rounded-3xl relative overflow-hidden shadow-2xl flex flex-col justify-between p-8 sm:p-10 text-center border-4 border-[#fbbf24] bg-gradient-to-br from-[#022c22] via-[#064e3b] to-[#022c22] text-white select-none"
+                  >
+                    {/* Header */}
+                    <div className="space-y-1">
+                      <div className="font-quran text-base sm:text-lg font-bold text-[#fbbf24]">
+                        بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ
+                      </div>
+                      <div className="font-quran text-[11px] sm:text-xs text-[#86efac]">
+                        ﴿ يَرْفَعِ اللَّهُ الَّذِينَ آمَنُوا مِنكُمْ وَالَّذِينَ أُوتُوا الْعِلْمَ دَرَجَاتٍ ﴾
+                      </div>
+                      <h2 className="font-black text-xl sm:text-3xl text-[#fbbf24] font-heading mt-2">
+                        شَهَادَةُ اجْتِيَازِ وَتَفَوُّقِ فِي الاخْتِبَارِ
+                      </h2>
+                    </div>
+
+                    {/* Body */}
+                    <div className="space-y-3 my-auto py-2">
+                      <p className="text-xs sm:text-sm text-emerald-100/90 font-medium">
+                        تَشْهَدُ إِدَارَةُ المَجْمَعِ القُرْآنِيِّ بِأَنَّ الطَّالِبَ النَّجِيبَ:
+                      </p>
+                      <div className="font-quran text-2xl sm:text-4xl font-black text-[#fbbf24] py-1">
+                        {sub.studentName}
+                      </div>
+                      <p className="text-xs sm:text-sm text-emerald-100/90 font-medium">
+                        قَدِ اجْتَازَ بِتَفَوُّقٍ وَجَدَارَةٍ: <strong className="text-white font-bold">({sub.examTitle})</strong>
+                      </p>
+                      <div className="inline-block bg-[#022c22]/90 border border-[#fbbf24]/50 rounded-2xl px-6 py-2 shadow-inner">
+                        <span className="text-xs text-[#86efac] block">النتيجة والتقدير العام:</span>
+                        <div className="text-base sm:text-lg font-black text-[#fbbf24] mt-0.5">
+                          {sub.totalScoreEarned} / {sub.maxPossibleScore} ({pct}%) • {gradeLabel}
+                        </div>
+                      </div>
+                      <div className="text-[11px] text-[#86efac]/80">
+                        الحلقة: {sub.halaqahName || 'الحلقة القرآنية'} • المحاولة #{sub.attemptNumber}
+                      </div>
+                    </div>
+
+                    {/* Footer - Electronic Accreditation Only (No manual signature required as user requested) */}
+                    <div className="pt-3 border-t border-white/20 flex items-center justify-between text-[10px] sm:text-[11px] text-[#86efac]">
+                      <span>تاريخ التسليم والاعتماد: {todayFormatted}</span>
+                      <div className="flex items-center gap-1.5 font-bold text-[#fbbf24]">
+                        <Award className="w-4 h-4" />
+                        <span>معتمد إلكترونياً • منصة عُمران</span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
+
+            {/* Actions Bar */}
+            <div className="p-4 bg-[#022c22] border-t border-[#065f46] flex flex-wrap items-center justify-between gap-3 shrink-0">
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const prevTitle = document.title;
+                    document.title = `شهادة_اختبار_${selectedCertSubmission.studentName}`;
+                    window.print();
+                    document.title = prevTitle;
+                  }}
+                  className="px-4 py-2 rounded-xl bg-[#064e3b] hover:bg-[#064e3b]/80 text-[#86efac] hover:text-white border border-[#065f46] font-bold text-xs flex items-center gap-1.5 cursor-pointer transition-all"
+                >
+                  <Printer className="w-4 h-4 text-amber-300" />
+                  <span>تحميل كـ PDF فاخر</span>
+                </button>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const sub = selectedCertSubmission;
+                    const studentObj = students.find(s => s.id === sub.studentId || s.name === sub.studentName);
+                    const parentPhone = studentObj ? getStudentParentPhone(studentObj) : '';
+                    const cleanPhone = parentPhone ? parentPhone.replace(/\D/g, '') : '';
+                    const message = `السلام عليكم ورحمة الله وبركاته،
+نزف إليكم أطيب التهاني بمناسبة اجتياز ابنكم المتميز *(${sub.studentName})* لاختبار:
+*(${sub.examTitle})*
+بجدارة وتفوق، وحصوله على درجة: *${sub.totalScoreEarned} من ${sub.maxPossibleScore} (${sub.percentage}%)*.
+
+بارك الله في جهوده وجهودكم المباركة في تربيته على مائدة القرآن العظيم.
+مع تحيات إدارة حلقة: ${sub.halaqahName || 'القرآن الكريم'}`;
+
+                    if (cleanPhone) {
+                      window.open(`https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`, '_blank');
+                    } else {
+                      navigator.clipboard.writeText(message);
+                      alert(`تم نسخ نص رسالة التهنئة للطالب (${sub.studentName}) بنجاح.`);
+                    }
+                  }}
+                  className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-green-600 hover:brightness-110 text-white font-black text-xs flex items-center gap-1.5 shadow-md cursor-pointer transition-all"
+                >
+                  <Send className="w-4 h-4" />
+                  <span>إرسال عبر واتساب لولي الأمر</span>
+                </button>
+              </div>
             </div>
           </div>
         </div>

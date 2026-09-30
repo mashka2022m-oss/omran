@@ -948,9 +948,7 @@ export const PrintableQuranicReport: React.FC<PrintableQuranicReportProps> = ({
 
                 {/* Circular Golden Accreditation Seal */}
                 <div className="seal-badge">
-                  <span style={{ fontSize: '6.5pt', fontWeight: 900, color: '#064e3b', lineHeight: 1.1 }}>منظومة عُمران</span>
-                  <span style={{ fontSize: '6pt', color: '#b45309', fontWeight: 'bold', lineHeight: 1.1 }}>معتمد إلكترونياً</span>
-                  <span style={{ fontSize: '5.5pt', color: '#64748b', fontFamily: 'monospace', lineHeight: 1.1 }}>{todayGregorian}</span>
+                  <span style={{ fontSize: '7pt', color: '#b45309', fontWeight: 'bold', lineHeight: 1.2 }}>معتمد إلكترونياً</span>
                 </div>
               </div>
 

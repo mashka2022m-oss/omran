@@ -833,3 +833,44 @@ export function getFourPartNameValidation(
   return { isValid: true, partsCount: threePartRes.partsCount };
 }
 
+// =========================================================================
+// Certificate System Types & Custom Complex Templates
+// =========================================================================
+export interface CustomCertificateTemplate {
+  id: string;
+  complexId?: string;
+  halaqahId?: string;
+  name: string; // اسم النموذج
+  imageUrl: string; // Base64 / URL image data (under 5MB)
+  studentNamePosition: {
+    x: number; // percentage from left (0 to 100)
+    y: number; // percentage from top (0 to 100)
+    fontSize: number; // font size in px (16 - 72)
+    fontFamily: string; // Arabic font name
+    color: string; // CSS color string (e.g. #064e3b, #d97706)
+    textAlign: 'center' | 'right' | 'left';
+    fontWeight?: 'normal' | 'bold' | '900';
+    maxWidth?: number; // max width percentage
+  };
+  showDate?: boolean;
+  datePosition?: {
+    x: number;
+    y: number;
+    fontSize: number;
+    fontFamily: string;
+    color: string;
+    textAlign: 'center' | 'right' | 'left';
+  };
+  createdByTeacherName?: string;
+  createdAt: string;
+}
+
+export type CertificateOccasion =
+  | 'شكر وتقدير وتميز'
+  | 'إتمام جزء من القرآن الكريم'
+  | 'إتمام سورة من القرآن الكريم'
+  | 'اجتياز اختبار قرآني'
+  | 'مواظبة وانضباط قرآني'
+  | 'مناسبة مخصصة';
+
+
