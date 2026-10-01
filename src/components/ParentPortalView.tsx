@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   BookOpen,
   Award,
@@ -27,7 +27,10 @@ import {
   Headphones,
   Radio,
   ListOrdered,
-  Info
+  Info,
+  Printer,
+  Download,
+  X
 } from 'lucide-react';
 import { YouTubeAyahPlayer, formatTimeMMSS } from './recordings/YouTubeAyahPlayer';
 import { AudioAyahPlayer } from './recordings/AudioAyahPlayer';
@@ -509,14 +512,6 @@ export const ParentPortalView: React.FC<ParentPortalViewProps> = ({
       isCompleted: false
     };
   }, [currentStudent]);
-
-  // Certificates archived for this student
-  const studentCertificates = useMemo(() => {
-    return certificates.filter(
-      c => c.studentId === currentStudent.id ||
-           (c.studentName && currentStudent.name && c.studentName.trim() === currentStudent.name.trim())
-    );
-  }, [certificates, currentStudent]);
 
   const [selectedCertificateForView, setSelectedCertificateForView] = useState<IssuedCertificate | null>(null);
 
@@ -1681,6 +1676,157 @@ export const ParentPortalView: React.FC<ParentPortalViewProps> = ({
                   className="w-full py-2 px-4 rounded-xl text-emerald-300 hover:text-white text-xs font-semibold cursor-pointer transition-colors mt-1"
                 >
                   إلغاء والعودة
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* CERTIFICATE PREVIEW & PRINT MODAL FOR STUDENT / PARENT */}
+        {selectedCertificateForView && (
+          <div className="fixed inset-0 z-[9999] bg-black/85 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto">
+            <div className="bg-[#022c22] border-2 border-[#fbbf24]/60 rounded-3xl w-full max-w-3xl max-h-[92vh] overflow-y-auto p-4 sm:p-6 shadow-2xl space-y-4 text-right relative flex flex-col">
+              {/* Modal Top Bar */}
+              <div className="flex items-center justify-between border-b border-emerald-800 pb-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-10 h-10 rounded-xl bg-[#fbbf24]/20 text-[#fbbf24] border border-[#fbbf24]/40 flex items-center justify-center shrink-0">
+                    <Award className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-bold text-white font-heading">
+                      {selectedCertificateForView.templateName || 'شهادة تميز وإتقان قرآني'}
+                    </h3>
+                    <p className="text-xs text-[#fbbf24] font-bold">
+                      الطالب: {selectedCertificateForView.studentName || currentStudent.name}
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setSelectedCertificateForView(null)}
+                  className="p-2 rounded-xl text-emerald-300 hover:text-white bg-emerald-950/60 cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Certificate Canvas / Card View */}
+              <div
+                id="portal-printable-certificate"
+                className="relative w-full aspect-[1.414/1] rounded-2xl overflow-hidden shadow-2xl p-6 sm:p-8 flex flex-col justify-between border-4 border-[#fbbf24] select-none text-center"
+                style={{
+                  background: selectedCertificateForView.templateType === 'custom' && selectedCertificateForView.customTemplateImageUrl
+                    ? `url(${selectedCertificateForView.customTemplateImageUrl}) center/cover no-repeat`
+                    : 'linear-gradient(135deg, #022c22 0%, #064e3b 50%, #022c22 100%)',
+                  color: '#f0f9f6'
+                }}
+              >
+                {selectedCertificateForView.templateType === 'custom' && selectedCertificateForView.customTemplateImageUrl ? (
+                  /* Custom template display with overlay student name */
+                  <div className="w-full h-full flex flex-col justify-center items-center relative">
+                    <div className="font-quran text-2xl sm:text-4xl md:text-5xl font-black text-[#064e3b] py-2">
+                      {selectedCertificateForView.studentName || currentStudent.name}
+                    </div>
+                    {selectedCertificateForView.dateArabic && (
+                      <div className="text-xs sm:text-sm text-slate-700 font-bold mt-2">
+                        {selectedCertificateForView.dateArabic}
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  /* Ready-made emerald royal certificate */
+                  <>
+                    <div className="flex flex-col items-center justify-center space-y-1">
+                      <div className="font-quran text-sm sm:text-lg text-[#fbbf24] font-bold">
+                        بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ
+                      </div>
+                      <div className="font-quran text-xs sm:text-sm text-emerald-200 opacity-90 px-4">
+                        ﴿ يَرْفَعِ اللَّهُ الَّذِينَ آمَنُوا مِنكُمْ وَالَّذِينَ أُوتُوا الْعِلْمَ دَرَجَاتٍ ﴾
+                      </div>
+                      <h1 className="font-heading font-black text-xl sm:text-3xl md:text-4xl text-[#fbbf24] mt-2 tracking-wide">
+                        شَهَادَةُ تَمَيُّزٍ وَإِتْقَانٍ قُرْآنِيٍّ
+                      </h1>
+                    </div>
+
+                    <div className="space-y-2 sm:space-y-3 my-auto py-2">
+                      <p className="text-xs sm:text-sm text-emerald-200 font-semibold">
+                        يَسُرُّ إِدَارَةَ الحِلْقَةِ أَنْ تَمْنَحَ هذِهِ الشَّهَادَةَ المُبَارَكَةَ لِلطَّالِبِ النَّجِيبِ:
+                      </p>
+                      <div className="font-quran text-2xl sm:text-4xl md:text-5xl font-black text-[#fbbf24] py-1">
+                        {selectedCertificateForView.studentName || currentStudent.name}
+                      </div>
+                      <p className="text-xs sm:text-sm text-white/95 max-w-lg mx-auto leading-relaxed font-medium">
+                        {selectedCertificateForView.occasionText || selectedCertificateForView.occasion || 'تقديراً لاجتهاده وحرصه المتميز في حفظ وتلاوة كتاب الله الكريم'}
+                      </p>
+                      <div className="text-[11px] text-[#86efac]">
+                        {selectedCertificateForView.halaqahName && <span>الحلقة: <strong>{selectedCertificateForView.halaqahName}</strong> • </span>}
+                        <span>المجمع: <strong>{selectedCertificateForView.complexName || settings.complexName || 'منظومة عُمران'}</strong></span>
+                      </div>
+                    </div>
+
+                    <div className="pt-3 border-t border-[#fbbf24]/30 flex items-center justify-between text-[11px] sm:text-xs text-emerald-200">
+                      <div className="text-right">
+                        <span className="block text-[10px] text-emerald-400">معلم ومحفظ الحلقة:</span>
+                        <span className="font-bold text-white">{selectedCertificateForView.teacherName || settings.teacherName || 'الشيخ المعلم'}</span>
+                      </div>
+
+                      <div className="flex items-center gap-1.5 text-[#fbbf24] font-bold">
+                        <Award className="w-4 h-4" />
+                        <span>معتمد إلكترونياً</span>
+                      </div>
+
+                      <div className="text-left">
+                        <span className="block text-[10px] text-emerald-400">تاريخ الإصدار:</span>
+                        <span className="font-bold text-white">{selectedCertificateForView.dateArabic || selectedCertificateForView.createdAt?.split('T')[0]}</span>
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
+
+              {/* Modal Actions */}
+              <div className="flex items-center justify-between gap-3 pt-3 border-t border-emerald-800">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const printContent = document.getElementById('portal-printable-certificate');
+                    if (printContent) {
+                      const printWin = window.open('', '', 'width=900,height=650');
+                      if (printWin) {
+                        printWin.document.write(`
+                          <html dir="rtl">
+                            <head>
+                              <title>شهادة - ${selectedCertificateForView.studentName || currentStudent.name}</title>
+                              <style>
+                                body { margin: 0; padding: 20px; display: flex; justify-content: center; align-items: center; min-height: 100vh; background: #fff; }
+                                @page { size: A4 landscape; margin: 0; }
+                              </style>
+                            </head>
+                            <body>
+                              ${printContent.outerHTML}
+                              <script>window.onload = function() { window.print(); window.close(); };<\/script>
+                            </body>
+                          </html>
+                        `);
+                        printWin.document.close();
+                      } else {
+                        window.print();
+                      }
+                    }
+                  }}
+                  className="px-5 py-2.5 rounded-xl bg-[#fbbf24] text-[#064e3b] font-black text-xs flex items-center gap-1.5 shadow-md cursor-pointer hover:bg-[#f59e0b]"
+                >
+                  <Award className="w-4 h-4" />
+                  <span>طباعة الشهادة الرسمية</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setSelectedCertificateForView(null)}
+                  className="px-4 py-2 rounded-xl bg-[#064e3b] text-emerald-200 font-bold text-xs hover:text-white cursor-pointer"
+                >
+                  إغلاق
                 </button>
               </div>
             </div>

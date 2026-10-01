@@ -101,12 +101,14 @@ export const LeaderboardTab: React.FC<LeaderboardTabProps> = ({
       const stEvaluations = evaluations.filter(ev => ev.studentId === st.id);
       const evalPoints = stEvaluations.reduce((sum, ev) => {
         const criteriaPts = ev.recitationDetails?.criteriaPointsEarnedToday || 0;
-        const pts = ev.recitationDetails?.pointsEarnedToday || 0;
-        return sum + Math.max(criteriaPts, pts);
+        const pagePts = ev.recitationDetails?.pagesPointsEarnedToday || 0;
+        const pts = ev.recitationDetails?.pointsEarnedToday;
+        const dailyTotal = pts !== undefined && pts !== null ? pts : (criteriaPts + pagePts);
+        return sum + dailyTotal;
       }, 0);
 
       // Fallback: If student has criteriaPoints stored on their profile
-      const finalEvalPoints = Math.max(evalPoints, st.criteriaPoints || 0);
+      const finalEvalPoints = Math.max(evalPoints, (st.criteriaPoints || 0) + (st.totalPagePoints || 0));
 
       // 3. Listening points
       const stLogs = listeningLogs.filter(l => l.studentId === st.id && l.isFullyCompleted);
@@ -518,7 +520,7 @@ export const LeaderboardTab: React.FC<LeaderboardTabProps> = ({
                 ) : (
                   <div className="max-h-40 overflow-y-auto space-y-2 pr-1">
                     {breakdownData.stEvaluations.map(ev => {
-                      const pts = ev.recitationDetails?.criteriaPointsEarnedToday || 0;
+                      const pts = ev.recitationDetails?.pointsEarnedToday ?? ((ev.recitationDetails?.criteriaPointsEarnedToday || 0) + (ev.recitationDetails?.pagesPointsEarnedToday || 0));
                       return (
                         <div
                           key={ev.id}

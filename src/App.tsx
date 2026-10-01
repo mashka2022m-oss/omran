@@ -847,6 +847,11 @@ export function App() {
     return submissions.filter(sub => scopedStudentIds.has(sub.studentId));
   }, [isDeveloper, submissions, scopedStudentIds]);
 
+  const scopedEvaluations = useMemo(() => {
+    if (isDeveloper) return evaluations;
+    return evaluations.filter(e => scopedStudentIds.has(e.studentId));
+  }, [isDeveloper, evaluations, scopedStudentIds]);
+
   // Save session on login
   const handleLoginSuccess = (user: { username: string; role: UserRole; studentId?: string; teacherId?: string }) => {
     setCurrentUser(user);
@@ -1116,24 +1121,31 @@ export function App() {
   };
 
   // 7. Save Evaluation & dynamically update student's current position and award criteria points
-  const handleSaveEvaluation = async (evaluation: StudentEvaluation) => {
+  const handleSaveEvaluation = async (
+    evaluation: StudentEvaluation,
+    newAssignment?: any,
+    updatedPosition?: { surahNumber: number; surahName: string; ayah: number },
+    listeningAssignment?: any
+  ) => {
     await OmranDataService.saveEvaluation(evaluation);
     const list = await OmranDataService.loadEvaluations();
     setEvaluations(list);
 
-    // If today recitation contains a new memorization portion, update the student's position and add points
-    const targetStudent = students.find(s => s.id === evaluation.studentId);
-    if (targetStudent) {
+    // Update the student's position, assignment, and award points permanently
+    setStudents(prev => {
+      const targetStudent = prev.find(s => s.id === evaluation.studentId);
+      if (!targetStudent) return prev;
+
       const todayNew = evaluation.recitationDetails?.todayNewItem;
       const criteriaPts = evaluation.recitationDetails?.criteriaPointsEarnedToday || 0;
       const pagePts = evaluation.recitationDetails?.pagesPointsEarnedToday || 0;
       const totalEarnedToday = criteriaPts + pagePts;
 
-      let finalSurahNum = targetStudent.currentSurah;
-      let finalSurahName = targetStudent.currentSurahName;
-      let finalAyah = targetStudent.currentAyah;
+      let finalSurahNum = updatedPosition?.surahNumber ?? targetStudent.currentSurah;
+      let finalSurahName = updatedPosition?.surahName ?? targetStudent.currentSurahName;
+      let finalAyah = updatedPosition?.ayah ?? targetStudent.currentAyah;
 
-      if (todayNew && todayNew.surahNumber && !todayNew.didNotRecite) {
+      if (!updatedPosition && todayNew && todayNew.surahNumber && !todayNew.didNotRecite) {
         finalSurahNum = todayNew.toSurahNumber || todayNew.surahNumber;
         finalSurahName = todayNew.toSurahName || todayNew.surahName || getSurahInfo(finalSurahNum).name;
         finalAyah = todayNew.toAyah || todayNew.fromAyah || 1;
@@ -1145,14 +1157,25 @@ export function App() {
         currentSurahName: finalSurahName,
         currentAyah: finalAyah,
         criteriaPoints: (targetStudent.criteriaPoints || 0) + criteriaPts,
-        points: (targetStudent.points || 0) + totalEarnedToday
+        totalPagePoints: (targetStudent.totalPagePoints || 0) + pagePts,
+        points: (targetStudent.points || 0) + totalEarnedToday,
+        persistentReviewItems: newAssignment?.reviewItems || targetStudent.persistentReviewItems,
+        activeListeningAssignment: listeningAssignment || targetStudent.activeListeningAssignment,
+        aiPlan: newAssignment ? {
+          roadmapSummary: targetStudent.aiPlan?.roadmapSummary || 'خطة الحفظ والمراجعة التراكمية',
+          difficultyAdjustment: targetStudent.aiPlan?.difficultyAdjustment || 'وتيرة متوازنة',
+          estimatedDaysToFinishJuz: targetStudent.aiPlan?.estimatedDaysToFinishJuz || 30,
+          currentDailyAssignment: newAssignment,
+          lastUpdated: new Date().toISOString()
+        } : targetStudent.aiPlan
       };
 
-      setStudents(prev => prev.map(s => s.id === updatedStudent.id ? updatedStudent : s));
-      await OmranDataService.saveStudent(updatedStudent);
-      const updatedStudentsList = await OmranDataService.loadStudents();
-      setStudents(updatedStudentsList);
-    }
+      OmranDataService.saveStudent(updatedStudent).catch(err => {
+        console.warn('Student save warning in evaluation:', err);
+      });
+
+      return prev.map(s => s.id === updatedStudent.id ? updatedStudent : s);
+    });
   };
 
   // 8. Update Criteria (scoped to active complex)
@@ -1208,28 +1231,29 @@ export function App() {
     updatedPosition?: { surahNumber: number; surahName: string; ayah: number },
     listeningAssignment?: any
   ) => {
-    const student = students.find(s => s.id === studentId);
-    if (!student) return;
+    setStudents(prev => {
+      const student = prev.find(s => s.id === studentId);
+      if (!student) return prev;
 
-    const updatedStudent: Student = {
-      ...student,
-      currentSurah: updatedPosition?.surahNumber ?? student.currentSurah,
-      currentSurahName: updatedPosition?.surahName ?? student.currentSurahName,
-      currentAyah: updatedPosition?.ayah ?? student.currentAyah,
-      persistentReviewItems: newAssignment?.reviewItems || student.persistentReviewItems,
-      activeListeningAssignment: listeningAssignment || student.activeListeningAssignment,
-      aiPlan: {
-        roadmapSummary: student.aiPlan?.roadmapSummary || 'خطة الحفظ والمراجعة التراكمية',
-        difficultyAdjustment: student.aiPlan?.difficultyAdjustment || 'وتيرة متوازنة',
-        estimatedDaysToFinishJuz: student.aiPlan?.estimatedDaysToFinishJuz || 30,
-        currentDailyAssignment: newAssignment,
-        lastUpdated: new Date().toISOString()
-      }
-    };
+      const updatedStudent: Student = {
+        ...student,
+        currentSurah: updatedPosition?.surahNumber ?? student.currentSurah,
+        currentSurahName: updatedPosition?.surahName ?? student.currentSurahName,
+        currentAyah: updatedPosition?.ayah ?? student.currentAyah,
+        persistentReviewItems: newAssignment?.reviewItems || student.persistentReviewItems,
+        activeListeningAssignment: listeningAssignment || student.activeListeningAssignment,
+        aiPlan: {
+          roadmapSummary: student.aiPlan?.roadmapSummary || 'خطة الحفظ والمراجعة التراكمية',
+          difficultyAdjustment: student.aiPlan?.difficultyAdjustment || 'وتيرة متوازنة',
+          estimatedDaysToFinishJuz: student.aiPlan?.estimatedDaysToFinishJuz || 30,
+          currentDailyAssignment: newAssignment,
+          lastUpdated: new Date().toISOString()
+        }
+      };
 
-    await OmranDataService.saveStudent(updatedStudent);
-    const list = await OmranDataService.loadStudents();
-    setStudents(list);
+      OmranDataService.saveStudent(updatedStudent).catch(e => console.warn('Save student AI plan notice:', e));
+      return prev.map(s => s.id === updatedStudent.id ? updatedStudent : s);
+    });
   };
 
   // 10. Update Settings

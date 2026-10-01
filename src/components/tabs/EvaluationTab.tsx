@@ -61,7 +61,12 @@ interface EvaluationTabProps {
   isSupervisor?: boolean;
   activeComplexId?: string;
   selectedStudentId?: string;
-  onSaveEvaluation: (evaluation: StudentEvaluation) => Promise<void>;
+  onSaveEvaluation: (
+    evaluation: StudentEvaluation,
+    newAssignment?: any,
+    updatedPosition?: { surahNumber: number; surahName: string; ayah: number },
+    listeningAssignment?: any
+  ) => Promise<void>;
   onSaveCriteria: (criteriaList: EvaluationCriteria[]) => Promise<void>;
   onDeleteCriteria: (id: string) => Promise<void>;
   onUpdateStudentAIPlan: (
@@ -1059,10 +1064,18 @@ export const EvaluationTab: React.FC<EvaluationTabProps> = ({
         evaluatedAt: new Date().toISOString()
       };
 
-      // 1. Save evaluation
-      await onSaveEvaluation(fullEvaluation);
+      // Update student's current position:
+      // If student did not recite, keep current position unchanged!
+      const targetSurahNumber = todayNewDidNotRecite ? (activeStudent.currentSurah || 78) : todayNewToSurah;
+      const targetSurahName = todayNewDidNotRecite ? (activeStudent.currentSurahName || getSurahInfo(targetSurahNumber).name) : todayEndSurahInfo.name;
+      const targetAyah = todayNewDidNotRecite ? (activeStudent.currentAyah || 1) : todayNewToAyah;
 
-      // 2. Update student assignment & current position permanently
+      const updatedPosition = {
+        surahNumber: targetSurahNumber,
+        surahName: targetSurahName,
+        ayah: targetAyah
+      };
+
       const newDailyAssignment = {
         newMemorization: tomNewFormatted,
         review: tomRevFormatted,
@@ -1086,17 +1099,13 @@ export const EvaluationTab: React.FC<EvaluationTabProps> = ({
         isCompleted: false
       };
 
-      // Update student's current position:
-      // If student did not recite, keep current position unchanged!
-      const targetSurahNumber = todayNewDidNotRecite ? (activeStudent.currentSurah || 78) : todayNewToSurah;
-      const targetSurahName = todayNewDidNotRecite ? (activeStudent.currentSurahName || getSurahInfo(targetSurahNumber).name) : todayEndSurahInfo.name;
-      const targetAyah = todayNewDidNotRecite ? (activeStudent.currentAyah || 1) : todayNewToAyah;
+      // 1. Save evaluation and atomically update student's points, position, and assignments
+      await onSaveEvaluation(fullEvaluation, newDailyAssignment, updatedPosition, listeningAssignmentForStudent);
 
-      await onUpdateStudentAIPlan(activeStudent.id, newDailyAssignment, {
-        surahNumber: targetSurahNumber,
-        surahName: targetSurahName,
-        ayah: targetAyah
-      }, listeningAssignmentForStudent);
+      // 2. Also ensure onUpdateStudentAIPlan is notified for backwards compatibility
+      if (onUpdateStudentAIPlan) {
+        onUpdateStudentAIPlan(activeStudent.id, newDailyAssignment, updatedPosition, listeningAssignmentForStudent).catch(() => {});
+      }
 
       setSaveSuccessMsg(
         todayNewDidNotRecite
@@ -1873,10 +1882,23 @@ export const EvaluationTab: React.FC<EvaluationTabProps> = ({
                 {/* 1.1 New Memorization (Flexible Multi-Surah Range) */}
                 <div className="space-y-3 bg-[#064e3b]/40 p-4 rounded-2xl border border-[#065f46]">
                   <div className="flex items-center justify-between flex-wrap gap-2">
-                    <span className="text-xs font-bold text-white flex items-center gap-1.5">
-                      <span className="w-2 h-2 rounded-full bg-[#fbbf24]" />
-                      <span>الحفظ الجديد (بداية ونهاية التسميع):</span>
-                    </span>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-xs font-bold text-white flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full bg-[#fbbf24]" />
+                        <span>الحفظ الجديد (بداية ونهاية التسميع):</span>
+                      </span>
+                      {activeStudent?.activeListeningAssignment?.isCompleted || (activeStudent?.dailyListeningCompletedDate && activeStudent?.dailyListeningCompletedDate >= (activeStudent?.activeListeningAssignment?.assignedDate || '')) ? (
+                        <span className="text-[10px] px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-bold inline-flex items-center gap-1 shadow-sm">
+                          <Check className="w-3 h-3 text-emerald-400" />
+                          <span>استمع للمقطع المقرر ({activeStudent.activeListeningAssignment?.completedRepetitions || activeStudent.activeListeningAssignment?.requiredRepetitions || 3} مرات)</span>
+                        </span>
+                      ) : (
+                        <span className="text-[10px] px-2.5 py-0.5 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/40 font-bold inline-flex items-center gap-1 shadow-sm">
+                          <XCircle className="w-3 h-3 text-rose-400" />
+                          <span>لم يستمع للمقطع المقرر</span>
+                        </span>
+                      )}
+                    </div>
 
                     <div className="flex items-center gap-1.5">
                       <button
