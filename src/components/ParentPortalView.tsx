@@ -30,6 +30,7 @@ import {
   Info,
   Printer,
   Download,
+  Search,
   X
 } from 'lucide-react';
 import { YouTubeAyahPlayer, formatTimeMMSS } from './recordings/YouTubeAyahPlayer';
@@ -49,7 +50,8 @@ import {
   SurahRecording,
   RecordingsConfig,
   SurahRecordingSegment,
-  IssuedCertificate
+  IssuedCertificate,
+  StudentListeningLog
 } from '../types';
 import { StudentExamTaker } from './StudentExamTaker';
 import { QuranAyahAudioPlayer } from './quran/QuranAyahAudioPlayer';
@@ -71,6 +73,7 @@ interface ParentPortalViewProps {
   recordings?: SurahRecording[];
   recordingsConfig?: RecordingsConfig;
   certificates?: IssuedCertificate[];
+  listeningLogs?: StudentListeningLog[];
   isLoggedInStudent?: boolean;
   onLogout?: () => void;
   onSaveSubmission?: (submission: ExamSubmission) => Promise<void>;
@@ -91,6 +94,7 @@ export const ParentPortalView: React.FC<ParentPortalViewProps> = ({
   recordings = [],
   recordingsConfig,
   certificates = [],
+  listeningLogs = [],
   isLoggedInStudent,
   onLogout,
   onSaveSubmission,
@@ -304,42 +308,92 @@ export const ParentPortalView: React.FC<ParentPortalViewProps> = ({
       ? Math.round((presentsCount / studentAttendance.length) * 100)
       : 100;
 
-  // Honor Board / Leaderboard Calculation for Student Portal
+  // Honor Board / Leaderboard Calculation for Student Portal (Unified Formula identical to LeaderboardTab)
+  const [leaderboardSearch, setLeaderboardSearch] = useState('');
+  const [selectedStudentForBreakdown, setSelectedStudentForBreakdown] = useState<any | null>(null);
+
   const activeScope = leaderboardSettings?.scope || 'all_unified';
   const isPerHalaqahScope = activeScope === 'per_halaqah';
 
   // Filter students based on supervisor's setting (all halaqat vs per halaqah)
   const poolStudents = students && students.length > 0 ? students : [student];
-  const eligibleStudents = poolStudents.filter(s => {
-    if (isPerHalaqahScope) {
-      return s.halaqahId === student.halaqahId;
-    }
-    return true;
-  });
+  const eligibleStudents = useMemo(() => {
+    return poolStudents.filter(s => {
+      if (isPerHalaqahScope) {
+        return s.halaqahId === student.halaqahId;
+      }
+      return true;
+    });
+  }, [poolStudents, isPerHalaqahScope, student.halaqahId]);
 
-  const studentRankList = eligibleStudents.map(st => {
-    const stSubmissions = submissions.filter(sub => sub.studentId === st.id);
-    const examPoints = stSubmissions.reduce((sum, s) => sum + (s.pointsGrantedForLeaderboard || 0), 0);
-    const stEvaluations = evaluations.filter(ev => ev.studentId === st.id);
-    const evalPoints = leaderboardSettings?.includeEvaluationScores
-      ? stEvaluations.reduce((sum, ev) => sum + (ev.totalScore || 0), 0)
-      : 0;
-    const totalPoints = examPoints + evalPoints;
-    const bestPercentage = stSubmissions.reduce((max, s) => Math.max(max, s.percentage || 0), 0);
-    const halaqahName = st.halaqahName || halaqahs?.find(h => h.id === st.halaqahId)?.name || 'الحلقة';
+  const studentRankList = useMemo(() => {
+    return eligibleStudents.map(st => {
+      // 1. Exam points
+      const stSubmissions = submissions.filter(sub => sub.studentId === st.id);
+      const examPoints = stSubmissions.reduce(
+        (sum, s) => sum + (s.pointsGrantedForLeaderboard || 0),
+        0
+      );
+      const bestPercentage = stSubmissions.reduce(
+        (max, s) => Math.max(max, s.percentage || 0),
+        0
+      );
 
-    return {
-      student: st,
-      totalPoints,
-      examPoints,
-      evalPoints,
-      completedExams: stSubmissions.length,
-      bestPercentage,
-      halaqahName
-    };
-  });
+      // 2. Evaluation / criteria points
+      const stEvaluations = evaluations.filter(ev => ev.studentId === st.id);
+      const evalPoints = stEvaluations.reduce((sum, ev) => {
+        const criteriaPts = ev.recitationDetails?.criteriaPointsEarnedToday || 0;
+        const pagePts = ev.recitationDetails?.pagesPointsEarnedToday || 0;
+        const pts = ev.recitationDetails?.pointsEarnedToday;
+        const dailyTotal = pts !== undefined && pts !== null ? pts : (criteriaPts + pagePts);
+        return sum + dailyTotal;
+      }, 0);
 
-  studentRankList.sort((a, b) => b.totalPoints - a.totalPoints || b.bestPercentage - a.bestPercentage);
+      // Fallback: If student has criteriaPoints stored on their profile
+      const finalEvalPoints = Math.max(evalPoints, (st.criteriaPoints || 0) + (st.totalPagePoints || 0));
+
+      // 3. Listening points
+      const stLogs = (listeningLogs || []).filter(l => l.studentId === st.id && l.isFullyCompleted);
+      const logsListeningPoints = stLogs.length * 5;
+      const finalListeningPoints = Math.max(logsListeningPoints, st.listeningPoints || 0);
+
+      // 4. Completed pages points
+      const totalPagePoints = st.totalPagePoints || 0;
+
+      // 5. Total points: sum of all components (or profile points if higher)
+      const computedTotal = examPoints + finalEvalPoints + finalListeningPoints + totalPagePoints;
+      const totalPoints = Math.max(computedTotal, st.points || 0);
+
+      const halaqahName =
+        st.halaqahName || halaqahs?.find(h => h.id === st.halaqahId)?.name || 'الحلقة القرآنية';
+
+      return {
+        student: st,
+        totalPoints,
+        examPoints,
+        evalPoints: finalEvalPoints,
+        listeningPoints: finalListeningPoints,
+        pagePoints: totalPagePoints,
+        completedExams: stSubmissions.length,
+        completedEvaluations: stEvaluations.length,
+        completedListenings: stLogs.length,
+        bestPercentage,
+        halaqahName,
+        stSubmissions,
+        stEvaluations,
+        stLogs
+      };
+    }).sort((a, b) => b.totalPoints - a.totalPoints || b.bestPercentage - a.bestPercentage);
+  }, [eligibleStudents, submissions, evaluations, listeningLogs, halaqahs]);
+
+  const displayedRankList = useMemo(() => {
+    if (!leaderboardSearch.trim()) return studentRankList;
+    const q = leaderboardSearch.trim().toLowerCase();
+    return studentRankList.filter(item =>
+      item.student.name.toLowerCase().includes(q) ||
+      item.halaqahName.toLowerCase().includes(q)
+    );
+  }, [studentRankList, leaderboardSearch]);
 
   const myRankIndex = studentRankList.findIndex(item => item.student.id === student.id);
   const myRank = myRankIndex >= 0 ? myRankIndex + 1 : null;
@@ -951,8 +1005,25 @@ export const ParentPortalView: React.FC<ParentPortalViewProps> = ({
             )}
           </div>
 
+          {/* Search Input */}
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-1">
+            <div className="relative w-full sm:w-80">
+              <Search className="w-4 h-4 text-emerald-400 absolute right-3.5 top-3" />
+              <input
+                type="text"
+                placeholder="ابحث باسم الطالب لرؤية ترتيبه وتفاصيل نقاطه..."
+                value={leaderboardSearch}
+                onChange={e => setLeaderboardSearch(e.target.value)}
+                className="w-full pl-4 pr-10 py-2 rounded-xl bg-[#022c22]/90 border border-[#065f46] text-white text-xs placeholder:text-emerald-300/50 focus:border-[#fbbf24] focus:outline-none font-bold"
+              />
+            </div>
+            <div className="text-[11px] text-emerald-300/80 font-bold self-start sm:self-center">
+              إجمالي الطلاب المصنفين: {displayedRankList.length} طالب
+            </div>
+          </div>
+
           {/* Top 3 Podium Cards */}
-          {studentRankList.length > 0 && (
+          {studentRankList.length > 0 && !leaderboardSearch.trim() && (
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
               {studentRankList.slice(0, 3).map((item, idx) => {
                 const isMe = item.student.id === student.id;
@@ -967,10 +1038,11 @@ export const ParentPortalView: React.FC<ParentPortalViewProps> = ({
                 return (
                   <div
                     key={item.student.id}
-                    className={`p-4 rounded-2xl border transition-all text-center relative overflow-hidden flex flex-col justify-between ${
+                    onClick={() => setSelectedStudentForBreakdown(item)}
+                    className={`p-4 rounded-2xl border transition-all text-center relative overflow-hidden flex flex-col justify-between cursor-pointer group hover:scale-[1.02] ${
                       isMe
                         ? 'bg-[#064e3b] border-[#fbbf24] ring-2 ring-[#fbbf24]/40 shadow-xl'
-                        : 'bg-[#022c22]/90 border-[#065f46]'
+                        : 'bg-[#022c22]/90 border-[#065f46] hover:border-[#fbbf24]/50'
                     }`}
                   >
                     {isMe && (
@@ -995,10 +1067,27 @@ export const ParentPortalView: React.FC<ParentPortalViewProps> = ({
                       </div>
                       <div className="w-px h-6 bg-emerald-800/60" />
                       <div>
-                        <span className="text-[10px] text-emerald-400/80 block">أفضل درجة</span>
-                        <strong className="text-white font-mono text-xs">{item.bestPercentage}%</strong>
+                        <span className="text-[10px] text-emerald-400/80 block">التسميع</span>
+                        <strong className="text-emerald-300 font-mono text-xs">{item.evalPoints}</strong>
+                      </div>
+                      <div className="w-px h-6 bg-emerald-800/60" />
+                      <div>
+                        <span className="text-[10px] text-emerald-400/80 block">الاختبارات</span>
+                        <strong className="text-blue-300 font-mono text-xs">{item.examPoints}</strong>
                       </div>
                     </div>
+
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedStudentForBreakdown(item);
+                      }}
+                      className="mt-2.5 py-1 px-3 rounded-xl bg-white/5 hover:bg-[#fbbf24]/20 text-[#fbbf24] text-[11px] font-bold border border-white/10 transition-colors flex items-center justify-center gap-1"
+                    >
+                      <Sparkles className="w-3 h-3" />
+                      <span>عرض تفاصيل ومصادر النقاط</span>
+                    </button>
                   </div>
                 );
               })}
@@ -1014,62 +1103,226 @@ export const ParentPortalView: React.FC<ParentPortalViewProps> = ({
                     <th className="p-3">الترتيب</th>
                     <th className="p-3">اسم الطالب</th>
                     {!isPerHalaqahScope && <th className="p-3">الحلقة</th>}
-                    <th className="p-3 text-center">الاختبارات المنجزة</th>
-                    <th className="p-3 text-center">أعلى نسبة</th>
+                    <th className="p-3 text-center">نقاط التسميع</th>
+                    <th className="p-3 text-center">نقاط الاختبارات</th>
+                    <th className="p-3 text-center">نقاط الاستماع</th>
                     <th className="p-3 text-left">إجمالي النقاط</th>
+                    <th className="p-3 text-center">التفاصيل</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#065f46]/40 text-white">
-                  {studentRankList.map((item, idx) => {
-                    const isMe = item.student.id === student.id;
-                    return (
-                      <tr
-                        key={item.student.id}
-                        className={`transition-colors ${
-                          isMe
-                            ? 'bg-[#064e3b] font-bold text-[#fbbf24] border-l-4 border-l-[#fbbf24]'
-                            : 'hover:bg-[#064e3b]/30'
-                        }`}
-                      >
-                        <td className="p-3 font-mono">
-                          <span className={`inline-flex items-center justify-center w-6 h-6 rounded-full text-[11px] font-black ${
-                            idx === 0
-                              ? 'bg-[#fbbf24] text-[#064e3b]'
-                              : idx === 1
-                              ? 'bg-slate-300 text-slate-900'
-                              : idx === 2
-                              ? 'bg-amber-600 text-white'
-                              : 'bg-[#022c22] text-emerald-300 border border-emerald-800'
-                          }`}>
-                            {idx + 1}
-                          </span>
-                        </td>
-                        <td className="p-3">
-                          <div className="flex items-center gap-2">
-                            <span>{item.student.name}</span>
-                            {isMe && (
-                              <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#fbbf24] text-[#064e3b] font-black">
-                                أنت
-                              </span>
-                            )}
-                          </div>
-                        </td>
-                        {!isPerHalaqahScope && (
-                          <td className="p-3 text-emerald-300/80 text-[11px]">{item.halaqahName}</td>
-                        )}
-                        <td className="p-3 text-center font-mono">{item.completedExams}</td>
-                        <td className="p-3 text-center font-mono text-emerald-300">{item.bestPercentage}%</td>
-                        <td className="p-3 text-left font-mono font-bold text-[#fbbf24] text-sm">
-                          {item.totalPoints}
-                        </td>
-                      </tr>
-                    );
-                  })}
+                  {displayedRankList.length === 0 ? (
+                    <tr>
+                      <td colSpan={8} className="p-6 text-center text-emerald-300/70">
+                        لا توجد نتائج مطابقة لبحثك في لوحة الشرف.
+                      </td>
+                    </tr>
+                  ) : (
+                    displayedRankList.map((item) => {
+                      const isMe = item.student.id === student.id;
+                      const originalIdx = studentRankList.findIndex(x => x.student.id === item.student.id);
+                      return (
+                        <tr
+                          key={item.student.id}
+                          onClick={() => setSelectedStudentForBreakdown(item)}
+                          className={`transition-colors cursor-pointer ${
+                            isMe
+                              ? 'bg-[#064e3b] font-bold text-[#fbbf24] border-l-4 border-l-[#fbbf24]'
+                              : 'hover:bg-[#064e3b]/40'
+                          }`}
+                        >
+                          <td className="p-3 font-mono">
+                            <span className={`inline-flex items-center justify-center w-6 h-6 rounded-full text-[11px] font-black ${
+                              originalIdx === 0
+                                ? 'bg-[#fbbf24] text-[#064e3b]'
+                                : originalIdx === 1
+                                ? 'bg-slate-300 text-slate-900'
+                                : originalIdx === 2
+                                ? 'bg-amber-600 text-white'
+                                : 'bg-[#022c22] text-emerald-300 border border-emerald-800'
+                            }`}>
+                              {originalIdx + 1}
+                            </span>
+                          </td>
+                          <td className="p-3">
+                            <div className="flex items-center gap-2">
+                              <span>{item.student.name}</span>
+                              {isMe && (
+                                <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#fbbf24] text-[#064e3b] font-black">
+                                  أنت
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                          {!isPerHalaqahScope && (
+                            <td className="p-3 text-emerald-300/80 text-[11px]">{item.halaqahName}</td>
+                          )}
+                          <td className="p-3 text-center font-mono text-emerald-300 font-bold">{item.evalPoints}</td>
+                          <td className="p-3 text-center font-mono text-blue-300 font-bold">{item.examPoints}</td>
+                          <td className="p-3 text-center font-mono text-amber-300 font-bold">{item.listeningPoints}</td>
+                          <td className="p-3 text-left font-mono font-bold text-[#fbbf24] text-sm">
+                            {item.totalPoints}
+                          </td>
+                          <td className="p-3 text-center">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedStudentForBreakdown(item);
+                              }}
+                              className="px-2.5 py-1 rounded-lg bg-emerald-900/60 hover:bg-[#fbbf24] hover:text-[#064e3b] text-[#86efac] text-[10px] font-bold border border-emerald-700/50 transition-colors"
+                            >
+                              عرض النقاط
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
                 </tbody>
               </table>
             </div>
           </div>
         </div>
+
+        {/* STUDENT POINTS BREAKDOWN MODAL */}
+        {selectedStudentForBreakdown && (
+          <div className="fixed inset-0 z-[9999] bg-black/80 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto">
+            <div className="bg-[#022c22] border border-[#fbbf24]/50 rounded-3xl w-full max-w-xl max-h-[90vh] overflow-y-auto p-6 shadow-2xl space-y-5 text-right relative">
+              <button
+                onClick={() => setSelectedStudentForBreakdown(null)}
+                className="absolute top-4 left-4 p-2 text-emerald-300 hover:text-white rounded-xl bg-emerald-950/40 cursor-pointer"
+              >
+                <XCircle className="w-5 h-5" />
+              </button>
+
+              <div className="flex items-center gap-3 border-b border-emerald-800 pb-4">
+                <div className="w-12 h-12 rounded-2xl bg-[#fbbf24]/20 text-[#fbbf24] border border-[#fbbf24]/30 flex items-center justify-center shrink-0">
+                  <Trophy className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="text-base sm:text-lg font-bold font-heading text-white">
+                    تفاصيل ومصادر نقاط: {selectedStudentForBreakdown.student.name}
+                  </h3>
+                  <p className="text-xs text-[#86efac]/80 mt-0.5">
+                    {selectedStudentForBreakdown.halaqahName} • إجمالي النقاط:{' '}
+                    <strong className="text-[#fbbf24] font-mono text-sm">{selectedStudentForBreakdown.totalPoints}</strong> نقطة
+                  </p>
+                </div>
+              </div>
+
+              {/* 4 Pillars Summary */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-center">
+                <div className="p-3 rounded-2xl bg-[#064e3b]/50 border border-emerald-700/50 space-y-1">
+                  <span className="text-[10px] text-emerald-300 block font-bold">نقاط التسميع</span>
+                  <span className="text-lg font-black text-emerald-200 font-mono">
+                    +{selectedStudentForBreakdown.evalPoints}
+                  </span>
+                  <span className="text-[9px] text-emerald-400/70 block">
+                    {selectedStudentForBreakdown.completedEvaluations} تقييم تسميع
+                  </span>
+                </div>
+
+                <div className="p-3 rounded-2xl bg-[#064e3b]/50 border border-blue-700/50 space-y-1">
+                  <span className="text-[10px] text-blue-300 block font-bold">نقاط الاختبارات</span>
+                  <span className="text-lg font-black text-blue-200 font-mono">
+                    +{selectedStudentForBreakdown.examPoints}
+                  </span>
+                  <span className="text-[9px] text-blue-400/70 block">
+                    {selectedStudentForBreakdown.completedExams} اختبار منجز
+                  </span>
+                </div>
+
+                <div className="p-3 rounded-2xl bg-[#064e3b]/50 border border-amber-700/50 space-y-1">
+                  <span className="text-[10px] text-amber-300 block font-bold">نقاط الاستماع</span>
+                  <span className="text-lg font-black text-amber-200 font-mono">
+                    +{selectedStudentForBreakdown.listeningPoints}
+                  </span>
+                  <span className="text-[9px] text-amber-400/70 block">
+                    {selectedStudentForBreakdown.completedListenings} جلسة تكرار
+                  </span>
+                </div>
+
+                <div className="p-3 rounded-2xl bg-[#064e3b]/50 border border-teal-700/50 space-y-1">
+                  <span className="text-[10px] text-teal-300 block font-bold">نقاط الصفحات</span>
+                  <span className="text-lg font-black text-teal-200 font-mono">
+                    +{selectedStudentForBreakdown.pagePoints || 0}
+                  </span>
+                  <span className="text-[9px] text-teal-400/70 block">أوجه مكتملة</span>
+                </div>
+              </div>
+
+              {/* Exam Submissions Details */}
+              {selectedStudentForBreakdown.stSubmissions?.length > 0 && (
+                <div className="space-y-2">
+                  <h4 className="text-xs font-bold text-white flex items-center gap-1.5">
+                    <FileText className="w-3.5 h-3.5 text-blue-400" />
+                    <span>سجل الاختبارات المنجزة ({selectedStudentForBreakdown.stSubmissions.length})</span>
+                  </h4>
+                  <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1">
+                    {selectedStudentForBreakdown.stSubmissions.map((sub: any) => (
+                      <div
+                        key={sub.id}
+                        className="p-2.5 rounded-xl bg-[#064e3b]/30 border border-emerald-800/60 flex items-center justify-between text-xs"
+                      >
+                        <div>
+                          <span className="font-bold text-white">{sub.examTitle}</span>
+                          <span className="text-[10px] text-emerald-300/70 block">{sub.submittedAt ? sub.submittedAt.split('T')[0] : ''}</span>
+                        </div>
+                        <div className="text-left font-mono">
+                          <span className="text-blue-300 font-bold">+{sub.pointsGrantedForLeaderboard || 0} نقطة</span>
+                          <span className="text-[10px] text-emerald-400/80 block">({sub.percentage}%)</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Recitation Evaluation Criteria Details */}
+              {selectedStudentForBreakdown.stEvaluations?.length > 0 && (
+                <div className="space-y-2">
+                  <h4 className="text-xs font-bold text-white flex items-center gap-1.5">
+                    <BookOpen className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>سجل تقييمات التسميع الأخيرة ({selectedStudentForBreakdown.stEvaluations.length})</span>
+                  </h4>
+                  <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1">
+                    {selectedStudentForBreakdown.stEvaluations.slice(-5).reverse().map((ev: any) => {
+                      const cPts = ev.recitationDetails?.criteriaPointsEarnedToday || 0;
+                      const pPts = ev.recitationDetails?.pagesPointsEarnedToday || 0;
+                      const tot = ev.recitationDetails?.pointsEarnedToday ?? (cPts + pPts);
+                      return (
+                        <div
+                          key={ev.id}
+                          className="p-2.5 rounded-xl bg-[#064e3b]/30 border border-emerald-800/60 flex items-center justify-between text-xs"
+                        >
+                          <div>
+                            <span className="font-bold text-white">{ev.date} - تسميع يومي</span>
+                            <span className="text-[10px] text-emerald-300/70 block">
+                              ورد الحفظ: {ev.dailyTarget || 'مقرر الحفظ'} • التقييم: {ev.totalScore}%
+                            </span>
+                          </div>
+                          <div className="text-left font-mono">
+                            <span className="text-emerald-300 font-bold">+{tot} نقطة</span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              <div className="flex justify-end pt-3 border-t border-emerald-800">
+                <button
+                  onClick={() => setSelectedStudentForBreakdown(null)}
+                  className="px-5 py-2 rounded-xl bg-[#fbbf24] text-[#064e3b] font-bold text-xs cursor-pointer hover:bg-amber-300 transition-colors"
+                >
+                  إغلاق
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* REVIEW PREVIOUS ATTEMPT MODAL */}
         {viewingReviewSubmission && (

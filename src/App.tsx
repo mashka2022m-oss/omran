@@ -85,7 +85,6 @@ import { ReportsTab } from './components/tabs/ReportsTab';
 import { DataBackupTab } from './components/tabs/DataBackupTab';
 import { ExamsTab } from './components/tabs/ExamsTab';
 import { AccountsTab } from './components/tabs/AccountsTab';
-import { RecordingsTab } from './components/tabs/RecordingsTab';
 import { CertificatesTab } from './components/tabs/CertificatesTab';
 import { LeaderboardTab } from './components/tabs/LeaderboardTab';
 import { EditAccountModal } from './components/EditAccountModal';
@@ -732,12 +731,12 @@ export function App() {
     }
   }, [currentUser, isSupervisor, assignedHalaqahs, activeHalaqahId, scopedHalaqahIds]);
 
-  // Guard programmer-only tabs: accounts/ranks and database backup are strictly for Programmer (Mohamed Montaser), recordings is for developer & supervisor
+  // Guard programmer-only tabs: accounts/ranks and database backup are strictly for Programmer (Mohamed Montaser)
   useEffect(() => {
     if (!isDeveloper && (activeTab === 'accounts' || activeTab === 'backup')) {
       setActiveTab('home');
     }
-    if (!isDeveloper && !isSupervisor && activeTab === 'recordings') {
+    if (activeTab === 'recordings') {
       setActiveTab('home');
     }
   }, [isDeveloper, isSupervisor, activeTab]);
@@ -1533,6 +1532,7 @@ export function App() {
             recordings={recordings}
             recordingsConfig={recordingsConfig}
             certificates={certificates}
+            listeningLogs={listeningLogs}
             isLoggedInStudent={!!currentUser}
             onLogout={handleLogout}
             onSaveSubmission={handleSaveSubmission}
@@ -1675,9 +1675,6 @@ export function App() {
     { id: 'exams', label: 'قسم الاختبارات', icon: FileText, badge: scopedExams.length > 0 ? scopedExams.length : undefined },
     { id: 'certificates', label: 'قسم الشهادات', icon: Award },
     { id: 'leaderboard', label: 'لوحة الشرف', icon: Trophy },
-    ...(isDeveloper || isSupervisor ? [
-      { id: 'recordings', label: 'مقاطع التلاوة والواجبات', icon: Headphones, badge: recordings.length > 0 ? recordings.length : undefined }
-    ] : []),
     ...(isDeveloper ? [
       { id: 'accounts', label: 'إدارة الحسابات والرتب', icon: UserCog, badge: teachers.length }
     ] : []),
@@ -2003,20 +2000,6 @@ export function App() {
                 activeHalaqahId={activeHalaqahId}
                 currentUserName={currentTeacher?.name || currentUser?.username || scopedSettings.teacherName}
                 onSaveLeaderboardSettings={handleSaveLeaderboardSettings}
-              />
-            )}
-
-            {activeTab === 'recordings' && (isDeveloper || isSupervisor) && (
-              <RecordingsTab
-                recordings={recordings}
-                recordingsConfig={recordingsConfig}
-                onSaveRecording={handleSaveRecording}
-                onDeleteRecording={handleDeleteRecording}
-                onSaveConfig={handleSaveRecordingsConfig}
-                isDeveloper={isDeveloper}
-                isSupervisor={isSupervisor}
-                settings={scopedSettings}
-                onUpdateSettings={handleUpdateSettings}
               />
             )}
 

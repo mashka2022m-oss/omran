@@ -14,16 +14,28 @@ import {
   Lock,
   ExternalLink,
   ChevronLeft,
+  ChevronDown,
   GraduationCap,
   HeartHandshake,
   Layers,
   HelpCircle,
-  Globe,
   Database,
-  Mail,
-  Check,
-  Eye,
-  Languages
+  Languages,
+  Trophy,
+  Medal,
+  Volume2,
+  Play,
+  RotateCcw,
+  MessageCircle,
+  Send,
+  Printer,
+  Sliders,
+  Star,
+  Flame,
+  ShieldAlert,
+  Building2,
+  Headphones,
+  Check
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -41,14 +53,201 @@ export const PublicLandingPage: React.FC<PublicLandingPageProps> = ({
   appName = 'منظومة عُمْرَان لإدارة الحلقات والمجمعات القرآنية'
 }) => {
   const [showEnglishOverview, setShowEnglishOverview] = useState(false);
+  const [activeFeatureTab, setActiveFeatureTab] = useState<number>(0);
+  const [openFaqIndex, setOpenFaqIndex] = useState<number | null>(null);
+
+  // Interactive Live Demo States for Landing Page Visitors
+  const [demoRepetitions, setDemoRepetitions] = useState<number>(3);
+  const [demoCurrentRep, setDemoCurrentRep] = useState<number>(1);
+  const [demoIsPlaying, setDemoIsPlaying] = useState<boolean>(false);
+
+  const featureTabs = [
+    {
+      id: 'complexes',
+      title: 'إدارة المجمعات والحلقات',
+      icon: Building2,
+      tag: 'الهيكل التنظيمي والصلاحيات',
+      color: 'from-amber-500 to-amber-600',
+      badge: 'متعدد المجمعات',
+      headline: 'إدارة مركزية مستقلة لكل مجمع قرآني مع صلاحيات متدرجة ودقيقة',
+      description: 'توفر المنظومة بيئة تشغيل سحابية مرنة تعزل قواعد بيانات كل مجمع قرآني وتتيح إدارة الحلقات، توزيع الطلاب، وتعيين المعلمين والمشرفين بمرونة كاملة.',
+      highlights: [
+        'عزل أو دمج بيانات المجمعات القرآنية مع التبديل الفوري بنقرة واحدة.',
+        'مستويات صلاحيات دقيقة: المشرف العام/المبرمج، مشرف المجمع، معلم الحلقة، المعلم المساعد، ولي الأمر، والطالب.',
+        'إدارة الحلقات القرآنية ونقل الطلاب وتوزيعهم حسب المستويات ومتابعة الشواغر.',
+        'سجل شامل للمشرفين والمعلمين مع إمكانية ربط كل معلم بعدة مجمعات وحلقات.'
+      ],
+      previewSnippet: {
+        badgeText: 'مجمع الفرقان النموذجي',
+        subText: '٥ حلقات نشطة • ٨٢ طالباً مسجلاً • ٦ معلمين مجازين',
+        stat1: { label: 'نسبة الحضور اليوم', val: '٩٤٪' },
+        stat2: { label: 'أوراد التسميع المنجزة', val: '٧٨ ورد' }
+      }
+    },
+    {
+      id: 'recitation',
+      title: 'سجل التسميع ومعايير التجويد',
+      icon: BookOpen,
+      tag: 'الحفظ والمراجعة وخطة الغد',
+      color: 'from-emerald-500 to-emerald-600',
+      badge: 'تقييم تجويدي ذكي',
+      headline: 'رصد دقيق لمقدار الحفظ ومعايير الأداء التجويدي واقتراح خطة الغد الذكية',
+      description: 'نظام متكامل لتسميع القرآن الكريم يقسم الورد اليومي إلى حفظ جديد، مراجعة صغرى (أحدث ٥ أجزاء)، ومراجعة كبرى، مع تقييم بنود الأداء واحتساب النقاط تلقائياً.',
+      highlights: [
+        'معايير تجويد دقيقة: مخارج الحروف، الغنة، أحكام المدود، الطلاقة والانطلاق، وإعراب الحركات.',
+        'احتساب نقاط التسميع ونقاط الأوجه والصفحات المنجزة تلقائياً وإضافتها لرصيد الطالب في لوحة الشرف.',
+        'اقتراح خطة الغد ومقرر الحفظ التالي آلياً بحسب إنجاز الطالب ومستواه التعليمي.',
+        'شارة فحص الجاهزية: التحقق المسبق من استماع الطالب للمقطع وتكراره قبل التسميع.'
+      ],
+      previewSnippet: {
+        badgeText: 'سجل التسميع اليومي',
+        subText: 'الطالب: عبد الرحمن أحمد • سورة الشعراء (١ - ١٥)',
+        stat1: { label: 'معايير التجويد', val: '٤.٩ / ٥' },
+        stat2: { label: 'نقاط التميز المكتسبة', val: '+٢٥ نقطة' }
+      }
+    },
+    {
+      id: 'listening',
+      title: 'مشغل الآيات والتكرار الصوتي',
+      icon: Headphones,
+      tag: 'بالرسم العثماني لمجمع الملك فهد',
+      color: 'from-amber-400 to-amber-500',
+      badge: 'استماع آية بآية',
+      headline: 'استماع تفاعلي بالرسم العثماني المعتمد مع عداد تكرار منزلي آلي',
+      description: 'نظام استماع صوتي متطور يعرض الآيات القرآنية آية بآية بالخط العثماني لمجمع الملك فهد متزامنة مع تلاوات خاشعة لنخبة من كبار مشايخ العالم الإسلامي.',
+      highlights: [
+        'تحديد المقطع القرآني بدقة من الآية (أ) إلى الآية (ب) من قبل المعلم دون إمكانية تجاوزها أو التلاعب.',
+        'تحديد عدد مرات التكرار المطلوبة (من ١ إلى ٢٠ تكرار) من قبل المحفظ للمتابعة المنزلية.',
+        'احتساب ذكي وآلي لمرات السماع والتكرار بدون تدخل الطالب، وإيداع نقاط التميز فور إتمام المقرر.',
+        'نخبة من كبار المشايخ المتقنين: الشيخ الحصري، المنشاوي، عبد الباسط، العفاسي، علي جابر، المعيقلي، الشاطري.'
+      ],
+      previewSnippet: {
+        badgeText: 'سورة الشعراء - الآيات [٩ - ١٢]',
+        subText: 'بصوت الشيخ محمود خليل الحصري (المصحف المعلم)',
+        stat1: { label: 'التكرار المطلوب', val: '٥ مرات' },
+        stat2: { label: 'الإنجاز المنزلي', val: 'مكتمل بنجاح' }
+      }
+    },
+    {
+      id: 'exams',
+      title: 'بنك الاختبارات وGoogle Forms',
+      icon: FileText,
+      tag: 'تصحيح آلي وتكامل سحابي',
+      color: 'from-blue-500 to-blue-600',
+      badge: 'تكامل Google Forms',
+      headline: 'إنشاء اختبارات قرآنية متقدمة وربطها بنماذج Google Forms وسحب النتائج لحظياً',
+      description: 'بنك متكامل لاختبارات الحفظ والتجويد يتيح إنشاء أسئلة إلكترونية متعددة الأنواع، والربط الذكي بنماذج Google Forms مع تعبئة بيانات الطالب تلقائياً ورصد الدرجات.',
+      highlights: [
+        'أنواع أسئلة شاملة: اختيار من متعدد، إكمال آيات، أحكام التجويد، وأسئلة مقالية للمراجعة.',
+        'تكامل مباشر مع Google Forms: إنشاء النماذج تلقائياً وسحب إجابات الطلاب دون تدخل يدوي.',
+        'تعبئة اسم الطالب ورقم الجلوس تلقائياً في رابط الاختبار لمنع الالتباس والأخطاء.',
+        'إمكانية مراجعة الإجابات ونسب النجاح، واحتساب درجات الاختبار في لوحة الشرف فورياً.'
+      ],
+      previewSnippet: {
+        badgeText: 'اختبار تجويد جزء عمّ',
+        subText: '٢٠ سؤالاً قياسياً • تصحيح سحابي فوري عبر Google Forms',
+        stat1: { label: 'متوسط الدرجات', val: '٩٦٪' },
+        stat2: { label: 'الشهادة الممنوحة', val: 'ممتاز مرتفع' }
+      }
+    },
+    {
+      id: 'certificates',
+      title: 'الشهادات الرقمية والأرشيف',
+      icon: Award,
+      tag: 'طباعة فورية A4 وجودة فائقة',
+      color: 'from-teal-500 to-teal-600',
+      badge: 'أرشيف معتمد',
+      headline: 'إصدار شهادات تقدير وتفوق قرآني احترافية جاهزة للطباعة والتنزيل وحفظها في أرشيف دائم',
+      description: 'منظومة إصدار شهادات إتقان فاخرة بختم المجمع وتوقيع المعلم والمشرف، محفوظة بصفة دائمة في ملف الطالب وبوابة ولي الأمر للرجوع إليها وطباعتها في أي وقت.',
+      highlights: [
+        'تصميمات إسلامية راقية متوافقة تماماً مع معايير الطباعة الورقية A4 وPDF بجودة فائقة.',
+        'أرشفة سحابية كاملة لكل شهادة صادرة برقم اعتماد وتاريخ رسمي وتفاصيل التكريم.',
+        'إمكانية وصول الطالب وولي الأمر لشهاداته الصادرة من خلال بوابته الخاصة في أي وقت.',
+        'إصدار جماعي بنقرة زر لجميع طلاب الحلقة المجتازين للاختبارات القرآنية.'
+      ],
+      previewSnippet: {
+        badgeText: 'شهادة إتقان حفظ جزء تبارك',
+        subText: 'معتمدة برقم توثيق رسمي وخاتم المجمع القرآني',
+        stat1: { label: 'التقدير العام', val: 'ممتاز مع مرتبة الشرف' },
+        stat2: { label: 'خيارات التصدير', val: 'طباعة A4 / PDF' }
+      }
+    },
+    {
+      id: 'leaderboard',
+      title: 'لوحة الشرف وتصنيف المتصدرين',
+      icon: Trophy,
+      tag: 'تحفيز وتنافس قرآني شريف',
+      color: 'from-amber-400 to-amber-600',
+      badge: 'معادلة نقاط موحدة',
+      headline: 'لوحة شرف تفاعلية تجمع كافة محاور التميز مع إمكانية تتبع مصادر النقاط بالتفصيل',
+      description: 'نظام تصنيف وتكريم عادل يجمع نقاط التسميع اليومية ومعايير التجويد، نقاط الاختبارات، نقاط الاستماع والتكرار المنزلي، ونقاط الصفحات المنجزة مع بحث وتفصيل فوري.',
+      highlights: [
+        'معادلة موحدة ومحدثة لحظياً عند المعلمين والمشرفين والطلاب دون أي تعارض أو تأخير.',
+        'منصة تتويج للمراكز الثلاثة الأولى (كؤوس ذهبية وفضية وبرونزية وأوسمة شرف).',
+        'محرك بحث فوري بالاسم يتيح الضغط على أي طالب لاستعراض أين وكيف جمع نقاطه بالتفصيل.',
+        'إمكانية ضبط نطاق اللوحة: ترتيب على مستوى الحلقة محلياً أو الترتيب العام الموحد للمجمع.'
+      ],
+      previewSnippet: {
+        badgeText: 'المتصدر الأول: أسامة البشير',
+        subText: 'حلقة الإمام الشاطبي • إجمالي النقاط: ٤٢٠ نقطة',
+        stat1: { label: 'نقاط التسميع', val: '+٢٤٠' },
+        stat2: { label: 'نقاط الاختبارات', val: '+١٨٠' }
+      }
+    },
+    {
+      id: 'whatsapp',
+      title: 'تقارير الواتساب وبوابة ولي الأمر',
+      icon: MessageCircle,
+      tag: 'تواصل وتربية مستمرة',
+      color: 'from-emerald-400 to-teal-500',
+      badge: 'إشعار فوري بضغطة زر',
+      headline: 'تقارير إنجاز يومية منمقة بالآيات ترسل عبر الواتساب وبوابة إلكترونية لولي الأمر',
+      description: 'تجسير التواصل بين المجمع والمنزل عبر قوالب رسائل واتساب ذكية ترصد الحفظ والغياب وخطة الغد، مع بوابة تفاعلية لولي الأمر لمتابعة مسيرة ابنه لحظة بلحظة.',
+      highlights: [
+        'توليد تقارير يومية وأسبوعية وشهرية نصية منمقة بآيات قرآنية جاهزة للإرسال لواتساب بنقرة واحدة.',
+        'بوابة خاصة بولي الأمر للاطلاع على الحضور، سجل التسميع، خطة الغد، والشهادات.',
+        'سجل التوجيه والملاحظات السلوكية والتربوية لمتابعة الانضباط وتدوين توصيات المشايخ.',
+        'إشعارات ذكية تنبه ولي الأمر بالغياب أو التأخر أو استحقاق الاختبار والشهادة.'
+      ],
+      previewSnippet: {
+        badgeText: 'تقرير إنجاز يومي - واتساب',
+        subText: 'تم إرساله لولي أمر الطالب: تم بحمد الله تسميع ورد اليوم بإتقان',
+        stat1: { label: 'حالة الحضور', val: 'حاضر في الموعد' },
+        stat2: { label: 'خطة الغد المقررة', val: 'سورة القصص (١ - ١٠)' }
+      }
+    }
+  ];
+
+  const faqs = [
+    {
+      q: 'هل تدعم المنظومة تشغيل عدة مجمعات وحلقات قرآنية مستقلة؟',
+      a: 'نعم، المنظومة مصممة بهيكل متعدد المجمعات (Multi-Complex) يتيح إنشاء وإدارة مجمعات مستقلة تماماً، وتوزيع الحلقات والمعلمين، مع إمكانية التبديل السلس أو مشاركة قواعد البيانات بإشراف المشرف العام والمبرمج.'
+    },
+    {
+      q: 'كيف يعمل نظام الاستماع وتكرار الآيات الجديد؟ وهل يمنع التلاعب؟',
+      a: 'المعلم يحدد المقطع بدقة من آية محددة إلى آية أخرى مع عدد مرات التكرار المطلوبة (من ١ إلى ٢٠ مرة) وقارئ معتمد بالرسم العثماني لمجمع الملك فهد. لا يستطيع الطالب تجاوز المقطع، ويقوم النظام باحتساب مرات الاستماع آلياً عند إتمام كل تكرار وإيداع نقاط التميز تلقائياً في حسابه ولوحة الشرف.'
+    },
+    {
+      q: 'كيف يتم احتساب درجات ونقاط لوحة الشرف للطلاب؟',
+      a: 'تعتمد المنظومة معادلة تفوق شاملة وموحدة تجمع: نقاط معايير التسميع اليومي (المخارج، التجويد، الطلاقة)، نقاط اجتياز الاختبارات ومسابقات Google Forms، نقاط الاستماع والتكرار الصوتي المنزلي، ونقاط الأوجه والصفحات المنجزة. ويمكن لأي طالب أو معلم الضغط على أي اسم لاستعراض تفاصيل ومصادر نقاطه بدقة.'
+    },
+    {
+      q: 'لماذا تطلب المنظومة أذونات Google Workspace (Sheets, Drive, Forms)؟',
+      a: 'تطلب المنظومة هذه الأذونات strictly on-demand عند رغبة المعلم أو المشرف بتصدير درجات التسميع وسجلات الحضور إلى جداول Google Sheets الشخصية الخاصة به، أو إنشاء اختبارات Google Forms وسحب درجاتها، أو حفظ نسخ احتياطية مشفرة في مجلد مخصص في Google Drive. لا نصل لأي ملفات شخصية أخرى، وتخضع العملية لسياسة الاستخدام المحدود الصارمة من Google.'
+    },
+    {
+      q: 'أين تُحفظ الشهادات الصادرة وهل يمكن للطالب وولي الأمر استعراضها؟',
+      a: 'جميع الشهادات التي تصدر للطلاب تُحفظ تلقائياً في الأرشيف السحابي الدائم للمجمع وتظهر فوراً في حساب الطالب وبوابة ولي الأمر، حيث يمكن استعراضها وطباعتها بجودة فائقة A4 أو حفظها كملف PDF في أي وقت دون أن تُفقد.'
+    }
+  ];
 
   return (
     <div className="min-h-screen bg-[#022c22] text-[#f0f9f6] font-sans selection:bg-[#fbbf24] selection:text-[#064e3b]" dir="rtl">
-      {/* Background Decorative Effects */}
+      {/* Background Decorative Gradient Orbs */}
       <div className="fixed inset-0 pointer-events-none overflow-hidden">
-        <div className="absolute -top-32 right-1/4 w-[500px] h-[500px] bg-emerald-600/10 rounded-full blur-3xl" />
-        <div className="absolute top-1/3 -left-40 w-[600px] h-[600px] bg-amber-500/10 rounded-full blur-3xl" />
-        <div className="absolute bottom-10 right-10 w-[400px] h-[400px] bg-teal-500/10 rounded-full blur-3xl" />
+        <div className="absolute -top-32 right-1/4 w-[550px] h-[550px] bg-emerald-600/15 rounded-full blur-3xl animate-pulse" />
+        <div className="absolute top-1/3 -left-40 w-[650px] h-[650px] bg-amber-500/10 rounded-full blur-3xl" />
+        <div className="absolute bottom-10 right-10 w-[500px] h-[500px] bg-teal-500/15 rounded-full blur-3xl" />
       </div>
 
       {/* Header / Navbar */}
@@ -56,7 +255,7 @@ export const PublicLandingPage: React.FC<PublicLandingPageProps> = ({
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between gap-4">
           {/* Brand / Logo */}
           <div className="flex items-center gap-3.5">
-            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-amber-400 to-amber-600 p-0.5 shadow-lg shadow-amber-500/20">
+            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-amber-400 via-amber-500 to-amber-600 p-0.5 shadow-lg shadow-amber-500/25">
               <div className="w-full h-full bg-[#022c22] rounded-[14px] flex items-center justify-center text-amber-400">
                 <BookOpen className="w-6 h-6" />
               </div>
@@ -66,23 +265,23 @@ export const PublicLandingPage: React.FC<PublicLandingPageProps> = ({
                 <h1 className="text-lg sm:text-xl font-black font-heading tracking-tight text-white">
                   منظومة عُمْرَان
                 </h1>
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-400/20 text-amber-300 font-bold border border-amber-400/30">
+                <span className="text-[10px] px-2.5 py-0.5 rounded-full bg-amber-400/20 text-amber-300 font-bold border border-amber-400/40">
                   Omran Quran Platform
                 </span>
               </div>
-              <p className="text-[11px] text-[#86efac]/80 hidden sm:block">
-                المنصة المتكاملة لإدارة مجمعات وحلقات تحفيظ القرآن الكريم
+              <p className="text-[11px] text-[#86efac]/90 hidden sm:block">
+                الصرح الرقمي الشامل لإدارة المجمعات والحلقات القرآنية ورعاية الحفاظ
               </p>
             </div>
           </div>
 
-          {/* Quick Nav Links & Actions */}
+          {/* Quick Nav Actions */}
           <div className="flex items-center gap-2.5 sm:gap-3">
             {/* English reviewer toggle */}
             <button
               type="button"
               onClick={() => setShowEnglishOverview(!showEnglishOverview)}
-              className="text-xs font-bold text-amber-300 hover:text-white px-2.5 py-1.5 rounded-xl bg-[#064e3b] border border-amber-400/40 hover:bg-[#065f46] transition-colors cursor-pointer flex items-center gap-1.5"
+              className="text-xs font-bold text-amber-300 hover:text-white px-2.5 py-1.5 rounded-xl bg-[#064e3b] border border-amber-400/40 hover:bg-[#065f46] transition-colors cursor-pointer flex items-center gap-1.5 shadow-sm"
               title="Toggle English Overview for Google Reviewers"
             >
               <Languages className="w-4 h-4" />
@@ -93,10 +292,10 @@ export const PublicLandingPage: React.FC<PublicLandingPageProps> = ({
             <button
               type="button"
               onClick={onOpenPrivacyPolicy}
-              className="text-xs font-bold text-[#86efac] hover:text-white transition-colors cursor-pointer inline-flex items-center gap-1.5 px-3 py-2 rounded-xl hover:bg-white/5 border border-emerald-500/20"
+              className="text-xs font-bold text-[#86efac] hover:text-white transition-colors cursor-pointer inline-flex items-center gap-1.5 px-3 py-2 rounded-xl hover:bg-white/5 border border-emerald-500/30"
             >
               <ShieldCheck className="w-4 h-4 text-amber-400" />
-              <span className="hidden md:inline">سياسة الخصوصية (Privacy Policy)</span>
+              <span className="hidden md:inline">وثيقة الخصوصية (Privacy Policy)</span>
               <span className="md:hidden">الخصوصية</span>
             </button>
 
@@ -106,7 +305,7 @@ export const PublicLandingPage: React.FC<PublicLandingPageProps> = ({
                 onClick={onOpenParentPortal}
                 className="text-xs font-bold text-amber-300 hover:text-amber-200 transition-colors cursor-pointer px-3.5 py-2 rounded-xl bg-[#064e3b] border border-[#065f46] hover:border-amber-400/50 hidden lg:inline-flex items-center gap-1.5"
               >
-                <GraduationCap className="w-4 h-4" />
+                <GraduationCap className="w-4 h-4 text-amber-400" />
                 <span>بوابة ولي الأمر</span>
               </button>
             )}
@@ -114,97 +313,99 @@ export const PublicLandingPage: React.FC<PublicLandingPageProps> = ({
             <button
               type="button"
               onClick={onOpenLogin}
-              className="px-4 sm:px-5 py-2 rounded-2xl bg-gradient-to-r from-amber-400 to-amber-500 hover:brightness-110 text-[#064e3b] text-xs sm:text-sm font-black shadow-lg shadow-amber-500/20 flex items-center gap-1.5 transition-all cursor-pointer"
+              className="px-4 sm:px-6 py-2.5 rounded-2xl bg-gradient-to-r from-amber-400 via-amber-500 to-amber-400 hover:brightness-110 text-[#064e3b] text-xs sm:text-sm font-black shadow-lg shadow-amber-500/25 flex items-center gap-2 transition-all cursor-pointer hover:scale-[1.02] active:scale-[0.98]"
             >
               <Lock className="w-4 h-4 text-[#064e3b]" />
-              <span>تسجيل الدخول</span>
+              <span>تسجيل الدخول للمنظومة</span>
             </button>
           </div>
         </div>
       </header>
 
       {/* Main Content */}
-      <main className="relative z-10 space-y-12 sm:space-y-16 pb-16">
+      <main className="relative z-10 space-y-16 sm:space-y-24 pb-20">
         {/* Optional English Overview Banner for Google Reviewers */}
-        {showEnglishOverview && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            exit={{ opacity: 0, height: 0 }}
-            className="bg-[#012019] border-b-2 border-amber-400 px-4 sm:px-6 lg:px-8 py-6 text-left"
-            dir="ltr"
-          >
-            <div className="max-w-7xl mx-auto space-y-4">
-              <div className="flex items-center justify-between gap-4">
-                <div className="flex items-center gap-2 text-amber-400 font-bold text-sm">
-                  <ShieldCheck className="w-5 h-5" />
-                  <span>Google OAuth Verification Quick Reference Guide (English Summary)</span>
-                </div>
-                <button
-                  onClick={() => setShowEnglishOverview(false)}
-                  className="text-xs text-slate-400 hover:text-white px-2 py-1 rounded-lg bg-white/10"
-                >
-                  Close English Panel ✕
-                </button>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs text-slate-200">
-                <div className="bg-[#022c22] p-4 rounded-xl border border-emerald-500/30 space-y-1.5">
-                  <strong className="text-white block font-semibold">1. Application & Brand Identity</strong>
-                  <p className="text-[#86efac]">
-                    <strong>Name:</strong> Omran Quran Platform (منظومة عُمْرَان لإدارة الحلقات والمجمعات القرآنية).
-                  </p>
-                  <p>
-                    A full-featured educational web application dedicated to managing Quran memorization schools, halaqahs, attendance, and student evaluations.
-                  </p>
+        <AnimatePresence>
+          {showEnglishOverview && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              className="bg-[#012019] border-b-2 border-amber-400 px-4 sm:px-6 lg:px-8 py-6 text-left shadow-2xl"
+              dir="ltr"
+            >
+              <div className="max-w-7xl mx-auto space-y-4">
+                <div className="flex items-center justify-between gap-4">
+                  <div className="flex items-center gap-2 text-amber-400 font-bold text-sm">
+                    <ShieldCheck className="w-5 h-5" />
+                    <span>Google OAuth Verification Quick Reference Guide (English Summary)</span>
+                  </div>
+                  <button
+                    onClick={() => setShowEnglishOverview(false)}
+                    className="text-xs text-slate-400 hover:text-white px-3 py-1 rounded-lg bg-white/10 cursor-pointer"
+                  >
+                    Close English Panel ✕
+                  </button>
                 </div>
 
-                <div className="bg-[#022c22] p-4 rounded-xl border border-emerald-500/30 space-y-1.5">
-                  <strong className="text-white block font-semibold">2. Purpose of Google User Data Requests</strong>
-                  <p>
-                    The app requests Google Workspace permissions (Google Sheets, Google Forms, Google Drive file scope) strictly on-demand when an authorized teacher/supervisor requests:
-                  </p>
-                  <ul className="list-disc list-inside text-[11px] text-amber-200 space-y-0.5">
-                    <li>Exporting attendance & student evaluation grades into personal Google Sheets.</li>
-                    <li>Generating Quran assessment quizzes in Google Forms.</li>
-                    <li>Saving JSON backup archives in a dedicated Drive app folder.</li>
-                  </ul>
-                </div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs text-slate-200">
+                  <div className="bg-[#022c22] p-4 rounded-xl border border-emerald-500/30 space-y-1.5">
+                    <strong className="text-white block font-semibold">1. Application & Brand Identity</strong>
+                    <p className="text-[#86efac]">
+                      <strong>Name:</strong> Omran Quran Platform (منظومة عُمْرَان لإدارة الحلقات والمجمعات القرآنية).
+                    </p>
+                    <p>
+                      A full-featured educational web application dedicated to managing Quran memorization schools, halaqahs, attendance, and student evaluations.
+                    </p>
+                  </div>
 
-                <div className="bg-[#022c22] p-4 rounded-xl border border-emerald-500/30 space-y-1.5">
-                  <strong className="text-white block font-semibold">3. Privacy, Security & Limited Use</strong>
-                  <p>
-                    Zero third-party data sharing. Data is never sold, leased, or used for advertising/AI training.
-                  </p>
-                  <div className="pt-2">
-                    <button
-                      onClick={onOpenPrivacyPolicy}
-                      className="text-xs font-bold text-amber-300 underline hover:text-white"
-                    >
-                      View Full Privacy Policy Document →
-                    </button>
+                  <div className="bg-[#022c22] p-4 rounded-xl border border-emerald-500/30 space-y-1.5">
+                    <strong className="text-white block font-semibold">2. Purpose of Google User Data Requests</strong>
+                    <p>
+                      The app requests Google Workspace permissions (Google Sheets, Google Forms, Google Drive file scope) strictly on-demand when an authorized teacher/supervisor requests:
+                    </p>
+                    <ul className="list-disc list-inside text-[11px] text-amber-200 space-y-0.5">
+                      <li>Exporting attendance & student evaluation grades into personal Google Sheets.</li>
+                      <li>Generating Quran assessment quizzes in Google Forms.</li>
+                      <li>Saving JSON backup archives in a dedicated Drive app folder.</li>
+                    </ul>
+                  </div>
+
+                  <div className="bg-[#022c22] p-4 rounded-xl border border-emerald-500/30 space-y-1.5">
+                    <strong className="text-white block font-semibold">3. Privacy, Security & Limited Use</strong>
+                    <p>
+                      Zero third-party data sharing. Data is never sold, leased, or used for advertising/AI training. Fully complies with Google Limited Use Policy.
+                    </p>
+                    <div className="pt-2">
+                      <button
+                        onClick={onOpenPrivacyPolicy}
+                        className="text-xs font-bold text-amber-300 underline hover:text-white cursor-pointer"
+                      >
+                        View Full Privacy Policy Document →
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
-          </motion.div>
-        )}
+            </motion.div>
+          )}
+        </AnimatePresence>
 
-        {/* Hero Section */}
+        {/* HERO SECTION */}
         <section className="pt-8 sm:pt-14 px-4 sm:px-6 lg:px-8 max-w-5xl mx-auto text-center space-y-8">
           <motion.div
             initial={{ opacity: 0, y: 30 }}
             whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: false, amount: 0.15 }}
-            transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.65, ease: [0.16, 1, 0.3, 1] }}
             className="space-y-6 flex flex-col items-center"
           >
             {/* Complete Quranic Verse Banner */}
             <motion.div
-              initial={{ opacity: 0, scale: 0.94, y: 20 }}
+              initial={{ opacity: 0, scale: 0.94, y: 15 }}
               whileInView={{ opacity: 1, scale: 1, y: 0 }}
-              viewport={{ once: false, amount: 0.15 }}
-              transition={{ duration: 0.65, delay: 0.08, ease: [0.16, 1, 0.3, 1] }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.65, delay: 0.08 }}
               className="inline-flex items-center justify-center gap-3 px-5 py-2.5 rounded-full bg-gradient-to-r from-emerald-950/95 via-[#064e3b]/90 to-emerald-950/95 border border-amber-400/50 text-amber-200 text-xs sm:text-base font-quran shadow-[0_0_25px_rgba(251,191,36,0.18)] max-w-full flex-wrap"
             >
               <Sparkles className="w-4 h-4 text-amber-400 shrink-0 animate-pulse" />
@@ -220,9 +421,9 @@ export const PublicLandingPage: React.FC<PublicLandingPageProps> = ({
             <motion.h2
               initial={{ opacity: 0, y: 25 }}
               whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: false, amount: 0.15 }}
-              transition={{ duration: 0.6, delay: 0.16, ease: [0.16, 1, 0.3, 1] }}
-              className="text-3xl sm:text-5xl font-black font-heading text-white leading-tight tracking-tight"
+              viewport={{ once: true }}
+              transition={{ duration: 0.6, delay: 0.16 }}
+              className="text-3xl sm:text-5xl lg:text-6xl font-black font-heading text-white leading-tight tracking-tight"
             >
               المنظومة الرقمية الشاملة لإدارة
               <span className="block text-transparent bg-clip-text bg-gradient-to-r from-amber-300 via-amber-400 to-amber-200 mt-2">
@@ -234,72 +435,270 @@ export const PublicLandingPage: React.FC<PublicLandingPageProps> = ({
             <motion.p
               initial={{ opacity: 0, y: 20 }}
               whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: false, amount: 0.15 }}
-              transition={{ duration: 0.6, delay: 0.24, ease: [0.16, 1, 0.3, 1] }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.6, delay: 0.24 }}
               className="text-sm sm:text-base text-[#86efac]/90 max-w-3xl mx-auto leading-relaxed"
             >
-              منصة تعليمية وتربوية رائدة تمكّن المشرفين والمعلمين والطلاب وأولياء الأمور من متابعة الحفظ والتسميع المتقن، رصد الحضور اليومي، أداء الاختبارات التفاعلية، والمزامنة السحابية الدائمة والموثوقة عبر خدمات Google Workspace وقواعد البيانات المركزية.
+              بيئة تقنية وتربوية رائدة صُممت خصيصاً لخدمة أهل القرآن الكريم: رصد التسميع اليومي بمعايير التجويد الدقيقة، تشغيل المصحف الشريف بالرسم العثماني مع تكرار الآيات، بنك اختبارات Google Forms، أرشيف الشهادات الرقمية، ولوحة شرف تنافسية تجمع كافة محاور التميز لحظياً.
             </motion.p>
 
-            {/* CTA Buttons */}
+            {/* CTA Action Buttons */}
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: false, amount: 0.15 }}
-              transition={{ duration: 0.6, delay: 0.32, ease: [0.16, 1, 0.3, 1] }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.6, delay: 0.32 }}
               className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-4 w-full"
             >
               <button
                 type="button"
                 onClick={onOpenLogin}
-                className="w-full sm:w-auto px-8 py-4 rounded-2xl bg-gradient-to-r from-amber-400 via-amber-500 to-amber-400 hover:brightness-110 text-[#064e3b] text-base font-black shadow-[0_0_30px_rgba(251,191,36,0.3)] flex items-center justify-center gap-3 transition-all cursor-pointer group hover:scale-[1.02] active:scale-[0.98]"
+                className="w-full sm:w-auto px-8 py-4 rounded-2xl bg-gradient-to-r from-amber-400 via-amber-500 to-amber-400 hover:brightness-110 text-[#064e3b] text-base font-black shadow-[0_0_30px_rgba(251,191,36,0.35)] flex items-center justify-center gap-3 transition-all cursor-pointer group hover:scale-[1.02] active:scale-[0.98]"
               >
-                <span>الدخول إلى لوحة تحكم المنظومة</span>
+                <span>دخول لوحة التحكم والبدء</span>
                 <ArrowLeft className="w-5 h-5 group-hover:-translate-x-1.5 transition-transform" />
               </button>
 
               <button
                 type="button"
-                onClick={onOpenPrivacyPolicy}
+                onClick={() => {
+                  const el = document.getElementById('features-explorer');
+                  if (el) el.scrollIntoView({ behavior: 'smooth' });
+                }}
                 className="w-full sm:w-auto px-7 py-4 rounded-2xl bg-[#064e3b]/80 hover:bg-[#064e3b] border border-amber-400/40 hover:border-amber-400 text-white text-sm font-bold flex items-center justify-center gap-2.5 transition-all cursor-pointer shadow-md hover:scale-[1.02] active:scale-[0.98]"
               >
-                <ShieldCheck className="w-5 h-5 text-amber-400" />
-                <span>وثيقة سياسة الخصوصية (Privacy Policy)</span>
+                <Sparkles className="w-5 h-5 text-amber-400" />
+                <span>استكشاف كافة مميزات المنظومة بالتفصيل</span>
               </button>
             </motion.div>
           </motion.div>
 
-          {/* Quick Metrics / Pillars with Bidirectional Scroll Animation */}
+          {/* Quick Metrics / Pillars */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3.5 sm:gap-5 pt-8 text-right">
             {[
-              { title: 'متعدد المجمعات', desc: 'إدارة مركزية مستقلة لكل مجمع', color: 'text-amber-400' },
-              { title: 'مزامنة سحابية', desc: 'Google Sheets & Google Drive', color: 'text-emerald-400' },
-              { title: 'بنك الاختبارات', desc: 'نماذج Google Forms وتصحيح ذكي', color: 'text-blue-400' },
-              { title: 'تقارير فورية', desc: 'متابعة يومية لأولياء الأمور بالواتساب', color: 'text-amber-300' }
-            ].map((pillar, i) => (
-              <motion.div
-                key={pillar.title}
-                initial={{ opacity: 0, y: 30, scale: 0.95 }}
-                whileInView={{ opacity: 1, y: 0, scale: 1 }}
-                viewport={{ once: false, amount: 0.2 }}
-                transition={{ duration: 0.5, delay: i * 0.08, ease: [0.16, 1, 0.3, 1] }}
-                className="bg-[#064e3b]/40 border border-[#065f46] hover:border-amber-400/40 rounded-2xl p-4 sm:p-5 backdrop-blur-sm transition-all hover:bg-[#064e3b]/60 shadow-lg"
-              >
-                <div className={`${pillar.color} text-xl sm:text-2xl font-black font-heading mb-1`}>
-                  {pillar.title}
-                </div>
-                <div className="text-xs text-slate-300">{pillar.desc}</div>
-              </motion.div>
-            ))}
+              { title: 'متعدد المجمعات', desc: 'إدارة مركزية مستقلة لكل مجمع وحلقة', color: 'text-amber-400', icon: Building2 },
+              { title: 'تكرار الآيات', desc: 'مشغل قرآني بالرسم العثماني وتكرار آلي', color: 'text-emerald-400', icon: Headphones },
+              { title: 'بنك الاختبارات', desc: 'تكامل ذكي مع نماذج Google Forms', color: 'text-blue-400', icon: FileText },
+              { title: 'لوحة الشرف', desc: 'معادلة نقاط موحدة وبحث وتفاصيل حية', color: 'text-amber-300', icon: Trophy }
+            ].map((pillar, i) => {
+              const Icon = pillar.icon;
+              return (
+                <motion.div
+                  key={pillar.title}
+                  initial={{ opacity: 0, y: 25, scale: 0.95 }}
+                  whileInView={{ opacity: 1, y: 0, scale: 1 }}
+                  viewport={{ once: true }}
+                  transition={{ duration: 0.5, delay: i * 0.08 }}
+                  className="bg-[#064e3b]/40 border border-[#065f46] hover:border-amber-400/40 rounded-2xl p-4 sm:p-5 backdrop-blur-sm transition-all hover:bg-[#064e3b]/60 shadow-lg"
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <span className={`${pillar.color} text-lg sm:text-xl font-black font-heading`}>
+                      {pillar.title}
+                    </span>
+                    <Icon className={`w-5 h-5 ${pillar.color}`} />
+                  </div>
+                  <div className="text-xs text-slate-300">{pillar.desc}</div>
+                </motion.div>
+              );
+            })}
           </div>
         </section>
 
-        {/* SECTION: TRANSPARENT DATA USAGE & GOOGLE WORKSPACE DISCLOSURE with Bidirectional Scroll Animation */}
+        {/* SECTION: INTERACTIVE ALL-FEATURES EXPLORER */}
+        <section id="features-explorer" className="px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto space-y-8 scroll-mt-24">
+          <div className="text-center space-y-3 max-w-3xl mx-auto">
+            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-amber-400/15 border border-amber-400/40 text-amber-300 text-xs font-bold">
+              <Sparkles className="w-4 h-4 text-amber-400" />
+              <span>دليل المزايا والوظائف الشاملة بالتفصيل الممل</span>
+            </div>
+            <h3 className="text-2xl sm:text-4xl font-black font-heading text-white">
+              كل ما تحتاجه لإدارة الصرح القرآني من الألف إلى الياء
+            </h3>
+            <p className="text-xs sm:text-sm text-[#86efac]/80 leading-relaxed">
+              اضغط على أي ركن من أركان المنظومة لاستكشاف تفاصيل تشغيله، مزاياه العملية، ومعاينته الحية
+            </p>
+          </div>
+
+          {/* Interactive Feature Tabs Navigator */}
+          <div className="flex items-center gap-2.5 overflow-x-auto pb-2 scrollbar-none justify-start lg:justify-center">
+            {featureTabs.map((tab, idx) => {
+              const TabIcon = tab.icon;
+              const isActive = activeFeatureTab === idx;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveFeatureTab(idx)}
+                  className={`flex items-center gap-2 px-4 py-3 rounded-2xl text-xs font-black transition-all shrink-0 cursor-pointer border ${
+                    isActive
+                      ? 'bg-gradient-to-r from-amber-400 to-amber-500 text-[#064e3b] border-amber-300 shadow-[0_0_20px_rgba(251,191,36,0.3)] scale-[1.03]'
+                      : 'bg-[#064e3b]/50 hover:bg-[#064e3b] text-white border-[#065f46] hover:border-amber-400/40'
+                  }`}
+                >
+                  <TabIcon className={`w-4 h-4 ${isActive ? 'text-[#064e3b]' : 'text-amber-400'}`} />
+                  <span>{tab.title}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Active Tab Detailed Showcase Card */}
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={activeFeatureTab}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              transition={{ duration: 0.4 }}
+              className="bg-gradient-to-br from-[#022c22] via-[#064e3b]/90 to-[#022c22] border-2 border-amber-400/60 rounded-[36px] p-6 sm:p-10 shadow-2xl relative overflow-hidden"
+            >
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
+                {/* Left Side: Text and Detailed Highlights */}
+                <div className="lg:col-span-7 space-y-6 text-right">
+                  <div className="flex items-center gap-3 flex-wrap">
+                    <span className="text-[11px] px-3 py-1 rounded-full bg-amber-400 text-[#064e3b] font-black">
+                      {featureTabs[activeFeatureTab].badge}
+                    </span>
+                    <span className="text-xs text-amber-300/90 font-bold">
+                      {featureTabs[activeFeatureTab].tag}
+                    </span>
+                  </div>
+
+                  <h4 className="text-xl sm:text-3xl font-black font-heading text-white leading-tight">
+                    {featureTabs[activeFeatureTab].headline}
+                  </h4>
+
+                  <p className="text-xs sm:text-sm text-slate-200 leading-relaxed">
+                    {featureTabs[activeFeatureTab].description}
+                  </p>
+
+                  <div className="space-y-3 pt-2">
+                    <span className="text-xs font-bold text-amber-300 block">
+                      أبرز الخصائص والقدرات الفنية:
+                    </span>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                      {featureTabs[activeFeatureTab].highlights.map((h, hIdx) => (
+                        <div
+                          key={hIdx}
+                          className="flex items-start gap-2.5 p-3 rounded-2xl bg-[#022c22]/80 border border-[#065f46] text-xs text-slate-200"
+                        >
+                          <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                          <span className="leading-relaxed">{h}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="pt-4 flex flex-wrap items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={onOpenLogin}
+                      className="px-6 py-3 rounded-xl bg-amber-400 hover:bg-amber-300 text-[#064e3b] text-xs font-black shadow-md flex items-center gap-2 cursor-pointer transition-all hover:scale-[1.02]"
+                    >
+                      <Lock className="w-4 h-4" />
+                      <span>تجربة الميزة في المنظومة الآن</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={onOpenPrivacyPolicy}
+                      className="px-5 py-3 rounded-xl bg-white/5 hover:bg-white/10 text-slate-200 text-xs font-bold border border-white/10 cursor-pointer transition-colors"
+                    >
+                      الاطلاع على سياسة الأمان والخصوصية
+                    </button>
+                  </div>
+                </div>
+
+                {/* Right Side: Interactive Live Simulation Box */}
+                <div className="lg:col-span-5">
+                  <div className="p-6 rounded-3xl bg-[#022c22] border-2 border-amber-400/40 shadow-2xl space-y-5 text-right relative overflow-hidden">
+                    <div className="flex items-center justify-between border-b border-[#065f46] pb-3">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-9 h-9 rounded-xl bg-amber-400/20 text-amber-400 flex items-center justify-center font-bold">
+                          <Star className="w-4 h-4 fill-current" />
+                        </div>
+                        <div>
+                          <div className="text-xs font-bold text-white">معاينة تفاعلية حية</div>
+                          <div className="text-[10px] text-[#86efac]/80">{featureTabs[activeFeatureTab].title}</div>
+                        </div>
+                      </div>
+                      <span className="text-[10px] px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-bold border border-emerald-500/30">
+                        مباشر
+                      </span>
+                    </div>
+
+                    {/* Preview Box Content */}
+                    <div className="p-4 rounded-2xl bg-[#064e3b]/50 border border-[#065f46] space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-white font-heading">
+                          {featureTabs[activeFeatureTab].previewSnippet.badgeText}
+                        </span>
+                        <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                      </div>
+                      <p className="text-[11px] text-emerald-200/90 leading-relaxed">
+                        {featureTabs[activeFeatureTab].previewSnippet.subText}
+                      </p>
+
+                      <div className="grid grid-cols-2 gap-2 pt-2 border-t border-[#065f46]/80 text-center">
+                        <div className="p-2.5 rounded-xl bg-[#022c22]/80 border border-[#065f46]">
+                          <span className="text-[10px] text-slate-400 block">{featureTabs[activeFeatureTab].previewSnippet.stat1.label}</span>
+                          <strong className="text-sm font-black text-amber-300 font-mono">
+                            {featureTabs[activeFeatureTab].previewSnippet.stat1.val}
+                          </strong>
+                        </div>
+                        <div className="p-2.5 rounded-xl bg-[#022c22]/80 border border-[#065f46]">
+                          <span className="text-[10px] text-slate-400 block">{featureTabs[activeFeatureTab].previewSnippet.stat2.label}</span>
+                          <strong className="text-sm font-black text-emerald-300 font-mono">
+                            {featureTabs[activeFeatureTab].previewSnippet.stat2.val}
+                          </strong>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Mini Interactive Control Demo */}
+                    <div className="p-3.5 rounded-2xl bg-[#011c16] border border-amber-400/20 space-y-2.5 text-xs">
+                      <div className="flex items-center justify-between text-[11px] text-amber-300 font-bold">
+                        <span>تجربة محاكاة سريعة للتحكم:</span>
+                        <span className="text-emerald-400 font-mono">تكرار {demoCurrentRep} / {demoRepetitions}</span>
+                      </div>
+                      <div className="flex items-center justify-between gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setDemoIsPlaying(!demoIsPlaying);
+                            if (!demoIsPlaying && demoCurrentRep < demoRepetitions) {
+                              setDemoCurrentRep(demoCurrentRep + 1);
+                            }
+                          }}
+                          className="flex-1 py-2 px-3 rounded-xl bg-amber-400 hover:bg-amber-300 text-[#064e3b] font-black text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                        >
+                          {demoIsPlaying ? <RotateCcw className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5 fill-current" />}
+                          <span>{demoIsPlaying ? 'إعادة تشغيل المقطع' : 'تشغيل محاكاة الاستماع'}</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setDemoRepetitions(demoRepetitions >= 5 ? 2 : demoRepetitions + 1);
+                            setDemoCurrentRep(1);
+                          }}
+                          className="py-2 px-3 rounded-xl bg-[#064e3b] text-emerald-200 hover:text-white border border-[#065f46] text-xs font-bold cursor-pointer"
+                          title="تغيير مرات التكرار"
+                        >
+                          تكرار {demoRepetitions}x
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          </AnimatePresence>
+        </section>
+
+        {/* SECTION: TRANSPARENT DATA USAGE & GOOGLE WORKSPACE DISCLOSURE */}
         <section className="px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
           <motion.div
             initial={{ opacity: 0, y: 40, scale: 0.97 }}
             whileInView={{ opacity: 1, y: 0, scale: 1 }}
-            viewport={{ once: false, amount: 0.15 }}
+            viewport={{ once: true }}
             transition={{ duration: 0.65, ease: [0.16, 1, 0.3, 1] }}
             className="bg-gradient-to-br from-[#022c22] via-[#064e3b]/90 to-[#022c22] border-2 border-amber-400/80 rounded-[32px] p-6 sm:p-10 space-y-6 shadow-2xl relative overflow-hidden"
           >
@@ -335,13 +734,7 @@ export const PublicLandingPage: React.FC<PublicLandingPageProps> = ({
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
               {/* Google Sheets Card */}
-              <motion.div
-                initial={{ opacity: 0, y: 25, scale: 0.95 }}
-                whileInView={{ opacity: 1, y: 0, scale: 1 }}
-                viewport={{ once: false, amount: 0.2 }}
-                transition={{ duration: 0.5, delay: 0.05, ease: [0.16, 1, 0.3, 1] }}
-                className="p-5 rounded-2xl bg-[#022c22]/90 border border-amber-400/30 space-y-3 shadow-inner hover:border-amber-400/60 transition-colors"
-              >
+              <div className="p-5 rounded-2xl bg-[#022c22]/90 border border-amber-400/30 space-y-3 shadow-inner hover:border-amber-400/60 transition-colors">
                 <div className="flex items-center gap-2.5 text-emerald-400">
                   <FileSpreadsheet className="w-6 h-6" />
                   <h4 className="text-base font-bold text-white font-heading">
@@ -357,16 +750,10 @@ export const PublicLandingPage: React.FC<PublicLandingPageProps> = ({
                     ✓ لا يتم القراءة أو الوصول إلى أي جداول أخرى خارج نطاق ما ينشئه المستخدم عبر المنظومة.
                   </p>
                 </div>
-              </motion.div>
+              </div>
 
               {/* Google Forms Card */}
-              <motion.div
-                initial={{ opacity: 0, y: 25, scale: 0.95 }}
-                whileInView={{ opacity: 1, y: 0, scale: 1 }}
-                viewport={{ once: false, amount: 0.2 }}
-                transition={{ duration: 0.5, delay: 0.12, ease: [0.16, 1, 0.3, 1] }}
-                className="p-5 rounded-2xl bg-[#022c22]/90 border border-amber-400/30 space-y-3 shadow-inner hover:border-amber-400/60 transition-colors"
-              >
+              <div className="p-5 rounded-2xl bg-[#022c22]/90 border border-amber-400/30 space-y-3 shadow-inner hover:border-amber-400/60 transition-colors">
                 <div className="flex items-center gap-2.5 text-blue-400">
                   <FileText className="w-6 h-6" />
                   <h4 className="text-base font-bold text-white font-heading">
@@ -382,16 +769,10 @@ export const PublicLandingPage: React.FC<PublicLandingPageProps> = ({
                     ✓ يقتصر الوصول على النماذج التي يصممها المعلم خصيصاً لاختبارات حلقته القرآنية.
                   </p>
                 </div>
-              </motion.div>
+              </div>
 
               {/* Google Drive Card */}
-              <motion.div
-                initial={{ opacity: 0, y: 25, scale: 0.95 }}
-                whileInView={{ opacity: 1, y: 0, scale: 1 }}
-                viewport={{ once: false, amount: 0.2 }}
-                transition={{ duration: 0.5, delay: 0.19, ease: [0.16, 1, 0.3, 1] }}
-                className="p-5 rounded-2xl bg-[#022c22]/90 border border-amber-400/30 space-y-3 shadow-inner hover:border-amber-400/60 transition-colors"
-              >
+              <div className="p-5 rounded-2xl bg-[#022c22]/90 border border-amber-400/30 space-y-3 shadow-inner hover:border-amber-400/60 transition-colors">
                 <div className="flex items-center gap-2.5 text-amber-400">
                   <HardDrive className="w-6 h-6" />
                   <h4 className="text-base font-bold text-white font-heading">
@@ -407,17 +788,11 @@ export const PublicLandingPage: React.FC<PublicLandingPageProps> = ({
                     ✓ نستخدم النطاق المقيد (drive.file) دون أي إمكانية للاطلاع على أي ملفات أخرى في Drive.
                   </p>
                 </div>
-              </motion.div>
+              </div>
             </div>
 
-            {/* Crucial Zero-Sharing Affirmation */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: false, amount: 0.2 }}
-              transition={{ duration: 0.5, delay: 0.15 }}
-              className="bg-[#064e3b]/80 border border-emerald-400/50 rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4"
-            >
+            {/* Zero-Sharing Affirmation */}
+            <div className="bg-[#064e3b]/80 border border-emerald-400/50 rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-emerald-500/20 text-emerald-300 flex items-center justify-center shrink-0 border border-emerald-400/40">
                   <CheckCircle2 className="w-5 h-5" />
@@ -435,106 +810,46 @@ export const PublicLandingPage: React.FC<PublicLandingPageProps> = ({
               >
                 قراءة بنود الاستخدام المحدود (Limited Use)
               </button>
-            </motion.div>
+            </div>
           </motion.div>
         </section>
 
-        {/* Feature Grid Section (Detailed App Functionality Description) */}
+        {/* WORKFLOW: STUDENT & TEACHER JOURNEY */}
         <section className="px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto space-y-8">
-          <motion.div
-            initial={{ opacity: 0, y: 25 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: false, amount: 0.2 }}
-            transition={{ duration: 0.55, ease: [0.16, 1, 0.3, 1] }}
-            className="text-center space-y-2 max-w-2xl mx-auto"
-          >
+          <div className="text-center space-y-2 max-w-2xl mx-auto">
             <h3 className="text-2xl sm:text-3xl font-black font-heading text-white">
-              الوظائف الشاملة لمنظومة عُمْرَان
+              رحلة الحفظ والتقييم في المنظومة
             </h3>
             <p className="text-xs sm:text-sm text-[#86efac]/80">
-              صُممت المنظومة لتغطي كافة الاحتياجات الإدارية والتربوية والقرآنية بدقة وسهولة
+              خطوات متسلسلة ومتكاملة تضمن إتقان الحفظ وبناء الأجيال القرآنية
             </p>
-          </motion.div>
+          </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
             {[
-              {
-                icon: BookOpen,
-                iconColor: 'text-amber-400',
-                borderColor: 'border-amber-400/40',
-                title: 'سجل التسميع والحفظ والمراجعة',
-                desc: 'رصد دقيق لمقدار الحفظ الجديد، المراجعة الصغرى، والمراجعة الكبرى مع تقييم أحكام التجويد والطلاقة، وتدوين الملاحظات التوجيهية لكل طالب.'
-              },
-              {
-                icon: Users,
-                iconColor: 'text-emerald-400',
-                borderColor: 'border-emerald-400/40',
-                title: 'إدارة المجمعات والحلقات والمعلمين',
-                desc: 'هيكلة تنظيمية مرنة تتيح توزيع الطلاب على الحلقات، تعيين المعلمين، وتحديد أدوار المشرفين مع إمكانية عزل أو مشاركة قواعد البيانات بين المجمعات.'
-              },
-              {
-                icon: Calendar,
-                iconColor: 'text-blue-400',
-                borderColor: 'border-blue-400/40',
-                title: 'الحضور والغياب والتنبيهات الذكية',
-                desc: 'تسجيل حضور وغياب وتأخر واستئذان الطلاب بضغطة واحدة، مع توليد رسائل إخطار مجهزة للإرسال الفوري لولي الأمر عبر الواتساب.'
-              },
-              {
-                icon: Award,
-                iconColor: 'text-amber-400',
-                borderColor: 'border-amber-400/40',
-                title: 'بنك الاختبارات ولوحة المتصدرين',
-                desc: 'إنشاء اختبارات قرآنية متقدمة مع دعم التكامل المباشر مع نماذج Google Forms، واحتساب النقاط تلقائياً لتكريم الطلاب في لوحة الشرف.'
-              },
-              {
-                icon: FileSpreadsheet,
-                iconColor: 'text-emerald-400',
-                borderColor: 'border-emerald-400/40',
-                title: 'الربط السحابي الدائم مع Google Workspace',
-                desc: 'تصدير السجلات الشاملة ونتائج الاختبارات والغياب تلقائياً إلى جداول Google Sheets ومجلدات Google Drive لحفظ بيانات المجمع للأبد.'
-              },
-              {
-                icon: GraduationCap,
-                iconColor: 'text-teal-400',
-                borderColor: 'border-teal-400/40',
-                title: 'بوابة الطالب ومتابعة ولي الأمر',
-                desc: 'نافذة خاصة تتيح لولي الأمر والطالب استعراض مستوى الإنجاز الأسبوعي والشهري، والاطلاع على الخطة القرآنية الحالية ونتائج الاختبارات.'
-              }
-            ].map((feat, idx) => {
-              const IconComp = feat.icon;
-              return (
-                <motion.div
-                  key={feat.title}
-                  initial={{ opacity: 0, y: 35, scale: 0.96 }}
-                  whileInView={{ opacity: 1, y: 0, scale: 1 }}
-                  viewport={{ once: false, amount: 0.2 }}
-                  transition={{ duration: 0.55, delay: (idx % 3) * 0.08, ease: [0.16, 1, 0.3, 1] }}
-                  className="bg-[#064e3b]/50 border border-[#065f46] hover:border-amber-400/50 rounded-3xl p-6 sm:p-7 space-y-4 transition-all group hover:bg-[#064e3b]/70 shadow-lg"
-                >
-                  <div className={`w-12 h-12 rounded-2xl bg-[#022c22] border ${feat.borderColor} ${feat.iconColor} flex items-center justify-center group-hover:scale-110 transition-transform shadow-inner`}>
-                    <IconComp className="w-6 h-6" />
-                  </div>
-                  <h4 className="text-lg font-bold text-white font-heading">
-                    {feat.title}
-                  </h4>
-                  <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
-                    {feat.desc}
-                  </p>
-                </motion.div>
-              );
-            })}
+              { step: '١', title: 'التسجيل وتوزيع الحلقات', desc: 'إضافة بيانات الطالب وتعيين الشيخ وتحديد خطة الحفظ المناسبة.' },
+              { step: '٢', title: 'الاستماع المنزلي وتكرار الآيات', desc: 'استماع الطالب لمقرر الغد بالرسم العثماني وإتمام التكرار المطلوب.' },
+              { step: '٣', title: 'التسميع وتقييم معايير التجويد', desc: 'رصد الحفظ والمراجعة وتقييم المخارج والأحكام واقتراح خطة الغد.' },
+              { step: '٤', title: 'تقرير الواتساب وجداول Sheets', desc: 'إشعار فوري لولي الأمر بالإنجاز ومزامنة السجلات السحابية الدائمة.' },
+              { step: '٥', title: 'الاختبارات والتتويج بالشهادات', desc: 'أداء اختبارات Google Forms والتكريم في لوحة الشرف والشهادات.' }
+            ].map((step, idx) => (
+              <div
+                key={step.step}
+                className="p-5 rounded-3xl bg-[#064e3b]/40 border border-[#065f46] hover:border-amber-400/50 space-y-3 text-right transition-all hover:bg-[#064e3b]/60 relative shadow-md"
+              >
+                <div className="w-10 h-10 rounded-2xl bg-amber-400 text-[#064e3b] font-black flex items-center justify-center text-sm shadow-md font-heading">
+                  {step.step}
+                </div>
+                <h4 className="text-sm font-bold text-white font-heading">{step.title}</h4>
+                <p className="text-xs text-slate-300 leading-relaxed">{step.desc}</p>
+              </div>
+            ))}
           </div>
         </section>
 
-        {/* User Roles & Target Audience Section with Bidirectional Animation */}
+        {/* USER ROLES SECTION */}
         <section className="px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
-          <motion.div
-            initial={{ opacity: 0, y: 35, scale: 0.98 }}
-            whileInView={{ opacity: 1, y: 0, scale: 1 }}
-            viewport={{ once: false, amount: 0.15 }}
-            transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
-            className="bg-[#064e3b]/40 border border-[#065f46] rounded-[32px] p-6 sm:p-8 space-y-6"
-          >
+          <div className="bg-[#064e3b]/40 border border-[#065f46] rounded-[32px] p-6 sm:p-8 space-y-6">
             <h3 className="text-xl font-bold font-heading text-white text-center">
               الفئات المستفيدة ومستويات الصلاحيات في المنظومة
             </h3>
@@ -568,15 +883,11 @@ export const PublicLandingPage: React.FC<PublicLandingPageProps> = ({
                   title: 'أولياء الأمور',
                   desc: 'الاطلاع الفوري على تقارير الأبناء، متابعة الحضور والغياب، واستلام رسائل الإنجاز الدورية.'
                 }
-              ].map((role, rIdx) => {
+              ].map((role) => {
                 const RoleIcon = role.icon;
                 return (
-                  <motion.div
+                  <div
                     key={role.title}
-                    initial={{ opacity: 0, y: 25, scale: 0.95 }}
-                    whileInView={{ opacity: 1, y: 0, scale: 1 }}
-                    viewport={{ once: false, amount: 0.2 }}
-                    transition={{ duration: 0.5, delay: rIdx * 0.08, ease: [0.16, 1, 0.3, 1] }}
                     className={`p-4 rounded-2xl bg-[#022c22] border ${role.border} space-y-1.5 hover:border-amber-400/60 transition-colors shadow-md`}
                   >
                     <div className={`flex items-center gap-2 ${role.color} font-bold`}>
@@ -586,57 +897,91 @@ export const PublicLandingPage: React.FC<PublicLandingPageProps> = ({
                     <p className="text-slate-300 leading-relaxed">
                       {role.desc}
                     </p>
-                  </motion.div>
+                  </div>
                 );
               })}
             </div>
-          </motion.div>
+          </div>
         </section>
 
-        {/* Dedicated Privacy Policy Call-to-Action Box with Bidirectional Animation */}
+        {/* FAQ ACCORDION SECTION */}
+        <section className="px-4 sm:px-6 lg:px-8 max-w-4xl mx-auto space-y-6">
+          <div className="text-center space-y-2">
+            <h3 className="text-2xl sm:text-3xl font-black font-heading text-white">
+              الأسئلة الشائعة حول المنظومة
+            </h3>
+            <p className="text-xs text-[#86efac]/80">
+              إجابات وافية على كافة الاستفسارات الفنية والإدارية
+            </p>
+          </div>
+
+          <div className="space-y-3">
+            {faqs.map((faq, idx) => {
+              const isOpen = openFaqIndex === idx;
+              return (
+                <div
+                  key={idx}
+                  className="rounded-2xl border border-[#065f46] bg-[#064e3b]/40 overflow-hidden transition-colors"
+                >
+                  <button
+                    type="button"
+                    onClick={() => setOpenFaqIndex(isOpen ? null : idx)}
+                    className="w-full p-4 sm:p-5 text-right flex items-center justify-between gap-4 text-sm font-bold text-white cursor-pointer hover:bg-[#064e3b]/60 transition-colors"
+                  >
+                    <span className="leading-relaxed">{faq.q}</span>
+                    <ChevronDown className={`w-4 h-4 text-amber-400 shrink-0 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+                  </button>
+                  <AnimatePresence>
+                    {isOpen && (
+                      <motion.div
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: 'auto' }}
+                        exit={{ opacity: 0, height: 0 }}
+                        transition={{ duration: 0.3 }}
+                        className="px-5 pb-5 text-xs text-slate-300 leading-relaxed border-t border-[#065f46]/60 pt-3"
+                      >
+                        {faq.a}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+
+        {/* CALL TO ACTION BOTTOM BANNER */}
         <section className="px-4 sm:px-6 lg:px-8 max-w-5xl mx-auto">
-          <motion.div
-            initial={{ opacity: 0, y: 35, scale: 0.98 }}
-            whileInView={{ opacity: 1, y: 0, scale: 1 }}
-            viewport={{ once: false, amount: 0.2 }}
-            transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
-            className="bg-gradient-to-r from-[#064e3b] via-[#022c22] to-[#064e3b] border-2 border-amber-400 rounded-[32px] p-6 sm:p-8 space-y-4 text-center sm:text-right flex flex-col sm:flex-row sm:items-center justify-between gap-6 shadow-2xl"
-          >
+          <div className="bg-gradient-to-r from-[#064e3b] via-[#022c22] to-[#064e3b] border-2 border-amber-400 rounded-[32px] p-6 sm:p-10 space-y-4 text-center sm:text-right flex flex-col sm:flex-row sm:items-center justify-between gap-6 shadow-2xl">
             <div className="space-y-2">
               <div className="flex items-center justify-center sm:justify-start gap-2 text-amber-300 font-bold text-xs">
-                <ShieldCheck className="w-5 h-5 text-amber-400" />
-                <span>الخصوصية وحماية البيانات الرسمية</span>
+                <Sparkles className="w-5 h-5 text-amber-400" />
+                <span>جاهز للارتقاء بمجمعك وحلقتك القرآنية؟</span>
               </div>
-              <h3 className="text-lg sm:text-xl font-black text-white font-heading">
-                تصفح وثيقة سياسة الخصوصية المعتمدة (Privacy Policy)
+              <h3 className="text-xl sm:text-2xl font-black text-white font-heading">
+                ابدأ الآن باستخدام منظومة عُمْرَان الرقمية المتكاملة
               </h3>
               <p className="text-xs text-[#86efac] max-w-2xl leading-relaxed">
-                صفحة رسمية مستقلة ومفصلة توضح كافة بنود جمع واستخدام وحماية البيانات، والامتثال لسياسات الاستخدام المحدود لـ Google API، وكيفية ممارسة حقوقك في حذف أو استرجاع سجلاتك.
+                انضم إلى المجمعات والحلقات الرائدة في إدارة تحفيظ القرآن الكريم ومتابعة الحفاظ بدقة وسهولة وأمان سحابي دائم.
               </p>
             </div>
 
             <div className="flex flex-col sm:flex-row items-center gap-3 shrink-0">
               <button
                 type="button"
-                onClick={onOpenPrivacyPolicy}
-                className="w-full sm:w-auto px-6 py-3.5 rounded-2xl bg-amber-400 hover:bg-amber-300 text-[#064e3b] text-xs sm:text-sm font-black transition-all cursor-pointer shadow-lg flex items-center justify-center gap-2 hover:scale-[1.02] active:scale-[0.98]"
+                onClick={onOpenLogin}
+                className="w-full sm:w-auto px-7 py-3.5 rounded-2xl bg-amber-400 hover:bg-amber-300 text-[#064e3b] text-xs sm:text-sm font-black transition-all cursor-pointer shadow-lg flex items-center justify-center gap-2 hover:scale-[1.02] active:scale-[0.98]"
               >
-                <span>فتح صفحة سياسة الخصوصية</span>
-                <ExternalLink className="w-4 h-4" />
+                <span>دخول لوحة التحكم</span>
+                <Lock className="w-4 h-4" />
               </button>
             </div>
-          </motion.div>
+          </div>
         </section>
       </main>
 
-      {/* Footer with Framer Motion scroll animation */}
-      <motion.footer
-        initial={{ opacity: 0, y: 30 }}
-        whileInView={{ opacity: 1, y: 0 }}
-        viewport={{ once: false, amount: 0.15 }}
-        transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
-        className="border-t border-[#065f46]/60 bg-[#011c16] py-10 px-4 sm:px-6 lg:px-8 text-xs text-slate-400"
-      >
+      {/* Footer */}
+      <footer className="border-t border-[#065f46]/60 bg-[#011c16] py-10 px-4 sm:px-6 lg:px-8 text-xs text-slate-400">
         <div className="max-w-7xl mx-auto space-y-6">
           <div className="flex flex-col md:flex-row items-center justify-between gap-6 text-center md:text-right">
             <div className="space-y-1.5">
@@ -685,7 +1030,7 @@ export const PublicLandingPage: React.FC<PublicLandingPageProps> = ({
             <span>Omran Quran Platform • Hosted on verified domain • All Google API terms strictly respected.</span>
           </div>
         </div>
-      </motion.footer>
+      </footer>
     </div>
   );
 };
