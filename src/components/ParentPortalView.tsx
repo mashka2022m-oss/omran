@@ -30,6 +30,7 @@ import {
   Info
 } from 'lucide-react';
 import { YouTubeAyahPlayer, formatTimeMMSS } from './recordings/YouTubeAyahPlayer';
+import { AudioAyahPlayer } from './recordings/AudioAyahPlayer';
 import { getAyahTextSync } from '../lib/quranTextService';
 import confetti from 'canvas-confetti';
 import {
@@ -44,9 +45,12 @@ import {
   Halaqah,
   SurahRecording,
   RecordingsConfig,
-  SurahRecordingSegment
+  SurahRecordingSegment,
+  IssuedCertificate
 } from '../types';
 import { StudentExamTaker } from './StudentExamTaker';
+import { QuranAyahAudioPlayer } from './quran/QuranAyahAudioPlayer';
+import { getSurahInfo } from '../data/quranData';
 import { OmranDataService } from '../lib/firebase';
 import { GoogleWorkspaceService } from '../lib/googleWorkspace';
 
@@ -63,6 +67,7 @@ interface ParentPortalViewProps {
   leaderboardSettings?: LeaderboardSettings;
   recordings?: SurahRecording[];
   recordingsConfig?: RecordingsConfig;
+  certificates?: IssuedCertificate[];
   isLoggedInStudent?: boolean;
   onLogout?: () => void;
   onSaveSubmission?: (submission: ExamSubmission) => Promise<void>;
@@ -82,6 +87,7 @@ export const ParentPortalView: React.FC<ParentPortalViewProps> = ({
   leaderboardSettings,
   recordings = [],
   recordingsConfig,
+  certificates = [],
   isLoggedInStudent,
   onLogout,
   onSaveSubmission,
@@ -258,6 +264,17 @@ export const ParentPortalView: React.FC<ParentPortalViewProps> = ({
   const studentViolations = violations.filter(
     v => v.studentId === student.id && (v.showInPortal ?? true)
   );
+
+  const [viewingCertModal, setViewingCertModal] = useState<IssuedCertificate | null>(null);
+
+  // Student certificates matching their ID or exact name
+  const studentCertificates = useMemo(() => {
+    if (!certificates || certificates.length === 0) return [];
+    const cleanName = (currentStudent.name || '').trim();
+    return certificates.filter(
+      c => c.studentId === currentStudent.id || (c.studentName && c.studentName.trim() === cleanName)
+    );
+  }, [certificates, currentStudent]);
 
   // Available Exams for this Student
   const studentHalaqahId = student.halaqahId || '';
@@ -456,6 +473,52 @@ export const ParentPortalView: React.FC<ParentPortalViewProps> = ({
       window.location.reload();
     }
   };
+
+  // Student's exact assigned passage (dictated by teacher)
+  const currentAssignedPassage = useMemo(() => {
+    if (currentStudent.activeListeningAssignment) {
+      return currentStudent.activeListeningAssignment;
+    }
+    const newItem = currentStudent.aiPlan?.currentDailyAssignment?.newItem;
+    if (newItem && newItem.surahNumber) {
+      return {
+        surahNumber: newItem.surahNumber,
+        surahName: newItem.surahName || getSurahInfo(newItem.surahNumber).name,
+        fromAyah: newItem.fromAyah || 1,
+        toAyah: newItem.toAyah || newItem.fromAyah || 7,
+        sheikhName: currentStudent.aiPlan?.currentDailyAssignment?.suggestedSheikh || 'الشيخ محمد صديق المنشاوي (المصحف المعلم)',
+        requiredRepetitions: currentStudent.aiPlan?.currentDailyAssignment?.targetRepetitions || 3,
+        assignedDate: new Date().toISOString().split('T')[0],
+        completedRepetitions: 0,
+        isCompleted: false
+      };
+    }
+    const sNum = currentStudent.currentSurah || 78;
+    const sInfo = getSurahInfo(sNum);
+    const fromA = currentStudent.currentAyah || 1;
+    const toA = Math.min(fromA + 5, sInfo.numberOfAyahs);
+    return {
+      surahNumber: sNum,
+      surahName: currentStudent.currentSurahName || sInfo.name,
+      fromAyah: fromA,
+      toAyah: toA,
+      sheikhName: 'الشيخ محمد صديق المنشاوي (المصحف المعلم)',
+      requiredRepetitions: 3,
+      assignedDate: new Date().toISOString().split('T')[0],
+      completedRepetitions: 0,
+      isCompleted: false
+    };
+  }, [currentStudent]);
+
+  // Certificates archived for this student
+  const studentCertificates = useMemo(() => {
+    return certificates.filter(
+      c => c.studentId === currentStudent.id ||
+           (c.studentName && currentStudent.name && c.studentName.trim() === currentStudent.name.trim())
+    );
+  }, [certificates, currentStudent]);
+
+  const [selectedCertificateForView, setSelectedCertificateForView] = useState<IssuedCertificate | null>(null);
 
   if (activeTakingExam) {
     return (
@@ -751,196 +814,110 @@ export const ParentPortalView: React.FC<ParentPortalViewProps> = ({
         </div>
 
         {/* QURAN AUDIO LISTENING & AYAH REPETITION SECTION */}
-        {recordings && recordings.length > 0 && (recordingsConfig?.isPublishedToStudents ?? true) && (
-          <div className="bg-[#064e3b]/60 border border-[#fbbf24]/40 rounded-[32px] p-6 sm:p-8 space-y-6 shadow-xl backdrop-blur-md">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-[#065f46]">
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-[#fbbf24] to-[#f59e0b] text-[#064e3b] flex items-center justify-center font-bold shadow-lg border border-[#fbbf24]/40 shrink-0">
-                  <Headphones className="w-6 h-6" />
-                </div>
-                <div>
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <h3 className="text-base sm:text-lg font-bold font-heading text-white">
-                      التسجيلات والاستماع القرآني المقرّر
-                    </h3>
-                    <span className="text-[10px] sm:text-xs px-2.5 py-0.5 rounded-full bg-[#fbbf24]/20 text-[#fbbf24] font-bold border border-[#fbbf24]/30">
-                      تقسيم الآيات بالذكاء الاصطناعي
-                    </span>
-                  </div>
-                  <p className="text-xs text-emerald-200/80 mt-0.5">
-                    استمع لتلاوة سورتك المقررة بدقة واضغط على أي آية للاستماع إليها مباشرة ومراجعة التكرار اليومي.
-                  </p>
-                </div>
+        <div className="space-y-4">
+          <QuranAyahAudioPlayer
+            student={currentStudent}
+            surahNumber={currentAssignedPassage.surahNumber}
+            surahName={currentAssignedPassage.surahName}
+            fromAyah={currentAssignedPassage.fromAyah}
+            toAyah={currentAssignedPassage.toAyah}
+            selectedSheikhName={currentAssignedPassage.sheikhName}
+            requiredRepetitions={currentAssignedPassage.requiredRepetitions || 3}
+            listeningPointsReward={10}
+            onRepetitionComplete={async (newCount, isFullyDone) => {
+              const updated: Student = {
+                ...currentStudent,
+                activeListeningAssignment: {
+                  ...currentAssignedPassage,
+                  completedRepetitions: newCount,
+                  isCompleted: isFullyDone
+                }
+              };
+              if (isFullyDone) {
+                updated.listeningPoints = (updated.listeningPoints || 0) + 10;
+                updated.points = (updated.points || 0) + 10;
+                updated.dailyListeningCompletedDate = new Date().toISOString().split('T')[0];
+              }
+              setCurrentStudent(updated);
+              await OmranDataService.saveStudent(updated);
+              if (onUpdateStudent) onUpdateStudent(updated);
+            }}
+          />
+        </div>
+
+        {/* STUDENT CERTIFICATES & AWARDS ARCHIVE */}
+        <div className="bg-[#064e3b]/60 border border-[#fbbf24]/40 rounded-[32px] p-6 sm:p-8 space-y-6 shadow-xl backdrop-blur-md">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-[#065f46]">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-[#fbbf24]/20 text-[#fbbf24] border border-[#fbbf24]/30 flex items-center justify-center shrink-0">
+                <Award className="w-5 h-5" />
               </div>
-
-              {/* Surah Selector if multiple recordings exist */}
-              {recordings.length > 1 && (
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-[#86efac] whitespace-nowrap">اختر السورة:</span>
-                  <select
-                    value={activeRecording?.id || ''}
-                    onChange={(e) => {
-                      const rec = recordings.find(r => r.id === e.target.value);
-                      if (rec) {
-                        setSelectedRecordingId(rec.id);
-                        const firstSeg = rec.segments && rec.segments.length > 0 ? rec.segments[0] : null;
-                        setActivePortalAyah(firstSeg);
-                        setActivePortalTargetAyah(null);
-                      }
-                    }}
-                    className="bg-[#022c22] text-[#fbbf24] text-xs font-bold px-3 py-2 rounded-xl border border-[#065f46] focus:outline-none focus:border-[#fbbf24]"
-                  >
-                    {recordings.map(r => (
-                      <option key={r.id} value={r.id}>
-                        سورة {r.surahName} ({r.segments?.length || 0} آية)
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
+              <div>
+                <h3 className="text-base sm:text-lg font-bold font-heading text-white flex items-center gap-2">
+                  <span>سجل الشهادات والجوائز التقديرية</span>
+                  <span className="text-[10px] px-2.5 py-0.5 rounded-full bg-[#fbbf24] text-[#064e3b] font-black">
+                    {studentCertificates.length} شهادات معتمدة
+                  </span>
+                </h3>
+                <p className="text-xs text-[#86efac]/80 mt-0.5">
+                  جميع الشهادات الصادرة والمحفوظة في أرشيف الطالب الرسمي مع إمكانية عرضها وطباعتها
+                </p>
+              </div>
             </div>
+          </div>
 
-            {activeRecording && (
-              <div className="space-y-6">
-                {/* Listening Target and Repetition Counter */}
-                <div className="bg-[#022c22]/70 border border-[#065f46] rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-400 border border-amber-500/30 flex items-center justify-center shrink-0">
-                      <Radio className="w-5 h-5" />
+          {studentCertificates.length === 0 ? (
+            <div className="text-center py-8 text-xs text-emerald-200/80 bg-[#022c22]/50 p-6 rounded-2xl border border-emerald-800/60">
+              لم تصدر شهادات لهذا الطالب بعد، وستظهر هنا فور إصدارها واعتمادها من قبل المعلم أو إدارة المجمع القرآني.
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {studentCertificates.map(cert => (
+                <div
+                  key={cert.id}
+                  className="p-5 rounded-2xl bg-[#022c22] border border-[#fbbf24]/30 space-y-3 flex flex-col justify-between shadow-md hover:border-[#fbbf24]/70 transition-colors"
+                >
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <span className="text-[10px] px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-bold border border-emerald-500/30">
+                        {cert.type || 'شهادة تميز قرآنية'}
+                      </span>
+                      <span className="text-[11px] text-[#86efac]/80 font-mono">
+                        {cert.issueDate || cert.createdAt?.split('T')[0]}
+                      </span>
                     </div>
-                    <div>
-                      <h4 className="text-sm font-bold text-white">
-                        سورة {activeRecording.surahName} {activeRecording.reciterName ? `- بصوت الشيخ ${activeRecording.reciterName}` : ''}
-                      </h4>
-                      <p className="text-xs text-[#86efac]/80 mt-0.5">
-                        الهدف اليومي: تكرار الاستماع {recordingsConfig?.dailyRepetitionTarget || 3} مرات متقنة
+
+                    <h4 className="text-sm font-black text-white font-heading">
+                      {cert.title || 'شهادة شكر وتقدير وإتقان'}
+                    </h4>
+
+                    {cert.appreciationText && (
+                      <p className="text-xs text-emerald-100/90 leading-relaxed bg-[#064e3b]/30 p-2.5 rounded-xl border border-[#065f46]/50">
+                        {cert.appreciationText}
                       </p>
+                    )}
+
+                    <div className="text-[11px] text-[#86efac] flex items-center justify-between pt-1">
+                      <span>إشراف المعلم: {cert.teacherName || 'معلم الحلقة'}</span>
+                      {cert.complexName && <span>مجمع: {cert.complexName}</span>}
                     </div>
                   </div>
 
-                  <div className="flex flex-col sm:flex-row items-center gap-3 w-full sm:w-auto justify-between sm:justify-end">
-                    <span className="text-xs text-[#86efac]">
-                      المكتمل: <strong className="text-[#fbbf24] text-sm">{listensCount}</strong> من {recordingsConfig?.dailyRepetitionTarget || 3}
-                    </span>
+                  <div className="pt-2 border-t border-[#065f46]/60 flex items-center justify-end">
                     <button
                       type="button"
-                      onClick={handleRecordListening}
-                      className="px-4 py-2 rounded-xl bg-[#fbbf24] hover:bg-[#f59e0b] text-[#064e3b] text-xs font-black flex items-center gap-1.5 transition-all shadow-md cursor-pointer"
+                      onClick={() => setSelectedCertificateForView(cert)}
+                      className="px-4 py-2 rounded-xl bg-gradient-to-r from-[#fbbf24] to-[#f59e0b] hover:from-[#f59e0b] hover:to-[#fbbf24] text-[#064e3b] text-xs font-black flex items-center gap-1.5 cursor-pointer shadow-md transition-all"
                     >
-                      <Check className="w-4 h-4" />
-                      <span>{listensCount >= (recordingsConfig?.dailyRepetitionTarget || 3) ? 'إعادة التعيين' : 'تسجيل استماع'}</span>
+                      <Award className="w-3.5 h-3.5 fill-current" />
+                      <span>عرض الشهادة وطباعتها</span>
                     </button>
                   </div>
                 </div>
-
-                {listeningCelebrationMsg && (
-                  <div className="p-3.5 bg-gradient-to-r from-amber-500/20 via-emerald-500/20 to-amber-500/20 border-2 border-[#fbbf24] rounded-2xl text-[#fbbf24] text-xs font-black text-center shadow-lg animate-bounce">
-                    {listeningCelebrationMsg}
-                  </div>
-                )}
-
-                {/* Player & Ayah Segment Navigator Grid */}
-                <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-                  {/* YouTube Ayah Player with Strict Duration Adherence */}
-                  <div className="lg:col-span-7">
-                    {activeRecording.youtubeVideoId || activeRecording.youtubeUrl ? (
-                      <YouTubeAyahPlayer
-                        videoId={activeRecording.youtubeVideoId || (activeRecording.youtubeUrl.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))([\w-]{11})/) || ['',''])[1]}
-                        activeSegment={activePortalAyah}
-                        targetSegmentToPlay={activePortalTargetAyah}
-                        onTimeUpdate={time => setPortalLiveTime(time)}
-                        surahName={activeRecording.surahName}
-                        readOnlyControls={true}
-                        onAyahFinished={() => {
-                          // Student completed listening to this verse
-                        }}
-                      />
-                    ) : (
-                      <div className="aspect-video w-full rounded-2xl bg-black border border-[#065f46] flex flex-col items-center justify-center text-center p-4 text-emerald-300/60">
-                        <Headphones className="w-10 h-10 mb-2 opacity-50" />
-                        <p className="text-xs">المقطع الصوتي قيد التحميل...</p>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Ayahs Quick Navigation List with Full Quran Text */}
-                  <div className="lg:col-span-5 bg-[#022c22]/70 rounded-2xl border border-[#065f46] p-4 flex flex-col max-h-[460px]">
-                    <div className="flex items-center justify-between pb-3 border-b border-[#065f46] mb-3">
-                      <div className="flex items-center gap-2">
-                        <ListOrdered className="w-4 h-4 text-[#fbbf24]" />
-                        <h4 className="text-xs font-bold text-white">آيات السورة ({activeRecording.segments?.length || 0})</h4>
-                      </div>
-                      <span className="text-[11px] text-[#86efac]/70">انقر للاستماع للآية المحددة فقط</span>
-                    </div>
-
-                    <div className="overflow-y-auto space-y-2 pr-1 custom-scrollbar flex-1">
-                      {activeRecording.segments && activeRecording.segments.length > 0 ? (
-                        activeRecording.segments.map((seg) => {
-                          const isCurrent = activePortalAyah?.ayahNumber === seg.ayahNumber;
-                          const isLiveReciting = portalLiveTime >= seg.startTimeSeconds && portalLiveTime < seg.endTimeSeconds;
-                          const duration = Math.max(0, Math.round(seg.endTimeSeconds - seg.startTimeSeconds));
-                          const verseText = seg.ayahText || getAyahTextSync(activeRecording.surahNumber, seg.ayahNumber);
-
-                          return (
-                            <button
-                              key={seg.ayahNumber}
-                              type="button"
-                              onClick={() => {
-                                setActivePortalAyah(seg);
-                                setActivePortalTargetAyah({ ...seg, _playTrigger: Date.now() } as any);
-                              }}
-                              className={`w-full text-right p-3 rounded-xl text-xs flex flex-col gap-1.5 transition-all cursor-pointer border ${
-                                isCurrent
-                                  ? 'bg-[#fbbf24] text-[#064e3b] font-bold shadow-md border-amber-300 ring-1 ring-amber-300'
-                                  : isLiveReciting
-                                  ? 'bg-emerald-900/60 border-emerald-400 text-white'
-                                  : 'bg-[#064e3b]/50 hover:bg-[#064e3b] text-white border-[#065f46]/60'
-                              }`}
-                            >
-                              <div className="flex items-center justify-between gap-2 w-full">
-                                <div className="flex items-center gap-2">
-                                  <span className={`w-6 h-6 rounded-lg text-[11px] font-black flex items-center justify-center shrink-0 ${
-                                    isCurrent ? 'bg-[#064e3b] text-[#fbbf24]' : 'bg-[#022c22] text-[#86efac]'
-                                  }`}>
-                                    {seg.ayahNumber === 0 ? '0' : seg.ayahNumber}
-                                  </span>
-                                  <span className="font-bold text-xs">
-                                    {seg.ayahNumber === 0 ? 'الاستعاذة والبسملة' : `الآية ${seg.ayahNumber}`}
-                                  </span>
-                                  {isLiveReciting && (
-                                    <span className="px-1.5 py-0.2 rounded-full bg-red-500/20 text-red-300 text-[9px] font-bold animate-pulse">
-                                      صوت الآن
-                                    </span>
-                                  )}
-                                </div>
-                                <span className={`text-[10px] font-mono shrink-0 ${isCurrent ? 'text-[#064e3b]' : 'text-[#86efac]/70'}`}>
-                                  {formatTimeMMSS(seg.startTimeSeconds)} - {formatTimeMMSS(seg.endTimeSeconds)} ({duration}ث)
-                                </span>
-                              </div>
-
-                              <p
-                                className={`text-[11px] font-serif leading-relaxed line-clamp-2 text-right ${
-                                  isCurrent ? 'text-[#064e3b] font-bold' : 'text-amber-100/90'
-                                }`}
-                                dir="rtl"
-                              >
-                                {verseText}
-                              </p>
-                            </button>
-                          );
-                        })
-                      ) : (
-                        <div className="text-center py-8 text-xs text-[#86efac]/70">
-                          لم يتم تقسيم آيات هذه السورة بعد.
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
+              ))}
+            </div>
+          )}
+        </div>
 
         {/* HONOR BOARD / LEADERBOARD SECTION FOR STUDENTS ACCORDING TO SUPERVISOR CONFIG */}
         <div className="bg-[#064e3b]/60 border border-[#fbbf24]/40 rounded-[32px] p-6 sm:p-8 space-y-6 shadow-xl backdrop-blur-md">

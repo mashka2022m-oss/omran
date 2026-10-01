@@ -11,6 +11,7 @@ import {
   AlertCircle,
   Clock,
   Volume2,
+  Headphones,
   Sliders,
   ChevronRight,
   ChevronLeft,
@@ -66,7 +67,8 @@ interface EvaluationTabProps {
   onUpdateStudentAIPlan: (
     studentId: string,
     newAssignment: any,
-    updatedPosition?: { surahNumber: number; surahName: string; ayah: number }
+    updatedPosition?: { surahNumber: number; surahName: string; ayah: number },
+    listeningAssignment?: any
   ) => Promise<void>;
   onNavigateToWhatsApp?: (studentId: string) => void;
   onNavigateToBehavior?: (studentId: string) => void;
@@ -172,6 +174,7 @@ export const EvaluationTab: React.FC<EvaluationTabProps> = ({
   ]);
 
   const [selectedSheikh, setSelectedSheikh] = useState<string>(FAMOUS_RECITERS[0].name);
+  const [targetRepetitions, setTargetRepetitions] = useState<number>(3);
   const [dailyHomeNote, setDailyHomeNote] = useState<string>(
     'الاستماع للقارئ المتقن 3 مرات، وتكرار الآيات غيباً 5 مرات قبل النوم والتسميع على ولي الأمر.'
   );
@@ -348,11 +351,24 @@ export const EvaluationTab: React.FC<EvaluationTabProps> = ({
       if (existing.recitationDetails?.tomorrowSuggestedSheikh) {
         setSelectedSheikh(existing.recitationDetails.tomorrowSuggestedSheikh);
       }
+      if (existing.recitationDetails?.tomorrowTargetRepetitions) {
+        setTargetRepetitions(existing.recitationDetails.tomorrowTargetRepetitions);
+      }
       if (existing.recitationDetails?.tomorrowDailyNote) {
         setDailyHomeNote(existing.recitationDetails.tomorrowDailyNote);
       }
     } else {
       // 2. No evaluation exists for this date yet!
+      if (activeStudent.activeListeningAssignment?.requiredRepetitions) {
+        setTargetRepetitions(activeStudent.activeListeningAssignment.requiredRepetitions);
+      } else if (activeStudent.aiPlan?.currentDailyAssignment?.targetRepetitions) {
+        setTargetRepetitions(activeStudent.aiPlan.currentDailyAssignment.targetRepetitions);
+      }
+      if (activeStudent.activeListeningAssignment?.sheikhName) {
+        setSelectedSheikh(activeStudent.activeListeningAssignment.sheikhName);
+      } else if (activeStudent.aiPlan?.currentDailyAssignment?.suggestedSheikh) {
+        setSelectedSheikh(activeStudent.aiPlan.currentDailyAssignment.suggestedSheikh);
+      }
       setTodayNewDidNotRecite(false);
       setTodayNewDidNotReciteReason('');
 
@@ -1013,6 +1029,9 @@ export const EvaluationTab: React.FC<EvaluationTabProps> = ({
         }
       }
 
+      const pagesPts = pagesCompletedToday.length * 5;
+      const totalPtsToday = calculatedCriteriaPoints + pagesPts;
+
       const fullEvaluation: StudentEvaluation = {
         id: `eval_${selectedDate}_${activeStudent.id}`,
         date: selectedDate,
@@ -1030,8 +1049,11 @@ export const EvaluationTab: React.FC<EvaluationTabProps> = ({
           tomorrowReviewItem: tomReviews[0] || null,
           tomorrowReviewItems: tomReviews || [],
           tomorrowSuggestedSheikh: selectedSheikh || '',
-          tomorrowDailyNote: dailyHomeNote || '',
+          tomorrowTargetRepetitions: targetRepetitions || 3,
+          tomorrowDailyNote: `تكرار الاستماع والمراجعة ${targetRepetitions || 3} مرات`,
           criteriaPointsEarnedToday: calculatedCriteriaPoints,
+          pagesPointsEarnedToday: pagesPts,
+          pointsEarnedToday: totalPtsToday,
           pagesCompletedToday
         },
         evaluatedAt: new Date().toISOString()
@@ -1045,10 +1067,23 @@ export const EvaluationTab: React.FC<EvaluationTabProps> = ({
         newMemorization: tomNewFormatted,
         review: tomRevFormatted,
         suggestedSheikh: selectedSheikh || '',
-        dailyNote: dailyHomeNote || '',
+        dailyNote: `تكرار الاستماع والمراجعة ${targetRepetitions || 3} مرات`,
+        targetRepetitions: targetRepetitions || 3,
         newItem: tomorrowNewItem,
         reviewItem: tomReviews[0] || null,
         reviewItems: tomReviews || []
+      };
+
+      const listeningAssignmentForStudent = {
+        surahNumber: tomNewSurah,
+        surahName: startTomNewSurahInfo.name,
+        fromAyah: tomNewFromAyah,
+        toAyah: tomNewToAyah,
+        sheikhName: selectedSheikh || FAMOUS_RECITERS[0].name,
+        requiredRepetitions: targetRepetitions || 3,
+        assignedDate: selectedDate,
+        completedRepetitions: 0,
+        isCompleted: false
       };
 
       // Update student's current position:
@@ -1061,7 +1096,7 @@ export const EvaluationTab: React.FC<EvaluationTabProps> = ({
         surahNumber: targetSurahNumber,
         surahName: targetSurahName,
         ayah: targetAyah
-      });
+      }, listeningAssignmentForStudent);
 
       setSaveSuccessMsg(
         todayNewDidNotRecite
@@ -1801,6 +1836,40 @@ export const EvaluationTab: React.FC<EvaluationTabProps> = ({
                   </span>
                 </div>
 
+                {/* Real-time Indicator: Did the student listen to yesterday's / current assignment? */}
+                {activeStudent && (
+                  <div className={`p-3.5 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-xs font-bold transition-all shadow-sm ${
+                    activeStudent.activeListeningAssignment?.isCompleted
+                      ? 'bg-emerald-950/70 border-emerald-500/50 text-emerald-200'
+                      : (activeStudent.activeListeningAssignment?.completedRepetitions || 0) > 0
+                        ? 'bg-amber-950/60 border-amber-500/50 text-amber-200'
+                        : 'bg-rose-950/50 border-rose-500/40 text-rose-300'
+                  }`}>
+                    <div className="flex items-center gap-2">
+                      <Headphones className="w-4 h-4 text-[#fbbf24] shrink-0" />
+                      <span>حالة استماع الطالب للورد المنزلي:</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {activeStudent.activeListeningAssignment?.isCompleted ? (
+                        <span className="flex items-center gap-1.5 px-3 py-1 rounded-xl bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
+                          <Check className="w-3.5 h-3.5 text-emerald-400" />
+                          <span>استمع للمقطع المقرر بالكامل ({activeStudent.activeListeningAssignment.completedRepetitions || activeStudent.activeListeningAssignment.requiredRepetitions} من {activeStudent.activeListeningAssignment.requiredRepetitions} مرات)</span>
+                        </span>
+                      ) : (activeStudent.activeListeningAssignment?.completedRepetitions || 0) > 0 ? (
+                        <span className="flex items-center gap-1.5 px-3 py-1 rounded-xl bg-amber-500/20 text-amber-300 border border-amber-500/40">
+                          <Clock className="w-3.5 h-3.5 text-amber-400" />
+                          <span>استمع جزئياً ({activeStudent.activeListeningAssignment.completedRepetitions} من {activeStudent.activeListeningAssignment.requiredRepetitions} مرات)</span>
+                        </span>
+                      ) : (
+                        <span className="flex items-center gap-1.5 px-3 py-1 rounded-xl bg-rose-500/20 text-rose-300 border border-rose-500/40">
+                          <XCircle className="w-3.5 h-3.5 text-rose-400" />
+                          <span>لم يستمع للمقطع المقرر</span>
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                )}
+
                 {/* 1.1 New Memorization (Flexible Multi-Surah Range) */}
                 <div className="space-y-3 bg-[#064e3b]/40 p-4 rounded-2xl border border-[#065f46]">
                   <div className="flex items-center justify-between flex-wrap gap-2">
@@ -2536,7 +2605,7 @@ export const EvaluationTab: React.FC<EvaluationTabProps> = ({
                   )}
                 </div>
 
-                {/* 2.3 Reciter & Daily Home Directive */}
+                {/* 2.3 Reciter & Repetitions Selector */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <label className="text-xs font-semibold text-[#86efac] block mb-1 flex items-center gap-1.5">
@@ -2546,9 +2615,9 @@ export const EvaluationTab: React.FC<EvaluationTabProps> = ({
                     <select
                       value={selectedSheikh}
                       onChange={e => setSelectedSheikh(e.target.value)}
-                      className="w-full bg-[#064e3b] border border-[#065f46] focus:border-[#fbbf24] rounded-2xl py-2 px-3 text-xs text-white outline-none"
+                      className="w-full bg-[#064e3b] border border-[#065f46] focus:border-[#fbbf24] rounded-2xl py-2 px-3 text-xs text-white outline-none cursor-pointer"
                     >
-                      {FAMOUS_RECITERS.map(r => (
+                      {FAMOUS_RECITERS.filter(r => (r as any).hasAudio).map(r => (
                         <option key={r.id} value={r.name}>
                           {r.name}
                         </option>
@@ -2558,17 +2627,20 @@ export const EvaluationTab: React.FC<EvaluationTabProps> = ({
 
                   <div>
                     <label className="text-xs font-semibold text-[#86efac] block mb-1 flex items-center gap-1.5">
-                      <FileText className="w-4 h-4 text-[#fbbf24]" />
-                      <span>توجيه المتابعة المنزلية لولي الأمر:</span>
+                      <RotateCcw className="w-4 h-4 text-[#fbbf24]" />
+                      <span>مرات التكرار المقررة للطالب (1 - 20):</span>
                     </label>
-                    <input
-                      type="text"
-                      value={dailyHomeNote}
-                      onChange={e => setDailyHomeNote(e.target.value)}
-                      placeholder="اكتب التوجيه المنزلي..."
-                      className="w-full bg-[#064e3b] border border-[#065f46] focus:border-[#fbbf24] rounded-2xl py-2 px-3 text-xs text-white outline-none"
-                      dir="rtl"
-                    />
+                    <select
+                      value={targetRepetitions}
+                      onChange={e => setTargetRepetitions(Number(e.target.value))}
+                      className="w-full bg-[#064e3b] border border-[#065f46] focus:border-[#fbbf24] rounded-2xl py-2 px-3 text-xs text-white outline-none font-bold cursor-pointer"
+                    >
+                      {Array.from({ length: 20 }, (_, i) => i + 1).map(num => (
+                        <option key={num} value={num}>
+                          {num === 1 ? 'مرة واحدة' : num === 2 ? 'مرتان' : `${num} مرات`}
+                        </option>
+                      ))}
+                    </select>
                   </div>
                 </div>
               </div>

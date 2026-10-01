@@ -531,8 +531,50 @@ export const OMRAN_CACHE_KEYS = {
   VIOLATIONS: 'omran_violations_data',
   EXAMS: 'omran_exams_data',
   SUBMISSIONS: 'omran_submissions_data',
-  CERTIFICATES: 'omran_certificates_data'
+  CERTIFICATES: 'omran_certificates_data',
+  DELETED_STUDENTS: 'omran_deleted_students',
+  DELETED_CERTIFICATES: 'omran_deleted_certificates',
+  INITIALIZED_FLAG: 'omran_platform_initialized_flag'
 };
+
+// Persistent Tombstone Helpers to ensure permanent and irreversible deletion
+export function getDeletedStudentIds(): Set<string> {
+  const list = getLocalCache<string[]>(OMRAN_CACHE_KEYS.DELETED_STUDENTS, []);
+  return new Set(Array.isArray(list) ? list : []);
+}
+
+export function addDeletedStudentId(id: string): void {
+  const current = getLocalCache<string[]>(OMRAN_CACHE_KEYS.DELETED_STUDENTS, []);
+  const arr = Array.isArray(current) ? current : [];
+  if (!arr.includes(id)) {
+    setLocalCache(OMRAN_CACHE_KEYS.DELETED_STUDENTS, [...arr, id]);
+  }
+}
+
+export function removeDeletedStudentId(id: string): void {
+  const current = getLocalCache<string[]>(OMRAN_CACHE_KEYS.DELETED_STUDENTS, []);
+  const arr = Array.isArray(current) ? current : [];
+  setLocalCache(OMRAN_CACHE_KEYS.DELETED_STUDENTS, arr.filter(x => x !== id));
+}
+
+export function getDeletedCertificateIds(): Set<string> {
+  const list = getLocalCache<string[]>(OMRAN_CACHE_KEYS.DELETED_CERTIFICATES, []);
+  return new Set(Array.isArray(list) ? list : []);
+}
+
+export function addDeletedCertificateId(id: string): void {
+  const current = getLocalCache<string[]>(OMRAN_CACHE_KEYS.DELETED_CERTIFICATES, []);
+  const arr = Array.isArray(current) ? current : [];
+  if (!arr.includes(id)) {
+    setLocalCache(OMRAN_CACHE_KEYS.DELETED_CERTIFICATES, [...arr, id]);
+  }
+}
+
+export function removeDeletedCertificateId(id: string): void {
+  const current = getLocalCache<string[]>(OMRAN_CACHE_KEYS.DELETED_CERTIFICATES, []);
+  const arr = Array.isArray(current) ? current : [];
+  setLocalCache(OMRAN_CACHE_KEYS.DELETED_CERTIFICATES, arr.filter(x => x !== id));
+}
 
 // Safe Local Cache Getter with fallback
 export function getLocalCache<T>(key: string, fallback: T): T {
@@ -1114,31 +1156,112 @@ export class OmranDataService {
     }
   }
 
-  // Load Students directly with Dual Persistence
+  // Persistent Tombstones for clean deletions that never resurrect
+  static getDeletedStudentIds(): Set<string> {
+    try {
+      const raw = typeof window !== 'undefined' ? localStorage.getItem('omran_deleted_student_ids') : null;
+      if (!raw) return new Set();
+      const arr = JSON.parse(raw);
+      return new Set(Array.isArray(arr) ? arr : []);
+    } catch {
+      return new Set();
+    }
+  }
+
+  static addDeletedStudentId(id: string): void {
+    if (!id) return;
+    try {
+      const set = OmranDataService.getDeletedStudentIds();
+      set.add(id);
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('omran_deleted_student_ids', JSON.stringify(Array.from(set)));
+      }
+    } catch {}
+  }
+
+  static removeDeletedStudentId(id: string): void {
+    if (!id) return;
+    try {
+      const set = OmranDataService.getDeletedStudentIds();
+      if (set.has(id)) {
+        set.delete(id);
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('omran_deleted_student_ids', JSON.stringify(Array.from(set)));
+        }
+      }
+    } catch {}
+  }
+
+  static getDeletedCertificateIds(): Set<string> {
+    try {
+      const raw = typeof window !== 'undefined' ? localStorage.getItem('omran_deleted_certificate_ids') : null;
+      if (!raw) return new Set();
+      const arr = JSON.parse(raw);
+      return new Set(Array.isArray(arr) ? arr : []);
+    } catch {
+      return new Set();
+    }
+  }
+
+  static addDeletedCertificateId(id: string): void {
+    if (!id) return;
+    try {
+      const set = OmranDataService.getDeletedCertificateIds();
+      set.add(id);
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('omran_deleted_certificate_ids', JSON.stringify(Array.from(set)));
+      }
+    } catch {}
+  }
+
+  static removeDeletedCertificateId(id: string): void {
+    if (!id) return;
+    try {
+      const set = OmranDataService.getDeletedCertificateIds();
+      if (set.has(id)) {
+        set.delete(id);
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('omran_deleted_certificate_ids', JSON.stringify(Array.from(set)));
+        }
+      }
+    } catch {}
+  }
+
+  // Load Students directly with Dual Persistence and Deletion Filtering
   static async loadStudents(): Promise<Student[]> {
-    const local = getLocalCache<Student[]>(OMRAN_CACHE_KEYS.STUDENTS, []);
+    const deletedIds = OmranDataService.getDeletedStudentIds();
+    const local = getLocalCache<Student[]>(OMRAN_CACHE_KEYS.STUDENTS, []).filter(s => s?.id && !deletedIds.has(s.id));
     let cloudList: Student[] = [];
     try {
       const snap = await getDocs(collection(db, 'students'));
-      snap.forEach(d => cloudList.push(d.data() as Student));
+      snap.forEach(d => {
+        const s = d.data() as Student;
+        if (s?.id && !deletedIds.has(s.id)) {
+          cloudList.push(s);
+        }
+      });
     } catch (e) {
       handleFirestoreError(e, OperationType.LIST, 'students');
     }
 
     const mergedMap = new Map<string, Student>();
     for (const s of local) {
-      if (s?.id) mergedMap.set(s.id, s);
+      if (s?.id && !deletedIds.has(s.id)) mergedMap.set(s.id, s);
     }
     for (const s of cloudList) {
-      if (s?.id) mergedMap.set(s.id, s);
+      if (s?.id && !deletedIds.has(s.id)) mergedMap.set(s.id, s);
     }
 
-    if (mergedMap.size === 0) {
+    // Only fallback to INITIAL_STUDENTS if no explicit deletions have occurred
+    if (mergedMap.size === 0 && deletedIds.size === 0) {
       for (const s of INITIAL_STUDENTS) {
-        mergedMap.set(s.id, s);
+        if (!deletedIds.has(s.id)) {
+          mergedMap.set(s.id, s);
+        }
       }
     }
     const merged = Array.from(mergedMap.values()).filter(s => {
+      if (deletedIds.has(s.id)) return false;
       if (s.id === 'teacher-1' || (s.id.startsWith('teacher-') && (s as any).username)) {
         return false;
       }
@@ -1160,6 +1283,7 @@ export class OmranDataService {
 
   // Save Student directly with Dual Persistence
   static async saveStudent(student: Student): Promise<void> {
+    OmranDataService.removeDeletedStudentId(student.id);
     const parentPhone = student.parentPhone || (student.parentPhones && student.parentPhones.length > 0 ? student.parentPhones[0] : student.phone) || '';
     const clean = cleanFirestoreData({ ...student, parentPhone });
     const local = getLocalCache<Student[]>(OMRAN_CACHE_KEYS.STUDENTS, INITIAL_STUDENTS);
@@ -1175,6 +1299,9 @@ export class OmranDataService {
 
   // Delete Student directly from Firestore and local cache, cleanly unlinking and deleting any Google account
   static async deleteStudent(studentId: string): Promise<void> {
+    // 0. Register persistent tombstone so student NEVER re-appears from offline cache or initial data
+    OmranDataService.addDeletedStudentId(studentId);
+
     const local = getLocalCache<Student[]>(OMRAN_CACHE_KEYS.STUDENTS, []);
     const student = local.find(s => s.id === studentId);
     setLocalCache(OMRAN_CACHE_KEYS.STUDENTS, local.filter(s => s.id !== studentId));
@@ -1557,9 +1684,13 @@ export class OmranDataService {
   static subscribeStudents(callback: (students: Student[]) => void): () => void {
     try {
       return onSnapshot(collection(db, 'students'), snap => {
+        const deletedIds = OmranDataService.getDeletedStudentIds();
         const list: Student[] = [];
         snap.forEach(d => {
           const s = d.data() as Student;
+          if (deletedIds.has(s.id)) {
+            return;
+          }
           if (s.id === 'teacher-1' || (s.id.startsWith('teacher-') && (s as any).username)) {
             return;
           }
@@ -2170,13 +2301,19 @@ export class OmranDataService {
 
   // Load Certificates with Dual Persistence
   static async loadCertificates(): Promise<IssuedCertificate[]> {
-    const local = getLocalCache<IssuedCertificate[]>(OMRAN_CACHE_KEYS.CERTIFICATES, []);
+    const deletedCertIds = OmranDataService.getDeletedCertificateIds();
+    const local = getLocalCache<IssuedCertificate[]>(OMRAN_CACHE_KEYS.CERTIFICATES, []).filter(
+      c => c?.id && !deletedCertIds.has(c.id)
+    );
     let cloudList: IssuedCertificate[] = [];
     try {
       const snap = await getDocs(collection(db, 'certificates'));
       snap.forEach(d => {
         const raw = d.data();
-        cloudList.push(OmranDataService.sanitizeCertificate({ ...raw, id: d.id || raw.id }));
+        const cId = d.id || raw.id;
+        if (!deletedCertIds.has(cId)) {
+          cloudList.push(OmranDataService.sanitizeCertificate({ ...raw, id: cId }));
+        }
       });
     } catch (e) {
       handleFirestoreError(e, OperationType.LIST, 'certificates');
@@ -2184,10 +2321,10 @@ export class OmranDataService {
 
     const mergedMap = new Map<string, IssuedCertificate>();
     for (const c of local) {
-      if (c?.id) mergedMap.set(c.id, OmranDataService.sanitizeCertificate(c));
+      if (c?.id && !deletedCertIds.has(c.id)) mergedMap.set(c.id, OmranDataService.sanitizeCertificate(c));
     }
     for (const c of cloudList) {
-      if (c?.id) mergedMap.set(c.id, c);
+      if (c?.id && !deletedCertIds.has(c.id)) mergedMap.set(c.id, c);
     }
 
     const merged = Array.from(mergedMap.values());
@@ -2198,6 +2335,7 @@ export class OmranDataService {
 
   // Save Single Certificate directly in Firestore & Cache
   static async saveCertificate(cert: IssuedCertificate): Promise<void> {
+    OmranDataService.removeDeletedCertificateId(cert.id);
     const cleanCert = OmranDataService.sanitizeCertificate(cert);
     const local = getLocalCache<IssuedCertificate[]>(OMRAN_CACHE_KEYS.CERTIFICATES, []);
     const updated = [cleanCert, ...local.filter(c => c.id !== cleanCert.id)];
@@ -2219,6 +2357,9 @@ export class OmranDataService {
   // Save Batch Certificates
   static async saveCertificates(certs: IssuedCertificate[]): Promise<void> {
     if (!certs || certs.length === 0) return;
+    for (const c of certs) {
+      OmranDataService.removeDeletedCertificateId(c.id);
+    }
     const cleanList = certs.map(c => OmranDataService.sanitizeCertificate(c));
 
     const local = getLocalCache<IssuedCertificate[]>(OMRAN_CACHE_KEYS.CERTIFICATES, []);
@@ -2247,6 +2388,9 @@ export class OmranDataService {
 
   // Delete Certificate from Firestore & Cache
   static async deleteCertificate(certId: string): Promise<void> {
+    // 0. Register persistent tombstone so certificate NEVER resurrects
+    OmranDataService.addDeletedCertificateId(certId);
+
     const local = getLocalCache<IssuedCertificate[]>(OMRAN_CACHE_KEYS.CERTIFICATES, []);
     const updated = local.filter(c => c.id !== certId);
     setLocalCache(OMRAN_CACHE_KEYS.CERTIFICATES, updated);
@@ -2263,21 +2407,28 @@ export class OmranDataService {
   static subscribeCertificates(callback: (certs: IssuedCertificate[]) => void): () => void {
     try {
       return onSnapshot(collection(db, 'certificates'), snap => {
+        const deletedCertIds = OmranDataService.getDeletedCertificateIds();
         const cloudList: IssuedCertificate[] = [];
         snap.forEach(d => {
           const raw = d.data();
-          cloudList.push(OmranDataService.sanitizeCertificate({ ...raw, id: d.id || raw.id }));
+          const cId = d.id || raw.id;
+          if (!deletedCertIds.has(cId)) {
+            cloudList.push(OmranDataService.sanitizeCertificate({ ...raw, id: cId }));
+          }
         });
 
         // Dual-persistence merge: preserve local customTemplateImageUrl and any local pending certs
-        const local = getLocalCache<IssuedCertificate[]>(OMRAN_CACHE_KEYS.CERTIFICATES, []);
+        const local = getLocalCache<IssuedCertificate[]>(OMRAN_CACHE_KEYS.CERTIFICATES, []).filter(
+          c => c?.id && !deletedCertIds.has(c.id)
+        );
         const localMap = new Map<string, IssuedCertificate>();
         for (const c of local) {
-          if (c?.id) localMap.set(c.id, c);
+          if (c?.id && !deletedCertIds.has(c.id)) localMap.set(c.id, c);
         }
 
         const mergedMap = new Map<string, IssuedCertificate>();
         for (const c of cloudList) {
+          if (deletedCertIds.has(c.id)) continue;
           const localItem = localMap.get(c.id);
           const finalCert = {
             ...c,
@@ -2286,7 +2437,7 @@ export class OmranDataService {
           mergedMap.set(c.id, finalCert);
         }
         for (const loc of local) {
-          if (loc?.id && !mergedMap.has(loc.id)) {
+          if (loc?.id && !deletedCertIds.has(loc.id) && !mergedMap.has(loc.id)) {
             mergedMap.set(loc.id, loc);
           }
         }

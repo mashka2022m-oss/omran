@@ -184,7 +184,9 @@ export const CertificatesTab: React.FC<CertificatesTabProps> = ({
   });
 
   // Track deleted certificate IDs locally to ensure instantaneous and permanent deletion
-  const [deletedCertIds, setDeletedCertIds] = useState<Set<string>>(() => new Set());
+  const [deletedCertIds, setDeletedCertIds] = useState<Set<string>>(() => {
+    return OmranDataService.getDeletedCertificateIds();
+  });
 
   // Success Popup Modal ("تم حفظ الشهادة منبثقة ويضغط تم ويديه لنماذجي")
   const [savedPopupModal, setSavedPopupModal] = useState<{
@@ -684,7 +686,8 @@ export const CertificatesTab: React.FC<CertificatesTabProps> = ({
         setCopiedNotification('تم حذف النموذج بنجاح.');
         setTimeout(() => setCopiedNotification(null), 4000);
       } else if (type === 'certificate') {
-        // 1. Instantly track as deleted so it immediately vanishes from the UI
+        // 1. Instantly track as deleted so it immediately vanishes from the UI and never resurrects
+        OmranDataService.addDeletedCertificateId(id);
         setDeletedCertIds(prev => new Set([...prev, id]));
         // 2. Instantly filter from local state
         setLocalCertificates(prev => prev.filter(c => c.id !== id));

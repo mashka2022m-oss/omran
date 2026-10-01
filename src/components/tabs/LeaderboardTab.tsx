@@ -1,0 +1,720 @@
+import React, { useState, useMemo } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
+import {
+  Trophy,
+  Medal,
+  Award,
+  Search,
+  BookOpen,
+  FileText,
+  Headphones,
+  Sparkles,
+  Sliders,
+  CheckCircle2,
+  X,
+  TrendingUp,
+  Flame,
+  Calendar,
+  Layers,
+  ChevronLeft
+} from 'lucide-react';
+import {
+  Student,
+  Halaqah,
+  StudentEvaluation,
+  ExamSubmission,
+  StudentListeningLog,
+  LeaderboardSettings
+} from '../../types';
+
+interface LeaderboardTabProps {
+  students: Student[];
+  halaqahs: Halaqah[];
+  evaluations: StudentEvaluation[];
+  submissions: ExamSubmission[];
+  listeningLogs?: StudentListeningLog[];
+  leaderboardSettings?: LeaderboardSettings;
+  isSupervisor?: boolean;
+  isDeveloper?: boolean;
+  activeHalaqahId?: string;
+  currentUserName?: string;
+  onSaveLeaderboardSettings?: (settings: LeaderboardSettings) => Promise<void>;
+}
+
+export const LeaderboardTab: React.FC<LeaderboardTabProps> = ({
+  students = [],
+  halaqahs = [],
+  evaluations = [],
+  submissions = [],
+  listeningLogs = [],
+  leaderboardSettings = {
+    scope: 'all_unified',
+    includeExamPoints: true,
+    includeEvaluationScores: true,
+    updatedAt: new Date().toISOString()
+  },
+  isSupervisor = false,
+  isDeveloper = false,
+  activeHalaqahId = 'all',
+  currentUserName,
+  onSaveLeaderboardSettings
+}) => {
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedHalaqahFilter, setSelectedHalaqahFilter] = useState<string>(
+    activeHalaqahId !== 'all' ? activeHalaqahId : 'all'
+  );
+  const [selectedStudentForBreakdown, setSelectedStudentForBreakdown] = useState<Student | null>(null);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [activeScope, setActiveScope] = useState<'all_unified' | 'per_halaqah'>(
+    leaderboardSettings?.scope === 'per_halaqah' ? 'per_halaqah' : 'all_unified'
+  );
+  const [isSavingSettings, setIsSavingSettings] = useState(false);
+
+  // Filter students by selected halaqah (if not 'all')
+  const filteredPool = useMemo(() => {
+    let pool = students;
+    if (selectedHalaqahFilter !== 'all') {
+      pool = pool.filter(s => s.halaqahId === selectedHalaqahFilter);
+    }
+    if (searchQuery.trim()) {
+      const q = searchQuery.trim().toLowerCase();
+      pool = pool.filter(s => s.name.toLowerCase().includes(q));
+    }
+    return pool;
+  }, [students, selectedHalaqahFilter, searchQuery]);
+
+  // Compute point breakdown for each student
+  const studentRankList = useMemo(() => {
+    return filteredPool.map(st => {
+      // 1. Exam points
+      const stSubmissions = submissions.filter(sub => sub.studentId === st.id);
+      const examPoints = stSubmissions.reduce(
+        (sum, s) => sum + (s.pointsGrantedForLeaderboard || 0),
+        0
+      );
+      const bestPercentage = stSubmissions.reduce(
+        (max, s) => Math.max(max, s.percentage || 0),
+        0
+      );
+
+      // 2. Evaluation / criteria points
+      const stEvaluations = evaluations.filter(ev => ev.studentId === st.id);
+      const evalPoints = stEvaluations.reduce((sum, ev) => {
+        const criteriaPts = ev.recitationDetails?.criteriaPointsEarnedToday || 0;
+        const pts = ev.recitationDetails?.pointsEarnedToday || 0;
+        return sum + Math.max(criteriaPts, pts);
+      }, 0);
+
+      // Fallback: If student has criteriaPoints stored on their profile
+      const finalEvalPoints = Math.max(evalPoints, st.criteriaPoints || 0);
+
+      // 3. Listening points
+      const stLogs = listeningLogs.filter(l => l.studentId === st.id && l.isFullyCompleted);
+      const logsListeningPoints = stLogs.length * 5;
+      const finalListeningPoints = Math.max(logsListeningPoints, st.listeningPoints || 0);
+
+      // 4. Completed pages points
+      const totalPagePoints = st.totalPagePoints || 0;
+
+      // 5. Total points: sum of all components (or profile points if higher)
+      const computedTotal = examPoints + finalEvalPoints + finalListeningPoints + totalPagePoints;
+      const totalPoints = Math.max(computedTotal, st.points || 0);
+
+      const halaqahName =
+        st.halaqahName || halaqahs.find(h => h.id === st.halaqahId)?.name || 'الحلقة القرآنية';
+
+      return {
+        student: st,
+        totalPoints,
+        examPoints,
+        evalPoints: finalEvalPoints,
+        listeningPoints: finalListeningPoints,
+        pagePoints: totalPagePoints,
+        completedExams: stSubmissions.length,
+        completedEvaluations: stEvaluations.length,
+        completedListenings: stLogs.length,
+        bestPercentage,
+        halaqahName,
+        stSubmissions,
+        stEvaluations,
+        stLogs
+      };
+    }).sort((a, b) => b.totalPoints - a.totalPoints || b.bestPercentage - a.bestPercentage);
+  }, [filteredPool, submissions, evaluations, listeningLogs, halaqahs]);
+
+  // Selected student breakdown details
+  const breakdownData = useMemo(() => {
+    if (!selectedStudentForBreakdown) return null;
+    return studentRankList.find(item => item.student.id === selectedStudentForBreakdown.id);
+  }, [selectedStudentForBreakdown, studentRankList]);
+
+  const handleSaveScope = async (scope: 'all_unified' | 'per_halaqah') => {
+    setActiveScope(scope);
+    if (onSaveLeaderboardSettings) {
+      setIsSavingSettings(true);
+      try {
+        await onSaveLeaderboardSettings({
+          ...leaderboardSettings,
+          scope,
+          updatedAt: new Date().toISOString()
+        });
+      } finally {
+        setIsSavingSettings(false);
+        setIsSettingsOpen(false);
+      }
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Top Banner Header */}
+      <div className="rounded-[32px] bg-gradient-to-br from-[#064e3b] via-[#022c22] to-[#064e3b] border border-[#fbbf24]/50 p-6 sm:p-8 shadow-2xl relative overflow-hidden backdrop-blur-md">
+        <div className="absolute -top-12 -left-12 w-48 h-48 bg-[#fbbf24]/10 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute -bottom-12 -right-12 w-48 h-48 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
+
+        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
+          <div className="flex items-center gap-4">
+            <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-[#fbbf24] to-[#f59e0b] text-[#064e3b] flex items-center justify-center shadow-lg border border-[#fbbf24]/40 shrink-0">
+              <Trophy className="w-8 h-8 text-[#064e3b]" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h2 className="text-xl sm:text-2xl font-black text-white font-heading">
+                  لوحة الشرف والتفوق القرآني
+                </h2>
+                <span className="text-xs px-3 py-1 rounded-full bg-[#fbbf24]/20 text-[#fbbf24] font-bold border border-[#fbbf24]/30">
+                  {activeScope === 'per_halaqah' ? 'ترتيب الحلقة' : 'الترتيب العام الموحد'}
+                </span>
+              </div>
+              <p className="text-xs sm:text-sm text-emerald-200/90 mt-1 max-w-xl leading-relaxed">
+                لوحة تنافسية شاملة ترصد وتجمع نقاط الطلاب من تقييمات التسميع اليومية، الاختبارات القرآنية، إنجاز الاستماع المنزلي، والأوجه المكتملة.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3">
+            {(isSupervisor || isDeveloper) && (
+              <button
+                type="button"
+                onClick={() => setIsSettingsOpen(true)}
+                className="px-4 py-2.5 rounded-2xl bg-[#022c22] hover:bg-emerald-950 border border-[#fbbf24]/40 text-amber-300 text-xs font-bold flex items-center gap-2 transition-all cursor-pointer shadow-md"
+              >
+                <Sliders className="w-4 h-4 text-[#fbbf24]" />
+                <span>إعدادات نطاق اللوحة</span>
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Filter and Search Bar */}
+        <div className="mt-6 pt-5 border-t border-emerald-800/60 flex flex-col sm:flex-row items-center justify-between gap-3">
+          <div className="relative w-full sm:w-80">
+            <Search className="w-4 h-4 text-emerald-400 absolute right-3.5 top-3" />
+            <input
+              type="text"
+              placeholder="ابحث باسم الطالب لرؤية ترتيبه ونقاطه..."
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              className="w-full pl-4 pr-10 py-2 rounded-xl bg-[#022c22]/90 border border-[#065f46] text-white text-xs placeholder:text-emerald-300/50 focus:border-[#fbbf24] focus:outline-none font-bold"
+            />
+          </div>
+
+          <div className="flex items-center gap-2 w-full sm:w-auto">
+            <span className="text-xs text-emerald-200 font-bold shrink-0">تصفية حسب الحلقة:</span>
+            <select
+              value={selectedHalaqahFilter}
+              onChange={e => setSelectedHalaqahFilter(e.target.value)}
+              className="text-xs text-amber-200 bg-[#022c22] border border-[#065f46] rounded-xl px-3 py-2 focus:border-[#fbbf24] focus:outline-none cursor-pointer font-bold"
+            >
+              <option value="all">جميع الحلقات ({students.length} طالب)</option>
+              {halaqahs.map(h => (
+                <option key={h.id} value={h.id}>
+                  {h.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+      </div>
+
+      {/* Top 3 Podium Cards */}
+      {studentRankList.length > 0 && !searchQuery && (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {studentRankList.slice(0, 3).map((item, idx) => {
+            const badges = [
+              {
+                label: 'المركز الأول • تاج التفوق',
+                icon: Trophy,
+                border: 'border-[#fbbf24]',
+                glow: 'shadow-[0_0_25px_rgba(251,191,36,0.35)]',
+                bg: 'bg-gradient-to-b from-amber-500/20 via-[#064e3b] to-[#022c22]',
+                badgeBg: 'bg-[#fbbf24]',
+                badgeText: 'text-[#064e3b]',
+                cardBorder: 'border-[#fbbf24]',
+                rankNumber: 1
+              },
+              {
+                label: 'المركز الثاني • وسام التميز',
+                icon: Medal,
+                border: 'border-slate-300',
+                glow: 'shadow-[0_0_20px_rgba(203,213,225,0.2)]',
+                bg: 'bg-gradient-to-b from-slate-400/20 via-[#064e3b] to-[#022c22]',
+                badgeBg: 'bg-slate-300',
+                badgeText: 'text-slate-900',
+                cardBorder: 'border-slate-300/60',
+                rankNumber: 2
+              },
+              {
+                label: 'المركز الثالث • درع الاجتهاد',
+                icon: Award,
+                border: 'border-amber-600',
+                glow: 'shadow-[0_0_20px_rgba(217,119,6,0.2)]',
+                bg: 'bg-gradient-to-b from-amber-600/20 via-[#064e3b] to-[#022c22]',
+                badgeBg: 'bg-amber-600',
+                badgeText: 'text-white',
+                cardBorder: 'border-amber-600/60',
+                rankNumber: 3
+              }
+            ];
+            const badge = badges[idx] || badges[0];
+            const BadgeIcon = badge.icon;
+
+            return (
+              <div
+                key={item.student.id}
+                onClick={() => setSelectedStudentForBreakdown(item.student)}
+                className={`p-6 rounded-3xl border ${badge.cardBorder} ${badge.bg} ${badge.glow} flex flex-col justify-between gap-4 cursor-pointer transition-all hover:scale-[1.02] relative overflow-hidden group`}
+              >
+                <div className="flex items-center justify-between">
+                  <span className={`px-3 py-1 rounded-full text-xs font-black flex items-center gap-1.5 shadow-md ${badge.badgeBg} ${badge.badgeText}`}>
+                    <BadgeIcon className="w-4 h-4" />
+                    <span>{badge.label}</span>
+                  </span>
+
+                  <span className="text-xs px-2.5 py-0.5 rounded-full bg-[#022c22] text-emerald-300 font-bold border border-emerald-800">
+                    الترتيب #{badge.rankNumber}
+                  </span>
+                </div>
+
+                <div className="text-center py-2">
+                  <div className="w-16 h-16 rounded-2xl bg-[#022c22] border-2 border-[#fbbf24]/50 text-[#fbbf24] text-2xl font-black flex items-center justify-center mx-auto mb-3 shadow-lg group-hover:border-[#fbbf24] transition-colors">
+                    {item.student.name.charAt(0)}
+                  </div>
+                  <h3 className="text-lg font-black text-white font-heading">{item.student.name}</h3>
+                  <p className="text-xs text-emerald-300/80 mt-0.5">{item.halaqahName}</p>
+                </div>
+
+                <div className="bg-[#022c22]/90 rounded-2xl p-3 border border-emerald-800/60 grid grid-cols-3 gap-2 text-center text-xs">
+                  <div>
+                    <span className="text-[10px] text-emerald-300/70 block">تسميع ومعايير</span>
+                    <strong className="text-emerald-400 font-mono text-xs">{item.evalPoints}</strong>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-emerald-300/70 block">الاختبارات</span>
+                    <strong className="text-emerald-400 font-mono text-xs">{item.examPoints}</strong>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-[#fbbf24] block">إجمالي النقاط</span>
+                    <strong className="text-[#fbbf24] font-mono text-base font-black">{item.totalPoints}</strong>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  className="w-full py-2.5 rounded-xl bg-[#fbbf24]/20 hover:bg-[#fbbf24]/30 text-[#fbbf24] border border-[#fbbf24]/40 font-bold text-xs flex items-center justify-center gap-1.5 transition-colors"
+                >
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span>عرض تفاصيل النقاط ومصادرها</span>
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Main Ranking Table Card */}
+      <div className="rounded-[32px] bg-[#064e3b]/60 border border-[#065f46] p-6 shadow-xl backdrop-blur-md space-y-4">
+        <div className="flex items-center justify-between pb-3 border-b border-[#065f46]">
+          <div className="flex items-center gap-2">
+            <Medal className="w-5 h-5 text-[#fbbf24]" />
+            <h3 className="text-base font-bold text-white font-heading">
+              قائمة ترتيب الطلاب التنافسية ({studentRankList.length} طالب)
+            </h3>
+          </div>
+          <span className="text-xs text-[#86efac] font-medium">
+            انقر على أي طالب للاطلاع على تفاصيل وكيفية جمع نقاطه
+          </span>
+        </div>
+
+        {studentRankList.length === 0 ? (
+          <div className="text-center py-12 text-xs text-emerald-200/70">
+            لا يوجد طلاب مطابقين للبحث أو الحلقة المحددة.
+          </div>
+        ) : (
+          <div className="overflow-x-auto rounded-2xl border border-emerald-800/60 bg-[#022c22]/70">
+            <table className="w-full text-right text-xs">
+              <thead className="bg-[#064e3b]/80 text-emerald-200 border-b border-[#065f46] text-[11px] font-bold">
+                <tr>
+                  <th className="p-3 text-center">الترتيب</th>
+                  <th className="p-3">اسم الطالب</th>
+                  <th className="p-3">الحلقة</th>
+                  <th className="p-3 text-center">نقاط التسميع والمعايير</th>
+                  <th className="p-3 text-center">نقاط الاختبارات</th>
+                  <th className="p-3 text-center">نقاط الاستماع</th>
+                  <th className="p-3 text-center">الأوجه المكتملة</th>
+                  <th className="p-3 text-center">إجمالي النقاط</th>
+                  <th className="p-3 text-left">التفاصيل</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-emerald-900/60 text-white">
+                {studentRankList.map((item, idx) => {
+                  const rank = idx + 1;
+                  return (
+                    <tr
+                      key={item.student.id}
+                      onClick={() => setSelectedStudentForBreakdown(item.student)}
+                      className="hover:bg-emerald-900/40 transition-colors cursor-pointer group"
+                    >
+                      <td className="p-3 text-center font-mono">
+                        <span
+                          className={`inline-flex items-center justify-center w-7 h-7 rounded-full text-xs font-black shadow-sm ${
+                            rank === 1
+                              ? 'bg-[#fbbf24] text-[#064e3b]'
+                              : rank === 2
+                              ? 'bg-slate-300 text-slate-900'
+                              : rank === 3
+                              ? 'bg-amber-600 text-white'
+                              : 'bg-[#022c22] text-emerald-300 border border-emerald-700'
+                          }`}
+                        >
+                          {rank}
+                        </span>
+                      </td>
+                      <td className="p-3">
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-white group-hover:text-[#fbbf24] transition-colors">
+                            {item.student.name}
+                          </span>
+                          {rank <= 3 && (
+                            <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-[#fbbf24]/20 text-[#fbbf24] font-bold">
+                              متميز
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="p-3 text-emerald-300/80">{item.halaqahName}</td>
+                      <td className="p-3 text-center font-mono font-bold text-emerald-300">
+                        {item.evalPoints}
+                      </td>
+                      <td className="p-3 text-center font-mono font-bold text-emerald-300">
+                        {item.examPoints}
+                      </td>
+                      <td className="p-3 text-center font-mono font-bold text-emerald-300">
+                        {item.listeningPoints}
+                      </td>
+                      <td className="p-3 text-center font-mono text-emerald-300">
+                        {item.pagePoints}
+                      </td>
+                      <td className="p-3 text-center font-mono text-sm font-black text-[#fbbf24]">
+                        {item.totalPoints}
+                      </td>
+                      <td className="p-3 text-left">
+                        <button
+                          type="button"
+                          className="px-3 py-1 rounded-lg bg-emerald-800/80 hover:bg-[#fbbf24] text-emerald-100 hover:text-[#064e3b] text-[11px] font-bold transition-colors inline-flex items-center gap-1 cursor-pointer"
+                        >
+                          <span>عرض النقاط</span>
+                          <ChevronLeft className="w-3.5 h-3.5" />
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* DETAILED POINT BREAKDOWN MODAL FOR SELECTED STUDENT */}
+      {selectedStudentForBreakdown && breakdownData && (
+        <div className="fixed inset-0 z-[9999] bg-black/85 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-[#022c22] border border-[#fbbf24]/60 rounded-3xl w-full max-w-2xl max-h-[90vh] overflow-y-auto p-6 sm:p-8 shadow-2xl space-y-6 text-right">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between border-b border-emerald-800 pb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-[#fbbf24] to-[#f59e0b] text-[#064e3b] font-black text-xl flex items-center justify-center shadow-lg">
+                  {selectedStudentForBreakdown.name.charAt(0)}
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-base sm:text-lg font-black text-white font-heading">
+                      {selectedStudentForBreakdown.name}
+                    </h3>
+                    <span className="text-xs px-2.5 py-0.5 rounded-full bg-[#fbbf24]/20 text-[#fbbf24] font-bold border border-[#fbbf24]/30">
+                      الترتيب #{studentRankList.findIndex(i => i.student.id === selectedStudentForBreakdown.id) + 1}
+                    </span>
+                  </div>
+                  <p className="text-xs text-emerald-300/80 mt-0.5">
+                    الحلقة: {breakdownData.halaqahName} • إجمالي رصيد النقاط: <strong className="text-[#fbbf24] font-mono text-sm">{breakdownData.totalPoints} نقطة</strong>
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setSelectedStudentForBreakdown(null)}
+                className="p-2 rounded-xl text-emerald-300 hover:text-white cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Point Sources Summary Grid */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div className="p-3 rounded-2xl bg-[#064e3b]/50 border border-emerald-800 text-center space-y-1">
+                <span className="text-[10px] text-emerald-300 font-bold block">تقييم التسميع</span>
+                <span className="text-lg font-black text-[#fbbf24] font-mono">{breakdownData.evalPoints}</span>
+                <span className="text-[10px] text-emerald-400/80 block">نقطة مكتسبة</span>
+              </div>
+
+              <div className="p-3 rounded-2xl bg-[#064e3b]/50 border border-emerald-800 text-center space-y-1">
+                <span className="text-[10px] text-emerald-300 font-bold block">الاختبارات القرآنية</span>
+                <span className="text-lg font-black text-[#fbbf24] font-mono">{breakdownData.examPoints}</span>
+                <span className="text-[10px] text-emerald-400/80 block">نقطة معتمدة</span>
+              </div>
+
+              <div className="p-3 rounded-2xl bg-[#064e3b]/50 border border-emerald-800 text-center space-y-1">
+                <span className="text-[10px] text-emerald-300 font-bold block">الاستماع القرآني</span>
+                <span className="text-lg font-black text-[#fbbf24] font-mono">{breakdownData.listeningPoints}</span>
+                <span className="text-[10px] text-emerald-400/80 block">تكرارات منجزة</span>
+              </div>
+
+              <div className="p-3 rounded-2xl bg-[#064e3b]/50 border border-emerald-800 text-center space-y-1">
+                <span className="text-[10px] text-emerald-300 font-bold block">الأوجه والصفحات</span>
+                <span className="text-lg font-black text-[#fbbf24] font-mono">{breakdownData.pagePoints}</span>
+                <span className="text-[10px] text-emerald-400/80 block">نقاط الإتمام</span>
+              </div>
+            </div>
+
+            {/* Itemized Lists: How Points Were Gathered */}
+            <div className="space-y-4">
+              {/* 1. Recitation Evaluations Points List */}
+              <div className="bg-[#064e3b]/30 rounded-2xl p-4 border border-emerald-800 space-y-3">
+                <div className="flex items-center justify-between text-xs font-bold text-white border-b border-emerald-800 pb-2">
+                  <div className="flex items-center gap-1.5">
+                    <BookOpen className="w-4 h-4 text-[#fbbf24]" />
+                    <span>سجل نقاط التسميع اليومي ({breakdownData.stEvaluations.length})</span>
+                  </div>
+                  <span className="text-[#fbbf24] font-mono">
+                    المجموع: {breakdownData.evalPoints} نقطة
+                  </span>
+                </div>
+
+                {breakdownData.stEvaluations.length === 0 ? (
+                  <p className="text-xs text-emerald-300/60 text-center py-2">
+                    لم تسجل تقييمات يومية بنقاط لهذا الطالب حتى الآن.
+                  </p>
+                ) : (
+                  <div className="max-h-40 overflow-y-auto space-y-2 pr-1">
+                    {breakdownData.stEvaluations.map(ev => {
+                      const pts = ev.recitationDetails?.criteriaPointsEarnedToday || 0;
+                      return (
+                        <div
+                          key={ev.id}
+                          className="p-2.5 rounded-xl bg-[#022c22] border border-emerald-900/60 flex items-center justify-between text-xs"
+                        >
+                          <div>
+                            <span className="text-[#fbbf24] font-bold">تاريخ: {ev.date}</span>
+                            <span className="text-slate-300 text-[11px] block mt-0.5">
+                              {ev.recitationDetails?.newMemorizationAchieved || 'تسميع يومي'}
+                            </span>
+                          </div>
+                          <span className="px-2.5 py-1 rounded-lg bg-emerald-500/20 text-emerald-300 font-mono font-bold">
+                            +{pts} نقطة
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* 2. Exams Points List */}
+              <div className="bg-[#064e3b]/30 rounded-2xl p-4 border border-emerald-800 space-y-3">
+                <div className="flex items-center justify-between text-xs font-bold text-white border-b border-emerald-800 pb-2">
+                  <div className="flex items-center gap-1.5">
+                    <FileText className="w-4 h-4 text-[#fbbf24]" />
+                    <span>سجل نقاط الاختبارات القرآنية ({breakdownData.stSubmissions.length})</span>
+                  </div>
+                  <span className="text-[#fbbf24] font-mono">
+                    المجموع: {breakdownData.examPoints} نقطة
+                  </span>
+                </div>
+
+                {breakdownData.stSubmissions.length === 0 ? (
+                  <p className="text-xs text-emerald-300/60 text-center py-2">
+                    لم ينجز الطالب أي اختبارات إلكترونية بعد.
+                  </p>
+                ) : (
+                  <div className="max-h-40 overflow-y-auto space-y-2 pr-1">
+                    {breakdownData.stSubmissions.map(sub => (
+                      <div
+                        key={sub.id}
+                        className="p-2.5 rounded-xl bg-[#022c22] border border-emerald-900/60 flex items-center justify-between text-xs"
+                      >
+                        <div>
+                          <span className="text-white font-bold">{sub.examTitle}</span>
+                          <span className="text-emerald-300 text-[11px] block mt-0.5 font-mono">
+                            الدرجة: {sub.totalScoreEarned} من {sub.maxPossibleScore} ({sub.percentage}%)
+                          </span>
+                        </div>
+                        <span className="px-2.5 py-1 rounded-lg bg-[#fbbf24]/20 text-[#fbbf24] font-mono font-bold">
+                          +{sub.pointsGrantedForLeaderboard || 0} نقطة شرف
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* 3. Listening Points List */}
+              <div className="bg-[#064e3b]/30 rounded-2xl p-4 border border-emerald-800 space-y-3">
+                <div className="flex items-center justify-between text-xs font-bold text-white border-b border-emerald-800 pb-2">
+                  <div className="flex items-center gap-1.5">
+                    <Headphones className="w-4 h-4 text-[#fbbf24]" />
+                    <span>سجل الاستماع القرآني المكتمل ({breakdownData.completedListenings})</span>
+                  </div>
+                  <span className="text-[#fbbf24] font-mono">
+                    المجموع: {breakdownData.listeningPoints} نقطة
+                  </span>
+                </div>
+
+                {breakdownData.stLogs.length === 0 ? (
+                  <p className="text-xs text-emerald-300/60 text-center py-2">
+                    {breakdownData.listeningPoints > 0
+                      ? `رصيد استماع معتمد: +${breakdownData.listeningPoints} نقطة`
+                      : 'لم يتم إتمام أي جلسة استماع قرآني مكتملة بعد.'}
+                  </p>
+                ) : (
+                  <div className="max-h-40 overflow-y-auto space-y-2 pr-1">
+                    {breakdownData.stLogs.map(l => (
+                      <div
+                        key={l.id}
+                        className="p-2.5 rounded-xl bg-[#022c22] border border-emerald-900/60 flex items-center justify-between text-xs"
+                      >
+                        <div>
+                          <span className="text-white font-bold">
+                            سورة {l.surahName} (الآيات {l.fromAyah} إلى {l.toAyah})
+                          </span>
+                          <span className="text-emerald-300 text-[11px] block mt-0.5">
+                            تم تكرار الاستماع {l.completedCount} مرات في تاريخ ({l.date})
+                          </span>
+                        </div>
+                        <span className="px-2.5 py-1 rounded-lg bg-emerald-500/20 text-emerald-300 font-mono font-bold">
+                          +5 نقاط
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="flex justify-end pt-3 border-t border-emerald-800">
+              <button
+                type="button"
+                onClick={() => setSelectedStudentForBreakdown(null)}
+                className="px-6 py-2.5 rounded-xl bg-[#fbbf24] text-[#064e3b] font-black text-xs cursor-pointer shadow-md"
+              >
+                إغلاق النافذة
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* LEADERBOARD SCOPE SETTINGS MODAL */}
+      {isSettingsOpen && (
+        <div className="fixed inset-0 z-[9999] bg-black/85 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="bg-[#022c22] border border-[#fbbf24]/60 rounded-3xl w-full max-w-md p-6 sm:p-7 shadow-2xl space-y-5 text-right relative">
+            <button
+              onClick={() => setIsSettingsOpen(false)}
+              className="absolute top-4 left-4 p-2 text-emerald-300 hover:text-white rounded-xl bg-emerald-950/40 cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="flex items-center gap-3 border-b border-emerald-800/80 pb-3">
+              <div className="w-12 h-12 rounded-2xl bg-amber-500/20 text-[#fbbf24] border border-[#fbbf24]/40 flex items-center justify-center shrink-0">
+                <Sliders className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-white font-heading">
+                  إعدادات نطاق لوحة الشرف
+                </h3>
+                <p className="text-xs text-[#fbbf24] font-bold mt-0.5">
+                  تحديد آلية التنافس وترتيب الطلاب
+                </p>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <button
+                type="button"
+                onClick={() => handleSaveScope('all_unified')}
+                disabled={isSavingSettings}
+                className={`w-full p-4 rounded-2xl border text-right transition-all cursor-pointer ${
+                  activeScope === 'all_unified'
+                    ? 'bg-[#064e3b] border-[#fbbf24] ring-2 ring-[#fbbf24]/40 text-white'
+                    : 'bg-[#022c22] border-[#065f46] text-emerald-200 hover:bg-[#064e3b]/50'
+                }`}
+              >
+                <div className="flex items-center justify-between font-bold text-xs mb-1">
+                  <span>1. الترتيب العام الموحد (كافة الحلقات معاً)</span>
+                  {activeScope === 'all_unified' && (
+                    <span className="w-2.5 h-2.5 rounded-full bg-[#fbbf24]" />
+                  )}
+                </div>
+                <p className="text-[11px] text-emerald-300/80 leading-relaxed">
+                  يتنافس جميع طلاب المركز في قائمة موحدة واحدة ويظهر ترتيب المراكز الأولى على مستوى المجمع ككل.
+                </p>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleSaveScope('per_halaqah')}
+                disabled={isSavingSettings}
+                className={`w-full p-4 rounded-2xl border text-right transition-all cursor-pointer ${
+                  activeScope === 'per_halaqah'
+                    ? 'bg-[#064e3b] border-[#fbbf24] ring-2 ring-[#fbbf24]/40 text-white'
+                    : 'bg-[#022c22] border-[#065f46] text-emerald-200 hover:bg-[#064e3b]/50'
+                }`}
+              >
+                <div className="flex items-center justify-between font-bold text-xs mb-1">
+                  <span>2. الترتيب الداخلي المستقل لكل حلقة</span>
+                  {activeScope === 'per_halaqah' && (
+                    <span className="w-2.5 h-2.5 rounded-full bg-[#fbbf24]" />
+                  )}
+                </div>
+                <p className="text-[11px] text-emerald-300/80 leading-relaxed">
+                  يقتصر التنافس والترتيب على طلاب كل حلقة بمفردها، بحيث يكون لكل حلقة مراكزها الأولى الخاصة.
+                </p>
+              </button>
+            </div>
+
+            <div className="pt-2 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setIsSettingsOpen(false)}
+                className="px-5 py-2.5 rounded-xl bg-emerald-900/60 text-emerald-300 text-xs font-bold cursor-pointer"
+              >
+                إغلاق
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};

@@ -121,7 +121,7 @@ export const ExamsTab: React.FC<ExamsTabProps> = ({
   onSaveLeaderboardSettings,
   onRefreshGoogleAuth
 }) => {
-  const [activeSubTab, setActiveSubTab] = useState<'exams' | 'submissions' | 'leaderboard' | 'google_sheets'>('exams');
+  const [activeSubTab, setActiveSubTab] = useState<'exams' | 'submissions' | 'google_sheets'>('exams');
   const [isCreatingExam, setIsCreatingExam] = useState(false);
   const [editingExamId, setEditingExamId] = useState<string | null>(null);
   const [selectedExamForSubmissions, setSelectedExamForSubmissions] = useState<string>('all');
@@ -1002,42 +1002,6 @@ export const ExamsTab: React.FC<ExamsTabProps> = ({
     }
   };
 
-  // Leaderboard Calculation
-  const calculateLeaderboardData = () => {
-    const studentScoresMap: Record<string, {
-      student: Student;
-      totalExamPoints: number;
-      completedExamsCount: number;
-      bestPercentage: number;
-      halaqahName: string;
-    }> = {};
-
-    students.forEach(s => {
-      studentScoresMap[s.id] = {
-        student: s,
-        totalExamPoints: 0,
-        completedExamsCount: 0,
-        bestPercentage: 0,
-        halaqahName: s.halaqahName || halaqahs.find(h => h.id === s.halaqahId)?.name || 'الحلقة'
-      };
-    });
-
-    submissions.forEach(sub => {
-      if (studentScoresMap[sub.studentId]) {
-        studentScoresMap[sub.studentId].totalExamPoints += (sub.pointsGrantedForLeaderboard || 0);
-        studentScoresMap[sub.studentId].completedExamsCount += 1;
-        if (sub.percentage > studentScoresMap[sub.studentId].bestPercentage) {
-          studentScoresMap[sub.studentId].bestPercentage = sub.percentage;
-        }
-      }
-    });
-
-    const list = Object.values(studentScoresMap);
-    list.sort((a, b) => b.totalExamPoints - a.totalExamPoints || b.bestPercentage - a.bestPercentage);
-    return list;
-  };
-
-  const leaderboardList = calculateLeaderboardData();
 
   // Filtered Exams
   const filteredExams = exams.filter(ex => {
@@ -1131,17 +1095,6 @@ export const ExamsTab: React.FC<ExamsTabProps> = ({
             )}
           </button>
 
-          <button
-            onClick={() => setActiveSubTab('leaderboard')}
-            className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 transition-all cursor-pointer ${
-              activeSubTab === 'leaderboard'
-                ? 'bg-[#fbbf24] text-[#064e3b] shadow-md shadow-amber-500/20'
-                : 'bg-[#022c22] text-emerald-200 hover:text-white hover:bg-emerald-900/60 border border-emerald-800/60'
-            }`}
-          >
-            <Trophy className="w-4 h-4" />
-            <span>لوحة الشرف والأوائل</span>
-          </button>
 
           <button
             onClick={() => setActiveSubTab('google_sheets')}
@@ -1646,143 +1599,6 @@ export const ExamsTab: React.FC<ExamsTabProps> = ({
         </div>
       )}
 
-      {/* SUBTAB 3: LEADERBOARD & RANKINGS */}
-      {activeSubTab === 'leaderboard' && (
-        <div className="space-y-6">
-          {/* Supervisor Controls Banner */}
-          {isSupervisor && (
-            <div className="p-5 rounded-3xl bg-[#022c22] border border-[#fbbf24]/40 shadow-xl space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 text-sm font-bold text-[#fbbf24]">
-                  <Settings className="w-4 h-4" />
-                  <span>إعدادات المشرف للوحة الشرف والترتيب العام</span>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
-                <div>
-                  <label className="block text-xs text-emerald-200 font-bold mb-1">
-                    نطاق لوحة الشرف بين الحلقات:
-                  </label>
-                  <select
-                    value={leaderboardSettings.scope}
-                    onChange={async e => {
-                      const newSettings: LeaderboardSettings = {
-                        ...leaderboardSettings,
-                        scope: e.target.value as LeaderboardScope,
-                        updatedAt: new Date().toISOString()
-                      };
-                      await onSaveLeaderboardSettings(newSettings);
-                    }}
-                    className="w-full text-xs text-emerald-100 bg-[#064e3b] border border-[#065f46] rounded-xl px-3 py-2.5 focus:border-[#fbbf24] focus:outline-none cursor-pointer"
-                  >
-                    <option value="all_unified">جميع الحلقات في صعيد واحد (ترتيب عام موحد)</option>
-                    <option value="per_halaqah">كل حلقة منفصلة لحالها في لوحة الشرف</option>
-                  </select>
-                </div>
-
-                <div className="flex items-center gap-4 pt-4">
-                  <label className="flex items-center gap-2 text-xs text-emerald-100 font-semibold cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={leaderboardSettings.includeExamPoints}
-                      onChange={async e => {
-                        const newSettings = {
-                          ...leaderboardSettings,
-                          includeExamPoints: e.target.checked,
-                          updatedAt: new Date().toISOString()
-                        };
-                        await onSaveLeaderboardSettings(newSettings);
-                      }}
-                      className="rounded accent-emerald-500 w-4 h-4"
-                    />
-                    <span>احتساب نقاط الاختبارات في لوحة الشرف</span>
-                  </label>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Leaderboard Cards */}
-          <div className="rounded-3xl border border-[#065f46] bg-[#022c22]/90 p-6 shadow-2xl space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                <Trophy className="w-5 h-5 text-[#fbbf24]" />
-                <span>لوحة شرف الأبطال المتصدرين في الاختبارات والنقاط</span>
-              </h3>
-              <span className="text-xs text-emerald-300/80 font-bold">
-                {leaderboardList.length} طالب مسجل
-              </span>
-            </div>
-
-            <div className="space-y-3 pt-2">
-              {leaderboardList.slice(0, 20).map((item, idx) => {
-                const isFirst = idx === 0;
-                const isSecond = idx === 1;
-                const isThird = idx === 2;
-
-                return (
-                  <div
-                    key={item.student.id}
-                    className={`flex items-center justify-between p-4 rounded-2xl border transition-all ${
-                      isFirst
-                        ? 'bg-amber-950/40 border-[#fbbf24] shadow-lg shadow-amber-500/10'
-                        : isSecond
-                        ? 'bg-emerald-900/40 border-emerald-400/50'
-                        : isThird
-                        ? 'bg-emerald-950/60 border-emerald-600/40'
-                        : 'bg-[#064e3b]/30 border-emerald-800/40'
-                    }`}
-                  >
-                    <div className="flex items-center gap-3.5">
-                      <div
-                        className={`w-9 h-9 rounded-xl flex items-center justify-center font-black text-sm ${
-                          isFirst
-                            ? 'bg-[#fbbf24] text-[#064e3b] shadow-md'
-                            : isSecond
-                            ? 'bg-emerald-400 text-[#064e3b]'
-                            : isThird
-                            ? 'bg-amber-600 text-white'
-                            : 'bg-emerald-900/60 text-emerald-300 border border-emerald-700'
-                        }`}
-                      >
-                        {isFirst ? <Crown className="w-4 h-4 text-[#064e3b]" /> : idx + 1}
-                      </div>
-
-                      <div>
-                        <h4 className="text-sm font-bold text-white flex items-center gap-2">
-                          <span>{item.student.name}</span>
-                          {isFirst && (
-                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#fbbf24] text-[#064e3b] font-black flex items-center gap-1">
-                              <Crown className="w-3 h-3" />
-                              الأول على المركز
-                            </span>
-                          )}
-                        </h4>
-                        <p className="text-[11px] text-emerald-300/80 mt-0.5">
-                          {item.halaqahName} • أنجز {item.completedExamsCount} اختبارات
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-4">
-                      <div className="text-left">
-                        <div className="text-base font-black text-[#fbbf24]">
-                          {item.totalExamPoints}{' '}
-                          <span className="text-[11px] font-normal text-emerald-300">نقطة</span>
-                        </div>
-                        <div className="text-[10px] text-emerald-400">
-                          أعلى نسبة: {item.bestPercentage}%
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* SUBTAB 4: GOOGLE SHEETS EXPORT */}
       {activeSubTab === 'google_sheets' && (

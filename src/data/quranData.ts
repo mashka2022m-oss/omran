@@ -125,13 +125,26 @@ export const QURAN_SURAHS: SurahInfo[] = [
 ];
 
 export const FAMOUS_RECITERS = [
-  { id: "minshawi", name: "الشيخ محمد صديق المنشاوي (المصحف المعلم)", style: "خشوع وعذوبة الصوت وترسيخ الحفظ للناشئة" },
-  { id: "hussary", name: "الشيخ محمود خليل الحصري (المصحف المعلم)", style: "إتقان الأحكام ومخارج الحروف والتأني الفائق" },
-  { id: "afasy", name: "الشيخ مشاري بن راشد العفاسي", style: "نبرة محببة وعصرية للأجيال الناشئة" },
-  { id: "hudhaify", name: "الشيخ علي بن عبد الرحمن الحذيفي", style: "وضوح الترتيل وسلاسة القراءة وضبط الوقف والابتداء" },
-  { id: "abdulbasit", name: "الشيخ عبد الباسط عبد الصمد (المصحف المرتل)", style: "فصاحة الصوت وقوة الأداء القرآني" },
-  { id: "suwaid", name: "الدكتور أيمن رشدي سويد", style: "التطبيق العملي الدقيق لقواعد التجويد ومخارج الحروف" }
+  { id: "minshawi", name: "الشيخ محمد صديق المنشاوي (المصحف المعلم)", style: "خشوع وعذوبة الصوت وترسيخ الحفظ للناشئة", everyAyahFolder: "Minshawy_Teacher_128kbps", hasAudio: true },
+  { id: "hussary", name: "الشيخ محمود خليل الحصري (المصحف المعلم)", style: "إتقان الأحكام ومخارج الحروف والتأني الفائق", everyAyahFolder: "Husary_Muallim_128kbps", hasAudio: true },
+  { id: "afasy", name: "الشيخ مشاري بن راشد العفاسي", style: "نبرة محببة وعصرية للأجيال الناشئة", everyAyahFolder: "Alafasy_128kbps", hasAudio: true },
+  { id: "hudhaify", name: "الشيخ علي بن عبد الرحمن الحذيفي", style: "وضوح الترتيل وسلاسة القراءة وضبط الوقف والابتداء", everyAyahFolder: "Hudhaify_128kbps", hasAudio: true },
+  { id: "abdulbasit", name: "الشيخ عبد الباسط عبد الصمد (المصحف المرتل)", style: "فصاحة الصوت وقوة الأداء القرآني", everyAyahFolder: "Abdul_Basit_Murattal_192kbps", hasAudio: true },
+  { id: "suwaid", name: "الدكتور أيمن رشدي سويد", style: "التطبيق العملي الدقيق لقواعد التجويد ومخارج الحروف", everyAyahFolder: "Ayman_Sowaid_64kbps", hasAudio: true }
 ];
+
+/**
+ * Returns the direct high-quality audio URL for any Surah and Ayah from EveryAyah CDN
+ */
+export function getAyahAudioUrl(surahNumber: number, ayahNumber: number, reciterIdOrFolder: string = 'minshawi'): string {
+  const reciter = FAMOUS_RECITERS.find(
+    r => r.id === reciterIdOrFolder || r.name === reciterIdOrFolder || r.everyAyahFolder === reciterIdOrFolder
+  ) || FAMOUS_RECITERS[0];
+  const folder = reciter.everyAyahFolder || 'Minshawy_Teacher_128kbps';
+  const sStr = String(surahNumber).padStart(3, '0');
+  const aStr = String(ayahNumber).padStart(3, '0');
+  return `https://everyayah.com/data/${folder}/${sStr}${aStr}.mp3`;
+}
 
 /**
  * Find surah by name, number, or fuzzy matching

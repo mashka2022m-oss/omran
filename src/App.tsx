@@ -20,7 +20,8 @@ import {
   Headphones,
   UserCog,
   Building2,
-  ClipboardList
+  ClipboardList,
+  Trophy
 } from 'lucide-react';
 import {
   Student,
@@ -47,7 +48,8 @@ import {
   normalizeTeacherText,
   QuranComplex,
   getThreePartNameValidation,
-  IssuedCertificate
+  IssuedCertificate,
+  StudentListeningLog
 } from './types';
 import {
   OmranDataService,
@@ -85,6 +87,7 @@ import { ExamsTab } from './components/tabs/ExamsTab';
 import { AccountsTab } from './components/tabs/AccountsTab';
 import { RecordingsTab } from './components/tabs/RecordingsTab';
 import { CertificatesTab } from './components/tabs/CertificatesTab';
+import { LeaderboardTab } from './components/tabs/LeaderboardTab';
 import { EditAccountModal } from './components/EditAccountModal';
 
 export function App() {
@@ -199,6 +202,7 @@ export function App() {
   const [recordings, setRecordings] = useState<SurahRecording[]>([]);
   const [recordingsConfig, setRecordingsConfig] = useState<RecordingsConfig>(DEFAULT_RECORDINGS_CONFIG);
   const [certificates, setCertificates] = useState<IssuedCertificate[]>([]);
+  const [listeningLogs, setListeningLogs] = useState<StudentListeningLog[]>([]);
   const [isLoadingData, setIsLoadingData] = useState(true);
 
   // Parse URL on initial load and handle hash / search changes
@@ -290,7 +294,8 @@ export function App() {
         loadedRecordings,
         loadedRecordingsConfig,
         loadedComplexes,
-        loadedCertificates
+        loadedCertificates,
+        loadedListeningLogs
       ] = await Promise.all([
         OmranDataService.loadStudents(),
         OmranDataService.loadAttendance(),
@@ -308,7 +313,8 @@ export function App() {
         OmranDataService.loadRecordings(),
         OmranDataService.loadRecordingsConfig(),
         OmranDataService.loadComplexes(),
-        OmranDataService.loadCertificates()
+        OmranDataService.loadCertificates(),
+        OmranDataService.loadListeningLogs()
       ]);
 
       setStudents(loadedStudents);
@@ -328,6 +334,7 @@ export function App() {
       setRecordingsConfig(loadedRecordingsConfig);
       setComplexes(loadedComplexes);
       setCertificates(loadedCertificates);
+      setListeningLogs(loadedListeningLogs);
     } catch (e) {
       console.warn('Initial data load notice:', e);
     } finally {
@@ -398,6 +405,9 @@ export function App() {
     const unsubCertificates = OmranDataService.subscribeCertificates(newCerts => {
       setCertificates(newCerts);
     });
+    const unsubListeningLogs = OmranDataService.subscribeListeningLogs(newLogs => {
+      setListeningLogs(newLogs);
+    });
 
     return () => {
       unsubStudents();
@@ -416,6 +426,7 @@ export function App() {
       unsubRecordings();
       unsubRecordingsConfig();
       unsubCertificates();
+      unsubListeningLogs();
     };
   }, []);
 
@@ -1104,32 +1115,43 @@ export function App() {
     setAttendance(list);
   };
 
-  // 7. Save Evaluation & dynamically update student's current position (where student reached)
+  // 7. Save Evaluation & dynamically update student's current position and award criteria points
   const handleSaveEvaluation = async (evaluation: StudentEvaluation) => {
     await OmranDataService.saveEvaluation(evaluation);
     const list = await OmranDataService.loadEvaluations();
     setEvaluations(list);
 
-    // If today recitation contains a new memorization portion, update the student's currentSurah and currentAyah
-    const todayNew = evaluation.recitationDetails?.todayNewItem;
-    if (todayNew && todayNew.surahNumber) {
-      const targetStudent = students.find(s => s.id === evaluation.studentId);
-      if (targetStudent) {
-        const finalSurahNum = todayNew.toSurahNumber || todayNew.surahNumber;
-        const finalSurahName = todayNew.toSurahName || todayNew.surahName || getSurahInfo(finalSurahNum).name;
-        const finalAyah = todayNew.toAyah || todayNew.fromAyah || 1;
+    // If today recitation contains a new memorization portion, update the student's position and add points
+    const targetStudent = students.find(s => s.id === evaluation.studentId);
+    if (targetStudent) {
+      const todayNew = evaluation.recitationDetails?.todayNewItem;
+      const criteriaPts = evaluation.recitationDetails?.criteriaPointsEarnedToday || 0;
+      const pagePts = evaluation.recitationDetails?.pagesPointsEarnedToday || 0;
+      const totalEarnedToday = criteriaPts + pagePts;
 
-        const updatedStudent: Student = {
-          ...targetStudent,
-          currentSurah: finalSurahNum,
-          currentSurahName: finalSurahName,
-          currentAyah: finalAyah
-        };
+      let finalSurahNum = targetStudent.currentSurah;
+      let finalSurahName = targetStudent.currentSurahName;
+      let finalAyah = targetStudent.currentAyah;
 
-        await OmranDataService.saveStudent(updatedStudent);
-        const updatedStudentsList = await OmranDataService.loadStudents();
-        setStudents(updatedStudentsList);
+      if (todayNew && todayNew.surahNumber && !todayNew.didNotRecite) {
+        finalSurahNum = todayNew.toSurahNumber || todayNew.surahNumber;
+        finalSurahName = todayNew.toSurahName || todayNew.surahName || getSurahInfo(finalSurahNum).name;
+        finalAyah = todayNew.toAyah || todayNew.fromAyah || 1;
       }
+
+      const updatedStudent: Student = {
+        ...targetStudent,
+        currentSurah: finalSurahNum,
+        currentSurahName: finalSurahName,
+        currentAyah: finalAyah,
+        criteriaPoints: (targetStudent.criteriaPoints || 0) + criteriaPts,
+        points: (targetStudent.points || 0) + totalEarnedToday
+      };
+
+      setStudents(prev => prev.map(s => s.id === updatedStudent.id ? updatedStudent : s));
+      await OmranDataService.saveStudent(updatedStudent);
+      const updatedStudentsList = await OmranDataService.loadStudents();
+      setStudents(updatedStudentsList);
     }
   };
 
@@ -1183,7 +1205,8 @@ export function App() {
   const handleUpdateStudentAIPlan = async (
     studentId: string,
     newAssignment: any,
-    updatedPosition?: { surahNumber: number; surahName: string; ayah: number }
+    updatedPosition?: { surahNumber: number; surahName: string; ayah: number },
+    listeningAssignment?: any
   ) => {
     const student = students.find(s => s.id === studentId);
     if (!student) return;
@@ -1194,6 +1217,7 @@ export function App() {
       currentSurahName: updatedPosition?.surahName ?? student.currentSurahName,
       currentAyah: updatedPosition?.ayah ?? student.currentAyah,
       persistentReviewItems: newAssignment?.reviewItems || student.persistentReviewItems,
+      activeListeningAssignment: listeningAssignment || student.activeListeningAssignment,
       aiPlan: {
         roadmapSummary: student.aiPlan?.roadmapSummary || 'خطة الحفظ والمراجعة التراكمية',
         difficultyAdjustment: student.aiPlan?.difficultyAdjustment || 'وتيرة متوازنة',
@@ -1626,6 +1650,7 @@ export function App() {
     { id: 'evaluation', label: 'تقييم التسميع', icon: BookOpen },
     { id: 'exams', label: 'قسم الاختبارات', icon: FileText, badge: scopedExams.length > 0 ? scopedExams.length : undefined },
     { id: 'certificates', label: 'قسم الشهادات', icon: Award },
+    { id: 'leaderboard', label: 'لوحة الشرف', icon: Trophy },
     ...(isDeveloper || isSupervisor ? [
       { id: 'recordings', label: 'مقاطع التلاوة والواجبات', icon: Headphones, badge: recordings.length > 0 ? recordings.length : undefined }
     ] : []),
@@ -1938,6 +1963,22 @@ export function App() {
                 selectedComplexId={selectedComplexId}
                 activeComplexName={activeComplex?.name || scopedSettings.complexName}
                 submissions={scopedSubmissions}
+              />
+            )}
+
+            {activeTab === 'leaderboard' && (
+              <LeaderboardTab
+                students={scopedStudents}
+                halaqahs={scopedHalaqahs}
+                evaluations={scopedEvaluations}
+                submissions={scopedSubmissions}
+                listeningLogs={listeningLogs}
+                leaderboardSettings={leaderboardSettings || undefined}
+                isSupervisor={isSupervisor}
+                isDeveloper={isDeveloper}
+                activeHalaqahId={activeHalaqahId}
+                currentUserName={currentTeacher?.name || currentUser?.username || scopedSettings.teacherName}
+                onSaveLeaderboardSettings={handleSaveLeaderboardSettings}
               />
             )}
 

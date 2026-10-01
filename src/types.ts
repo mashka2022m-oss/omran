@@ -323,6 +323,7 @@ export interface DailyAssignment {
   suggestedSheikh: string; // الشيخ المقترح للاستماع
   tajweedFocus?: string; // تركيز التجويد
   dailyNote: string; // توجيه المعلم المنزلي
+  targetRepetitions?: number; // عدد مرات التكرار المطلوبة للاستماع (1-20)
   // Detailed items
   newItem?: QuranRecitationItem;
   reviewItem?: QuranRecitationItem;
@@ -368,6 +369,17 @@ export interface Student {
   listeningPoints?: number; // نقاط إتمام واجبات الاستماع
   listenedAyahsCount?: number; // إجمالي عدد الآيات المسموعة
   dailyListeningCompletedDate?: string; // تاريخ آخر إنجاز استماع يومي
+  activeListeningAssignment?: {
+    surahNumber: number;
+    surahName: string;
+    fromAyah: number;
+    toAyah: number;
+    sheikhName: string;
+    requiredRepetitions: number;
+    assignedDate: string;
+    completedRepetitions?: number;
+    isCompleted?: boolean;
+  };
   criteriaPoints?: number; // نقاط المعايير المكتسبة
   points?: number; // إجمالي النقاط الكلي للطالب
   createdAt: string;
@@ -416,6 +428,7 @@ export interface StudentEvaluation {
     tomorrowReviewItems?: QuranRecitationItem[];
     tomorrowSuggestedSheikh?: string;
     tomorrowDailyNote?: string;
+    tomorrowTargetRepetitions?: number;
     tomorrowListeningAssignment?: {
       surahNumber: number;
       surahName: string;
