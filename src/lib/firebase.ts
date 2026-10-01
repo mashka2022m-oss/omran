@@ -2662,12 +2662,16 @@ export class OmranDataService {
     const local = getLocalCache<TeacherShift[]>(OMRAN_CACHE_KEYS.TEACHER_SHIFTS, []);
     try {
       const snap = await getDocs(collection(db, 'teacher_shifts'));
-      const list = snap.docs.map(d => ({ ...d.data(), id: d.id } as TeacherShift));
-      const filtered = complexId ? list.filter(s => s.complexId === complexId) : list;
-      if (filtered.length > 0) {
-        setLocalCache(OMRAN_CACHE_KEYS.TEACHER_SHIFTS, list);
-        return filtered;
-      }
+      const list = snap.docs.map(d => {
+        const data = d.data();
+        return {
+          ...data,
+          id: d.id,
+          assignedTeacherIds: Array.isArray(data.assignedTeacherIds) ? data.assignedTeacherIds : []
+        } as TeacherShift;
+      });
+      setLocalCache(OMRAN_CACHE_KEYS.TEACHER_SHIFTS, list);
+      return complexId ? list.filter(s => s.complexId === complexId) : list;
     } catch (e) {
       // quiet fallback
     }
@@ -2676,10 +2680,14 @@ export class OmranDataService {
 
   static async saveTeacherShift(shift: TeacherShift): Promise<void> {
     const local = getLocalCache<TeacherShift[]>(OMRAN_CACHE_KEYS.TEACHER_SHIFTS, []);
-    const updated = [...local.filter(s => s.id !== shift.id), shift];
+    const safeShift = {
+      ...shift,
+      assignedTeacherIds: Array.isArray(shift.assignedTeacherIds) ? shift.assignedTeacherIds : []
+    };
+    const updated = [...local.filter(s => s.id !== safeShift.id), safeShift];
     setLocalCache(OMRAN_CACHE_KEYS.TEACHER_SHIFTS, updated);
     try {
-      await setDoc(doc(db, 'teacher_shifts', shift.id), cleanFirestoreData(shift), { merge: true });
+      await setDoc(doc(db, 'teacher_shifts', safeShift.id), cleanFirestoreData(safeShift), { merge: true });
     } catch (e) {
       // Quiet fallback without breaking UI or throwing
     }
@@ -2708,11 +2716,11 @@ export class OmranDataService {
       if (complexId) {
         filtered = filtered.filter(r => r.complexId === complexId);
       }
-      setLocalCache(cacheKey, filtered);
+      setLocalCache(cacheKey, list);
       return filtered;
     } catch (e) {
       // quiet fallback
-      return local;
+      return complexId ? local.filter(r => r.complexId === complexId) : local;
     }
   }
 
@@ -2749,11 +2757,8 @@ export class OmranDataService {
     try {
       const snap = await getDocs(collection(db, 'mosques'));
       const list = snap.docs.map(d => ({ ...d.data(), id: d.id } as MosqueItem));
-      const filtered = complexId ? list.filter(m => m.complexId === complexId) : list;
-      if (filtered.length > 0) {
-        setLocalCache(OMRAN_CACHE_KEYS.MOSQUES, list);
-        return filtered;
-      }
+      setLocalCache(OMRAN_CACHE_KEYS.MOSQUES, list);
+      return complexId ? list.filter(m => m.complexId === complexId) : list;
     } catch (e) {
       // quiet fallback
     }

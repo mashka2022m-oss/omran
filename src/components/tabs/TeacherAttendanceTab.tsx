@@ -21,7 +21,8 @@ import {
   Building2,
   Users,
   Compass,
-  AlertCircle
+  AlertCircle,
+  UserPlus
 } from 'lucide-react';
 import {
   TeacherAccount,
@@ -61,6 +62,7 @@ export const TeacherAttendanceTab: React.FC<TeacherAttendanceTabProps> = ({
   const [activeSubTab, setActiveSubTab] = useState<'records' | 'shifts' | 'mosques' | 'self'>(
     isSupervisorOrDev ? 'records' : 'self'
   );
+  const isSupervisorSelfMode = activeSubTab === 'self';
 
   // Quick Toast Notification
   const [toastMessage, setToastMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
@@ -127,6 +129,11 @@ export const TeacherAttendanceTab: React.FC<TeacherAttendanceTabProps> = ({
 
   // Search in records
   const [searchTeacherQuery, setSearchTeacherQuery] = useState('');
+
+  // Dedicated Quick-Assign Teachers Modal State
+  const [assignTeachersModalShift, setAssignTeachersModalShift] = useState<TeacherShift | null>(null);
+  const [assignTeachersSearch, setAssignTeachersSearch] = useState('');
+  const [selectedAssignedTeacherIds, setSelectedAssignedTeacherIds] = useState<string[]>([]);
 
   // Helper for Arabic Time format (e.g. 03:45 م)
   const formatCurrentArabicTime = (dateObj: Date = new Date()) => {
@@ -336,6 +343,36 @@ export const TeacherAttendanceTab: React.FC<TeacherAttendanceTabProps> = ({
   // =========================================================================
   // 2. Shifts Management Handlers
   // =========================================================================
+  const handleOpenAssignTeachersModal = (shift: TeacherShift) => {
+    setAssignTeachersModalShift(shift);
+    setSelectedAssignedTeacherIds(shift.assignedTeacherIds || []);
+    setAssignTeachersSearch('');
+  };
+
+  const handleSaveAssignedTeachers = async () => {
+    if (!assignTeachersModalShift) return;
+    const shiftId = assignTeachersModalShift.id;
+    const updatedShift: TeacherShift = {
+      ...assignTeachersModalShift,
+      assignedTeacherIds: selectedAssignedTeacherIds
+    };
+
+    setShifts(prev => prev.map(s => (s.id === shiftId ? updatedShift : s)));
+    setAssignTeachersModalShift(null);
+
+    try {
+      await OmranDataService.saveTeacherShift(updatedShift);
+      showToast('تم تعيين وتكليف المعلمين في فترة الدوام بنجاح!');
+      try {
+        confetti({ particleCount: 30, spread: 50, origin: { y: 0.8 } });
+      } catch {
+        // ignore
+      }
+    } catch (e) {
+      showToast('تم حفظ التعيين بنجاح!');
+    }
+  };
+
   const handleOpenAddShiftModal = () => {
     setEditingShiftId(null);
     setIsAddingNewMosqueInShift(mosques.length === 0);
@@ -722,7 +759,7 @@ export const TeacherAttendanceTab: React.FC<TeacherAttendanceTabProps> = ({
   const myAssignedShifts = useMemo(() => {
     const tId = currentTeacher?.id;
     if (!tId) return shifts;
-    const explicitlyAssigned = shifts.filter(s => s.assignedTeacherIds.includes(tId));
+    const explicitlyAssigned = shifts.filter(s => (s.assignedTeacherIds || []).includes(tId));
     if (explicitlyAssigned.length > 0) return explicitlyAssigned;
     // If supervisor or developer, allow them to check in into any of the complex's shifts
     if (isSupervisorOrDev) return shifts;
@@ -880,19 +917,31 @@ export const TeacherAttendanceTab: React.FC<TeacherAttendanceTabProps> = ({
           )}
 
           {myAssignedShifts.length === 0 ? (
-            <div className="p-8 text-center text-xs text-emerald-300/80 border border-dashed border-[#065f46] rounded-3xl space-y-3 bg-[#022c22]/40">
-              <p className="text-sm font-bold text-white">لا توجد فترات دوام مسندة إليك حالياً في هذا المجمع.</p>
+            <div className="p-8 text-center text-xs text-emerald-300/80 border border-dashed border-[#065f46] rounded-3xl space-y-4 bg-[#022c22]/40">
+              <p className="text-sm font-bold text-white">لا توجد فترات دوام مسندة إليك حالياً في هذا المجمع ({activeComplex?.name || 'المجمع'}).</p>
               {isSupervisorOrDev ? (
-                <button
-                  type="button"
-                  onClick={handleOpenAddShiftModal}
-                  className="px-5 py-2.5 rounded-2xl bg-gradient-to-r from-amber-400 to-amber-500 hover:brightness-110 text-[#064e3b] font-black text-xs inline-flex items-center gap-2 shadow-lg cursor-pointer transition-all"
-                >
-                  <Plus className="w-4 h-4" />
-                  <span>إنشاء وتعيين فترة دوام الآن</span>
-                </button>
+                <div className="flex items-center justify-center gap-3 flex-wrap">
+                  {shifts.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => handleOpenAssignTeachersModal(shifts[0])}
+                      className="px-5 py-2.5 rounded-2xl bg-gradient-to-r from-amber-400 to-amber-500 hover:brightness-110 text-[#064e3b] font-black text-xs inline-flex items-center gap-2 shadow-lg cursor-pointer transition-all"
+                    >
+                      <UserCheck className="w-4 h-4" />
+                      <span>تعيين فترتي وإدراج اسمي الآن</span>
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={handleOpenAddShiftModal}
+                    className="px-5 py-2.5 rounded-2xl bg-[#064e3b] hover:bg-[#064e3b]/80 border border-amber-400/50 text-amber-300 font-black text-xs inline-flex items-center gap-2 shadow-lg cursor-pointer transition-all"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>إنشاء فترة دوام جديدة</span>
+                  </button>
+                </div>
               ) : (
-                <p className="text-emerald-400">يرجى التواصل مع المشرف لتعيين فترتك وجامعك.</p>
+                <p className="text-emerald-400">يرجى التواصل مع المشرف لتعيين فترتك وجامعك في هذا المجمع.</p>
               )}
             </div>
           ) : (
@@ -1036,7 +1085,7 @@ export const TeacherAttendanceTab: React.FC<TeacherAttendanceTabProps> = ({
       {/* ===================================================================== */}
       {/* VIEW 2: SUPERVISOR ATTENDANCE RECORDS (سجل الحضور اليومي للمشرف)      */}
       {/* ===================================================================== */}
-      {isSupervisorOrDev && !isSupervisorSelfMode && activeSubTab === 'records' && (
+      {isSupervisorOrDev && activeSubTab === 'records' && (
         <div className="bg-[#064e3b]/60 border border-[#065f46] rounded-[32px] p-6 sm:p-8 space-y-6 shadow-xl backdrop-blur-md">
           {/* Header & Date Navigation */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[#065f46] pb-4">
@@ -1077,7 +1126,7 @@ export const TeacherAttendanceTab: React.FC<TeacherAttendanceTabProps> = ({
             <div className="space-y-6">
               {shifts.map(shift => {
                 const shiftMosque = mosques.find(m => m.id === shift.mosqueId) || mosques[0];
-                const assignedTeachersList = teachers.filter(t => shift.assignedTeacherIds.includes(t.id));
+                const assignedTeachersList = teachers.filter(t => (shift.assignedTeacherIds || []).includes(t.id));
 
                 return (
                   <div
@@ -1106,16 +1155,33 @@ export const TeacherAttendanceTab: React.FC<TeacherAttendanceTabProps> = ({
                         </div>
                       </div>
 
-                      <span className="text-xs text-[#86efac] font-bold">
-                        {assignedTeachersList.length} معلم مناوب
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => handleOpenAssignTeachersModal(shift)}
+                          className="px-3 py-1.5 rounded-xl bg-amber-400/20 hover:bg-amber-400 text-amber-300 hover:text-[#064e3b] border border-amber-400/40 text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer"
+                        >
+                          <UserCheck className="w-3.5 h-3.5" />
+                          <span>تعيين وتكليف المعلمين ({assignedTeachersList.length})</span>
+                        </button>
+                      </div>
                     </div>
 
                     {/* Teachers Table for this shift */}
                     {assignedTeachersList.length === 0 ? (
-                      <p className="text-xs text-emerald-300/60 text-center py-3">
-                        لم يتم تعيين أي معلمين في هذه الفترة بعد.
-                      </p>
+                      <div className="text-center py-5 space-y-2 bg-[#064e3b]/20 rounded-2xl border border-dashed border-amber-400/30 p-4">
+                        <p className="text-xs text-amber-300/90 font-bold">
+                          لم يتم تعيين أي معلمين في هذه الفترة بعد.
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => handleOpenAssignTeachersModal(shift)}
+                          className="px-4 py-2 rounded-xl bg-gradient-to-r from-amber-400 to-amber-500 hover:brightness-110 text-[#064e3b] font-black text-xs inline-flex items-center gap-1.5 shadow-md cursor-pointer transition-all"
+                        >
+                          <UserPlus className="w-4 h-4" />
+                          <span>تعيين وتكليف المعلمين لهذه الفترة الآن</span>
+                        </button>
+                      </div>
                     ) : (
                       <div className="overflow-x-auto">
                         <table className="w-full text-right text-xs">
@@ -1269,7 +1335,7 @@ export const TeacherAttendanceTab: React.FC<TeacherAttendanceTabProps> = ({
       {/* ===================================================================== */}
       {/* VIEW 3: MOSQUES MANAGEMENT (إدارة الجوامع والمساجد المضافة)            */}
       {/* ===================================================================== */}
-      {isSupervisorOrDev && !isSupervisorSelfMode && activeSubTab === 'mosques' && (
+      {isSupervisorOrDev && activeSubTab === 'mosques' && (
         <div className="bg-[#064e3b]/60 border border-[#065f46] rounded-[32px] p-6 sm:p-8 space-y-6 shadow-xl backdrop-blur-md">
           <div className="flex items-center justify-between gap-3 pb-4 border-b border-[#065f46] flex-wrap">
             <div>
@@ -1362,7 +1428,7 @@ export const TeacherAttendanceTab: React.FC<TeacherAttendanceTabProps> = ({
       {/* ===================================================================== */}
       {/* VIEW 4: SHIFTS MANAGEMENT (إدارة فترات ومناوبات الدوام)                 */}
       {/* ===================================================================== */}
-      {isSupervisorOrDev && !isSupervisorSelfMode && activeSubTab === 'shifts' && (
+      {isSupervisorOrDev && activeSubTab === 'shifts' && (
         <div className="bg-[#064e3b]/60 border border-[#065f46] rounded-[32px] p-6 sm:p-8 space-y-6 shadow-xl backdrop-blur-md">
           <div className="flex items-center justify-between gap-3 pb-4 border-b border-[#065f46] flex-wrap">
             <div>
@@ -1388,7 +1454,7 @@ export const TeacherAttendanceTab: React.FC<TeacherAttendanceTabProps> = ({
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {shifts.map(shift => {
               const shiftMosque = mosques.find(m => m.id === shift.mosqueId) || mosques[0];
-              const assignedTeachers = teachers.filter(t => shift.assignedTeacherIds.includes(t.id));
+              const assignedTeachers = teachers.filter(t => (shift.assignedTeacherIds || []).includes(t.id));
 
               return (
                 <div
@@ -1399,7 +1465,7 @@ export const TeacherAttendanceTab: React.FC<TeacherAttendanceTabProps> = ({
                     <div className="flex items-center justify-between gap-2">
                       <h4 className="text-base font-black text-white font-heading">{shift.name}</h4>
                       <span className="text-xs px-2.5 py-0.5 rounded-full bg-amber-400/20 text-amber-300 font-bold border border-amber-400/40">
-                        {assignedTeachers.length} معلمين
+                        {assignedTeachers.length} معلمين مناوبين
                       </span>
                     </div>
 
@@ -1421,40 +1487,70 @@ export const TeacherAttendanceTab: React.FC<TeacherAttendanceTabProps> = ({
                       </div>
                     </div>
 
-                    <div className="space-y-1 pt-1">
-                      <span className="text-[11px] text-emerald-300 font-bold block">المعلمون المكلفون:</span>
-                      <div className="flex flex-wrap gap-1">
-                        {assignedTeachers.map(t => (
-                          <span
-                            key={t.id}
-                            className="text-[11px] px-2 py-0.5 rounded-lg bg-[#064e3b] text-emerald-100 border border-[#065f46]"
-                          >
-                            {t.name}
-                          </span>
-                        ))}
+                    <div className="space-y-1.5 pt-1">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] text-emerald-300 font-bold block">المعلمون المكلفون ({assignedTeachers.length}):</span>
+                        <button
+                          type="button"
+                          onClick={() => handleOpenAssignTeachersModal(shift)}
+                          className="text-[11px] text-amber-300 hover:text-white font-bold flex items-center gap-1 cursor-pointer"
+                        >
+                          <UserPlus className="w-3.5 h-3.5" />
+                          <span>تعديل المكلفين</span>
+                        </button>
                       </div>
+                      {assignedTeachers.length === 0 ? (
+                        <div
+                          onClick={() => handleOpenAssignTeachersModal(shift)}
+                          className="p-2.5 rounded-xl bg-amber-400/10 border border-dashed border-amber-400/30 text-center cursor-pointer hover:bg-amber-400/20 transition-colors"
+                        >
+                          <span className="text-xs text-amber-300 font-bold">لم يُعيّن معلمين بعد — اضغط هنا لتعيين المعلمين</span>
+                        </div>
+                      ) : (
+                        <div className="flex flex-wrap gap-1">
+                          {assignedTeachers.map(t => (
+                            <span
+                              key={t.id}
+                              className="text-[11px] px-2 py-0.5 rounded-lg bg-[#064e3b] text-emerald-100 border border-[#065f46]"
+                            >
+                              {t.name}
+                            </span>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   </div>
 
-                  <div className="flex items-center justify-end gap-2 pt-2 border-t border-[#065f46]">
+                  <div className="flex items-center justify-between gap-2 pt-3 border-t border-[#065f46] flex-wrap">
                     <button
                       type="button"
-                      onClick={() => handleOpenEditShiftModal(shift)}
-                      className="px-3 py-1.5 rounded-xl bg-[#064e3b] hover:bg-[#064e3b]/80 text-emerald-200 text-xs font-bold flex items-center gap-1 cursor-pointer transition-colors"
+                      onClick={() => handleOpenAssignTeachersModal(shift)}
+                      className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-amber-400 to-amber-500 hover:brightness-110 text-[#064e3b] font-black text-xs flex items-center gap-1.5 shadow-md cursor-pointer transition-all"
                     >
-                      <Edit2 className="w-3.5 h-3.5" />
-                      <span>تعديل الفترة</span>
+                      <UserCheck className="w-4 h-4" />
+                      <span>تعيين المعلمين ({assignedTeachers.length})</span>
                     </button>
-                    {shifts.length > 1 && (
+
+                    <div className="flex items-center gap-1.5">
                       <button
                         type="button"
-                        onClick={() => handleDeleteShift(shift.id)}
-                        className="p-1.5 rounded-xl bg-red-900/30 hover:bg-red-900/60 text-red-300 cursor-pointer transition-colors"
-                        title="حذف الفترة"
+                        onClick={() => handleOpenEditShiftModal(shift)}
+                        className="px-3 py-1.5 rounded-xl bg-[#064e3b] hover:bg-[#064e3b]/80 text-emerald-200 text-xs font-bold flex items-center gap-1 cursor-pointer transition-colors"
                       >
-                        <Trash2 className="w-3.5 h-3.5" />
+                        <Edit2 className="w-3.5 h-3.5" />
+                        <span>تعديل المواعيد</span>
                       </button>
-                    )}
+                      {shifts.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteShift(shift.id)}
+                          className="p-1.5 rounded-xl bg-red-900/30 hover:bg-red-900/60 text-red-300 cursor-pointer transition-colors"
+                          title="حذف الفترة"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
               );
@@ -1838,6 +1934,143 @@ export const TeacherAttendanceTab: React.FC<TeacherAttendanceTabProps> = ({
                 className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-amber-400 to-amber-500 hover:brightness-110 text-[#064e3b] font-black text-xs shadow-md cursor-pointer transition-all"
               >
                 تأكيد وحفظ
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* ===================================================================== */}
+      {/* MODAL 4: QUICK ASSIGN TEACHERS TO SHIFT (تعيين المعلمين في الفترة)     */}
+      {/* ===================================================================== */}
+      {assignTeachersModalShift && (
+        <div className="fixed inset-0 z-[10000] bg-black/85 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="bg-[#022c22] border-2 border-amber-400 rounded-3xl w-full max-w-lg max-h-[90vh] overflow-y-auto p-6 sm:p-7 shadow-2xl space-y-5 text-right relative">
+            <button
+              onClick={() => setAssignTeachersModalShift(null)}
+              className="absolute top-4 left-4 p-2 text-emerald-300 hover:text-white rounded-xl bg-emerald-950/40 cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="flex items-center gap-3 border-b border-emerald-800 pb-3">
+              <div className="w-12 h-12 rounded-2xl bg-amber-400/20 text-[#fbbf24] flex items-center justify-center font-black text-xl shadow-lg shrink-0">
+                <UserCheck className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-base sm:text-lg font-black text-white font-heading">
+                  تعيين وتكليف المعلمين في فترة ({assignTeachersModalShift.name})
+                </h3>
+                <p className="text-xs text-emerald-300/80">
+                  المجمع: {activeComplex?.name || 'المجمع الحالي'} • اختر المعلمين المناوبين المكلفين بالحضور
+                </p>
+              </div>
+            </div>
+
+            {/* Search Box & Quick Select Buttons */}
+            <div className="space-y-3">
+              <div className="relative">
+                <Search className="w-4 h-4 text-emerald-400 absolute right-3.5 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  value={assignTeachersSearch}
+                  onChange={e => setAssignTeachersSearch(e.target.value)}
+                  placeholder="بحث عن اسم المعلم..."
+                  className="w-full py-2.5 pr-10 pl-3.5 bg-[#064e3b] border border-[#065f46] focus:border-[#fbbf24] rounded-2xl text-xs sm:text-sm text-white font-bold outline-none"
+                />
+              </div>
+
+              <div className="flex items-center justify-between text-xs pt-1">
+                <span className="text-amber-300 font-bold">
+                  المحدد: {selectedAssignedTeacherIds.length} من أصل {teachers.length} معلم
+                </span>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedAssignedTeacherIds(teachers.map(t => t.id))}
+                    className="text-[11px] text-emerald-300 hover:text-white font-bold hover:underline cursor-pointer"
+                  >
+                    تحديد جميع المعلمين
+                  </button>
+                  <span className="text-emerald-600">•</span>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedAssignedTeacherIds([])}
+                    className="text-[11px] text-red-300 hover:text-white font-bold hover:underline cursor-pointer"
+                  >
+                    إلغاء التحديد
+                  </button>
+                </div>
+              </div>
+
+              {/* Teachers Checkbox List */}
+              <div className="max-h-60 overflow-y-auto space-y-2 p-2 rounded-2xl bg-[#011a14] border border-[#065f46]">
+                {teachers.length === 0 ? (
+                  <p className="text-xs text-emerald-300/60 text-center py-4">
+                    لا يوجد معلمين مسجلين في هذا المجمع بعد.
+                  </p>
+                ) : (
+                  teachers
+                    .filter(t => !assignTeachersSearch.trim() || t.name.toLowerCase().includes(assignTeachersSearch.toLowerCase()) || t.username.toLowerCase().includes(assignTeachersSearch.toLowerCase()))
+                    .map(t => {
+                      const isSelected = selectedAssignedTeacherIds.includes(t.id);
+                      return (
+                        <label
+                          key={t.id}
+                          className={`flex items-center justify-between p-3 rounded-xl border transition-all cursor-pointer ${
+                            isSelected
+                              ? 'bg-amber-400/10 border-amber-400/50 text-white'
+                              : 'bg-[#064e3b]/30 border-[#065f46] hover:bg-[#064e3b]/60 text-emerald-200'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2.5">
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={e => {
+                                if (e.target.checked) {
+                                  setSelectedAssignedTeacherIds(prev => [...prev, t.id]);
+                                } else {
+                                  setSelectedAssignedTeacherIds(prev => prev.filter(id => id !== t.id));
+                                }
+                              }}
+                              className="rounded border-[#065f46] text-[#fbbf24] focus:ring-0 cursor-pointer w-4 h-4"
+                            />
+                            <div>
+                              <span className="text-sm font-bold text-white block">{t.name}</span>
+                              <span className="text-[11px] text-emerald-300/70 block">
+                                اسم المستخدم: {t.username} {t.role === 'supervisor' ? '• (معلم مشرف)' : ''}
+                              </span>
+                            </div>
+                          </div>
+
+                          <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
+                            isSelected
+                              ? 'bg-amber-400/20 text-amber-300 border border-amber-400/30'
+                              : 'bg-emerald-950 text-emerald-400'
+                          }`}>
+                            {isSelected ? 'مكلف بالمناوبة' : 'غير مكلف'}
+                          </span>
+                        </label>
+                      );
+                    })
+                )}
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-3 border-t border-emerald-800">
+              <button
+                type="button"
+                onClick={() => setAssignTeachersModalShift(null)}
+                className="px-4 py-2 rounded-xl bg-emerald-950 text-emerald-300 text-xs font-bold cursor-pointer"
+              >
+                إلغاء
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveAssignedTeachers}
+                className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-amber-400 to-amber-500 hover:brightness-110 text-[#064e3b] font-black text-xs shadow-md cursor-pointer transition-all"
+              >
+                حفظ التعيين وتأكيد المناوبة
               </button>
             </div>
           </div>

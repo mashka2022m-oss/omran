@@ -581,32 +581,42 @@ export function App() {
     return new Set(scopedHalaqahs.map(h => h.id));
   }, [scopedHalaqahs]);
 
-  // Scoped students: If programmer, sees all students.
-  // If complex supervisor or teacher, STRICTLY sees students belonging to their active complex's halaqahs (and unassigned students in queue)!
+  // Scoped students: If programmer and 'all' chosen, sees all students.
+  // Otherwise, STRICTLY isolated to the active complex's halaqahs and students!
   const scopedStudents = useMemo(() => {
-    if (isDeveloper) return students;
+    if (!activeComplex) return students;
+    if (isDeveloper && (!selectedComplexId || selectedComplexId === 'all')) return students;
     return students.filter(s => {
-      if (!s.halaqahId || s.halaqahId === 'all') return true;
-      return scopedHalaqahIds.has(s.halaqahId);
+      if (s.complexId) {
+        return s.complexId === activeComplex.id;
+      }
+      if (s.halaqahId && s.halaqahId !== 'all') {
+        return scopedHalaqahIds.has(s.halaqahId);
+      }
+      // If student has no complexId and no halaqah, anchor to the primary complex
+      return complexes[0]?.id === activeComplex.id;
     });
-  }, [isDeveloper, students, scopedHalaqahIds]);
+  }, [isDeveloper, selectedComplexId, students, scopedHalaqahIds, activeComplex, complexes]);
 
   const scopedStudentIds = useMemo(() => {
     return new Set(scopedStudents.map(s => s.id));
   }, [scopedStudents]);
 
-  // Scoped teachers: Teachers belonging to the same complex
+  // Scoped teachers: Teachers belonging strictly to the active complex
   const scopedTeachers = useMemo(() => {
-    if (isDeveloper) return teachers;
     if (!supervisedComplex) return teachers;
-    return teachers.filter(t => {
+    if (isDeveloper && (!selectedComplexId || selectedComplexId === 'all')) return teachers;
+    const matched = teachers.filter(t => {
       if (currentTeacher && t.id === currentTeacher.id) return true;
       if (t.complexId === supervisedComplex.id) return true;
+      if (t.complexIds && t.complexIds.includes(supervisedComplex.id)) return true;
       if (t.halaqahId && scopedHalaqahIds.has(t.halaqahId)) return true;
       if (t.halaqahIds && t.halaqahIds.some(hid => scopedHalaqahIds.has(hid))) return true;
       return false;
     });
-  }, [isDeveloper, teachers, supervisedComplex, currentTeacher, scopedHalaqahIds]);
+    if (matched.length === 0 && isDeveloper) return teachers;
+    return matched;
+  }, [isDeveloper, selectedComplexId, teachers, supervisedComplex, currentTeacher, scopedHalaqahIds]);
 
   // Assigned halaqahs for current user inside the active complex:
   const assignedHalaqahs = useMemo(() => {
@@ -1018,6 +1028,7 @@ export function App() {
       dailyNewTarget: studentData.dailyNewTarget || 'نصف وجه',
       dailyReviewTarget: studentData.dailyReviewTarget || 'وجه واحد',
       level: studentData.level || 'متوسط',
+      complexId: activeComplex?.id,
       halaqahId: chosenHalaqahId,
       halaqahName: chosenHalaqahName,
       notes: studentData.notes || '',

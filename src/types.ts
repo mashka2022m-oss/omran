@@ -357,6 +357,7 @@ export interface Student {
   aiPlan?: StudentAIPlan;
   persistentReviewItems?: QuranRecitationItem[]; // بنود المراجعة والتراكمي والاختبار المحفوظة دائماً للطالب
   notes?: string;
+  complexId?: string; // ID of the complex this student belongs to
   halaqahId?: string; // ID of the halaqah this student belongs to
   halaqahName?: string; // Cached display name of halaqah
   googleEmail?: string | null; // بريد حساب Google المرتبط بالطالب
