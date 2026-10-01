@@ -1139,15 +1139,7 @@ export class OmranDataService {
       }
     }
     const merged = Array.from(mergedMap.values()).filter(s => {
-      const cleanName = (s.name || '').trim();
-      const norm = normalizeTeacherText(cleanName);
-      if (
-        norm.includes('محمد منتصر') ||
-        norm.includes('منتصر') ||
-        s.id === 'teacher-1' ||
-        (s.googleEmail && s.googleEmail.trim().toLowerCase() === 'fds421885@gmail.com')
-      ) {
-        deleteDoc(doc(db, 'students', s.id)).catch(() => {});
+      if (s.id === 'teacher-1' || (s.id.startsWith('teacher-') && (s as any).username)) {
         return false;
       }
       return true;
@@ -1177,7 +1169,6 @@ export class OmranDataService {
     try {
       await setDoc(doc(db, 'students', clean.id), clean);
     } catch (e) {
-      handleFirestoreError(e, OperationType.WRITE, `students/${clean.id}`);
       console.warn('[OmranDataService] Student saved locally, cloud sync pending/offline:', e);
     }
   }
@@ -1569,15 +1560,7 @@ export class OmranDataService {
         const list: Student[] = [];
         snap.forEach(d => {
           const s = d.data() as Student;
-          const cleanName = (s.name || '').trim();
-          const norm = normalizeTeacherText(cleanName);
-          if (
-            norm.includes('محمد منتصر') ||
-            norm.includes('منتصر') ||
-            s.id === 'teacher-1' ||
-            (s.googleEmail && s.googleEmail.trim().toLowerCase() === 'fds421885@gmail.com')
-          ) {
-            deleteDoc(doc(db, 'students', s.id)).catch(() => {});
+          if (s.id === 'teacher-1' || (s.id.startsWith('teacher-') && (s as any).username)) {
             return;
           }
           list.push(s);
@@ -2220,11 +2203,16 @@ export class OmranDataService {
     const updated = [cleanCert, ...local.filter(c => c.id !== cleanCert.id)];
     setLocalCache(OMRAN_CACHE_KEYS.CERTIFICATES, updated);
 
+    // Omit large base64 image from Firestore to strictly adhere to 1MB document limit
+    const firestoreData = { ...cleanCert };
+    if (firestoreData.customTemplateImageUrl && firestoreData.customTemplateImageUrl.length > 20000) {
+      delete firestoreData.customTemplateImageUrl;
+    }
+
     try {
-      await setDoc(doc(db, 'certificates', cleanCert.id), cleanFirestoreData(cleanCert));
+      await setDoc(doc(db, 'certificates', cleanCert.id), cleanFirestoreData(firestoreData));
     } catch (e) {
-      handleFirestoreError(e, OperationType.WRITE, `certificates/${cleanCert.id}`);
-      throw e;
+      console.warn('[OmranDataService] Certificate saved locally, cloud sync notice:', e);
     }
   }
 
@@ -2244,10 +2232,16 @@ export class OmranDataService {
 
     try {
       await Promise.allSettled(
-        cleanList.map(item => setDoc(doc(db, 'certificates', item.id), cleanFirestoreData(item)))
+        cleanList.map(item => {
+          const firestoreData = { ...item };
+          if (firestoreData.customTemplateImageUrl && firestoreData.customTemplateImageUrl.length > 20000) {
+            delete firestoreData.customTemplateImageUrl;
+          }
+          return setDoc(doc(db, 'certificates', item.id), cleanFirestoreData(firestoreData));
+        })
       );
     } catch (e) {
-      handleFirestoreError(e, OperationType.WRITE, 'certificates');
+      console.warn('[OmranDataService] Batch certificates saved locally, cloud sync notice:', e);
     }
   }
 
@@ -2265,18 +2259,43 @@ export class OmranDataService {
     }
   }
 
-  // Subscribe to Certificates in real time
+  // Subscribe to Certificates in real time with resilient Dual-Persistence merge
   static subscribeCertificates(callback: (certs: IssuedCertificate[]) => void): () => void {
     try {
       return onSnapshot(collection(db, 'certificates'), snap => {
-        const list: IssuedCertificate[] = [];
+        const cloudList: IssuedCertificate[] = [];
         snap.forEach(d => {
           const raw = d.data();
-          list.push(OmranDataService.sanitizeCertificate({ ...raw, id: d.id || raw.id }));
+          cloudList.push(OmranDataService.sanitizeCertificate({ ...raw, id: d.id || raw.id }));
         });
-        list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-        setLocalCache(OMRAN_CACHE_KEYS.CERTIFICATES, list);
-        callback(list);
+
+        // Dual-persistence merge: preserve local customTemplateImageUrl and any local pending certs
+        const local = getLocalCache<IssuedCertificate[]>(OMRAN_CACHE_KEYS.CERTIFICATES, []);
+        const localMap = new Map<string, IssuedCertificate>();
+        for (const c of local) {
+          if (c?.id) localMap.set(c.id, c);
+        }
+
+        const mergedMap = new Map<string, IssuedCertificate>();
+        for (const c of cloudList) {
+          const localItem = localMap.get(c.id);
+          const finalCert = {
+            ...c,
+            customTemplateImageUrl: c.customTemplateImageUrl || localItem?.customTemplateImageUrl
+          };
+          mergedMap.set(c.id, finalCert);
+        }
+        for (const loc of local) {
+          if (loc?.id && !mergedMap.has(loc.id)) {
+            mergedMap.set(loc.id, loc);
+          }
+        }
+
+        const merged = Array.from(mergedMap.values()).sort(
+          (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+        );
+        setLocalCache(OMRAN_CACHE_KEYS.CERTIFICATES, merged);
+        callback(merged);
       }, err => {
         handleFirestoreError(err, OperationType.LIST, 'certificates');
       });

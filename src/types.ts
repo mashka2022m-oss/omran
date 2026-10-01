@@ -728,11 +728,11 @@ export function getThreePartNameValidation(
   // Split by whitespace
   const rawTokens = trimmed.split(/\s+/).filter(Boolean);
 
-  if (rawTokens.length < 3) {
+  if (rawTokens.length < 2) {
     return {
       isValid: false,
       partsCount: rawTokens.length,
-      message: `الاسم الثلاثي إلزامي: يجب كتابة اسم ال${roleLabel} كاملاً من 3 مقاطع على الأقل (الاسم الأول، اسم الأب، واسم العائلة/الجد، مثلاً: محمد أحمد علي أو عبد الله بن راشد القحطاني).`
+      message: `يرجى إدخال اسم ال${roleLabel} كاملاً (مقطعين على الأقل: الاسم واسم الأب أو العائلة).`
     };
   }
 
@@ -747,62 +747,7 @@ export function getThreePartNameValidation(
     };
   }
 
-  // Disallow single-character abbreviations
-  const shortTokens = rawTokens.filter(t => t.length < 2 && t !== 'و');
-  if (shortTokens.length > 0) {
-    return {
-      isValid: false,
-      partsCount: 0,
-      message: `يرجى كتابة مقاطع الاسم كاملة وتجنب الاختصارات بحرف واحد.`
-    };
-  }
-
-  // Common Arabic prefixes and connectors
-  const prefixes = new Set([
-    'عبد', 'ابو', 'أبو', 'ابي', 'أبي', 'ابا', 'أبا', 'ام', 'أم',
-    'آل', 'ذو', 'ذا', 'ذي', 'بدر', 'نور', 'شمس', 'علاء', 'سيف',
-    'تقي', 'حسام', 'بهاء', 'ضياء', 'عماد', 'كمال', 'جمال', 'صلاح', 'سراج', 'نجم', 'أمة', 'امه'
-  ]);
-  const connectors = new Set(['بن', 'ابن', 'بنت', 'ولد']);
-  const religiousSuffixes = new Set(['الله', 'الرحمن', 'الدين', 'الإسلام', 'الاسلام', 'الحق']);
-
-  const groupedParts: string[] = [];
-  for (let i = 0; i < rawTokens.length; i++) {
-    const current = rawTokens[i];
-    const next = rawTokens[i + 1];
-
-    if (connectors.has(current)) {
-      if (next) {
-        groupedParts.push(`${current} ${next}`);
-        i++;
-      }
-      continue;
-    }
-
-    if (prefixes.has(current) && next) {
-      groupedParts.push(`${current} ${next}`);
-      i++;
-      continue;
-    }
-
-    if (next && religiousSuffixes.has(next)) {
-      groupedParts.push(`${current} ${next}`);
-      i++;
-      continue;
-    }
-
-    groupedParts.push(current);
-  }
-
-  if (groupedParts.length < 3) {
-    return {
-      isValid: false,
-      partsCount: groupedParts.length,
-      message: `الاسم المدخل ثنائي فقط ("${trimmed}"). يلزم إدخال اسم ال${roleLabel} الثلاثي كاملاً بإضافة اسم الجد أو العائلة/القبيلة.`
-    };
-  }
-
-  return { isValid: true, partsCount: groupedParts.length };
+  return { isValid: true, partsCount: rawTokens.length };
 }
 
 export function isValidThreePartName(

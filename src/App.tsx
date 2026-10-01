@@ -570,10 +570,13 @@ export function App() {
   }, [scopedHalaqahs]);
 
   // Scoped students: If programmer, sees all students.
-  // If complex supervisor or teacher, STRICTLY sees students belonging to their active complex's halaqahs!
+  // If complex supervisor or teacher, STRICTLY sees students belonging to their active complex's halaqahs (and unassigned students in queue)!
   const scopedStudents = useMemo(() => {
     if (isDeveloper) return students;
-    return students.filter(s => s.halaqahId && scopedHalaqahIds.has(s.halaqahId));
+    return students.filter(s => {
+      if (!s.halaqahId || s.halaqahId === 'all') return true;
+      return scopedHalaqahIds.has(s.halaqahId);
+    });
   }, [isDeveloper, students, scopedHalaqahIds]);
 
   const scopedStudentIds = useMemo(() => {
@@ -739,24 +742,24 @@ export function App() {
   };
 
   // Filter students based on active halaqah selection (or show all for supervisor within their complex)
-  // Teachers and complex supervisors MUST only see students assigned to their complex!
+  // Teachers and complex supervisors MUST only see students assigned to their complex, but can always see unassigned students in queue!
   const displayedStudents = useMemo(() => {
     if (isSupervisor) {
       if (activeHalaqahId && activeHalaqahId !== 'all') {
-        return scopedStudents.filter(s => s.halaqahId === activeHalaqahId);
+        return scopedStudents.filter(s => s.halaqahId === activeHalaqahId || !s.halaqahId || s.halaqahId === 'unassigned');
       }
       return scopedStudents;
     }
 
-    // Teacher view: only students assigned to teacher's halaqah
+    // Teacher view: only students assigned to teacher's halaqah, plus unassigned students so they can manage/view them
     if (activeHalaqahId && activeHalaqahId !== 'all') {
-      return scopedStudents.filter(s => s.halaqahId === activeHalaqahId);
+      return scopedStudents.filter(s => s.halaqahId === activeHalaqahId || !s.halaqahId || s.halaqahId === 'unassigned');
     }
     if (assignedHalaqahs.length > 0) {
       const allowedIds = new Set(assignedHalaqahs.map(h => h.id));
-      return scopedStudents.filter(s => s.halaqahId && allowedIds.has(s.halaqahId));
+      return scopedStudents.filter(s => !s.halaqahId || s.halaqahId === 'unassigned' || allowedIds.has(s.halaqahId));
     }
-    return [];
+    return scopedStudents;
   }, [scopedStudents, isSupervisor, activeHalaqahId, assignedHalaqahs]);
 
   // Students for attendance, evaluations, behavior, reports, and WhatsApp:
@@ -968,7 +971,7 @@ export function App() {
       throw new Error(`عذراً، هذا الاسم (${cleanStudentName}) مسجل مسبقاً كمعلم أو مشرف في المنظومة! يرجى كتابة الاسم الرباعي لتمييز الطالب وتجنب تطابق الأسماء.`);
     }
 
-    let chosenHalaqahId = studentData.halaqahId || '';
+    let chosenHalaqahId = studentData.halaqahId !== undefined ? studentData.halaqahId : '';
     let chosenHalaqahName = studentData.halaqahName || '';
 
     if (chosenHalaqahId) {
@@ -976,7 +979,7 @@ export function App() {
       if (match) {
         chosenHalaqahName = match.name;
       }
-    } else if (activeHalaqahId && activeHalaqahId !== 'all') {
+    } else if (studentData.halaqahId === undefined && activeHalaqahId && activeHalaqahId !== 'all') {
       const match = scopedHalaqahs.find(h => h.id === activeHalaqahId);
       if (match) {
         chosenHalaqahId = match.id;
@@ -984,15 +987,9 @@ export function App() {
       }
     }
 
-    // Default to first scoped halaqah if none selected or outside allowed complex scope
-    if (!chosenHalaqahId && scopedHalaqahs.length > 0) {
-      chosenHalaqahId = scopedHalaqahs[0].id;
-      chosenHalaqahName = scopedHalaqahs[0].name;
-    }
-
     const newStudent: Student = {
       id: `std_${Date.now()}`,
-      name: studentData.name || 'طالب جديد',
+      name: (studentData.name || 'طالب جديد').trim(),
       password: studentData.password || '123',
       phone: studentData.phone || '',
       age: studentData.age || 10,
@@ -1010,27 +1007,34 @@ export function App() {
       createdAt: new Date().toISOString()
     };
 
-    // Auto trigger Gemini AI plan generation
-    try {
-      const res = await fetch('/api/gemini/generate-plan', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ student: newStudent })
-      });
-      const data = await res.json();
-      if (data?.plan) {
-        newStudent.aiPlan = {
-          ...data.plan,
-          lastUpdated: new Date().toISOString()
-        };
-      }
-    } catch (e) {
-      console.warn('AI Plan generation warning:', e);
-    }
-
+    // Optimistically add to state and dual persistence immediately
+    setStudents(prev => [newStudent, ...prev.filter(s => s.id !== newStudent.id)]);
     await OmranDataService.saveStudent(newStudent);
-    const updated = await OmranDataService.loadStudents();
-    setStudents(updated);
+
+    // Asynchronously trigger Gemini AI plan in background without blocking addition
+    fetch('/api/gemini/generate-plan', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ student: newStudent })
+    })
+      .then(res => res.json())
+      .then(data => {
+        if (data?.plan) {
+          const withPlan = {
+            ...newStudent,
+            aiPlan: {
+              ...data.plan,
+              lastUpdated: new Date().toISOString()
+            }
+          };
+          setStudents(prev => prev.map(s => (s.id === newStudent.id ? withPlan : s)));
+          OmranDataService.saveStudent(withPlan).catch(() => {});
+        }
+      })
+      .catch(e => {
+        console.warn('AI Plan background generation notice:', e);
+      });
+
     return true;
   };
 
@@ -1330,12 +1334,15 @@ export function App() {
 
   // Certificate Handlers
   const handleSaveCertificate = async (cert: IssuedCertificate) => {
-    await OmranDataService.saveCertificate(cert);
     setCertificates(prev => [cert, ...prev.filter(c => c.id !== cert.id)]);
+    try {
+      await OmranDataService.saveCertificate(cert);
+    } catch (e) {
+      console.warn('Save certificate notice:', e);
+    }
   };
 
   const handleSaveCertificates = async (newCerts: IssuedCertificate[]) => {
-    await OmranDataService.saveCertificates(newCerts);
     setCertificates(prev => {
       const map = new Map<string, IssuedCertificate>();
       for (const c of newCerts) map.set(c.id, c);
@@ -1344,6 +1351,11 @@ export function App() {
         (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
       );
     });
+    try {
+      await OmranDataService.saveCertificates(newCerts);
+    } catch (e) {
+      console.warn('Save certificates notice:', e);
+    }
   };
 
   const handleDeleteCertificate = async (certId: string) => {

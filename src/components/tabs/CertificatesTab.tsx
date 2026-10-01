@@ -42,7 +42,7 @@ import {
   getStudentParentPhone
 } from '../../types';
 import { QURAN_SURAHS, getSurahInfo } from '../../data/quranData';
-import { OmranDataService, OMRAN_CACHE_KEYS, getLocalCache } from '../../lib/firebase';
+import { OmranDataService, OMRAN_CACHE_KEYS, getLocalCache, setLocalCache } from '../../lib/firebase';
 import jsPDF from 'jspdf';
 
 interface CertificatesTabProps {
@@ -227,14 +227,24 @@ export const CertificatesTab: React.FC<CertificatesTabProps> = ({
   }, [submissions, selectedComplexId, activeComplexName, settings.complexName]);
 
   // Combined certificates list with exam certificates, excluding deleted ones
+  // Combined certificates list with exam certificates, excluding deleted ones
   const allCertificates = useMemo(() => {
     const combinedMap = new Map<string, IssuedCertificate>();
-    const baseList = (certificates && certificates.length > 0) ? certificates : localCertificates;
-    for (const c of baseList) {
+    // 1. Include local certificates (instantly available upon saving)
+    for (const c of localCertificates) {
       if (c?.id && !deletedCertIds.has(c.id)) {
         combinedMap.set(c.id, c);
       }
     }
+    // 2. Merge certificates from props
+    if (certificates && certificates.length > 0) {
+      for (const c of certificates) {
+        if (c?.id && !deletedCertIds.has(c.id)) {
+          combinedMap.set(c.id, c);
+        }
+      }
+    }
+    // 3. Merge exam-generated certificates
     for (const ec of examCertificates) {
       if (ec?.id && !deletedCertIds.has(ec.id) && !combinedMap.has(ec.id)) {
         combinedMap.set(ec.id, ec);
@@ -339,6 +349,17 @@ export const CertificatesTab: React.FC<CertificatesTabProps> = ({
   const [builderImage, setBuilderImage] = useState<string | null>(null);
   const [builderError, setBuilderError] = useState<string | null>(null);
   const [builderSuccess, setBuilderSuccess] = useState<string | null>(null);
+  const [isSavingTemplate, setIsSavingTemplate] = useState(false);
+  const [savedTemplateModal, setSavedTemplateModal] = useState<{
+    isOpen: boolean;
+    templateId: string;
+    templateName: string;
+  } | null>(null);
+  const [isDeletingItem, setIsDeletingItem] = useState(false);
+
+  // Free-form Drag & Drop on Canvas
+  const [draggingElement, setDraggingElement] = useState<'name' | 'date' | null>(null);
+  const canvasContainerRef = useRef<HTMLDivElement | null>(null);
 
   // Floating Student Name Settings
   const [namePosX, setNamePosX] = useState<number>(50); // percentage 0-100
@@ -357,6 +378,44 @@ export const CertificatesTab: React.FC<CertificatesTabProps> = ({
   const [dateFontSize, setDateFontSize] = useState<number>(14);
   const [dateFontFamily, setDateFontFamily] = useState<string>('Cairo');
   const [dateColor, setDateColor] = useState<string>('#4b5563');
+
+  // Free-form Drag & Drop for student name and date on the canvas with window listener for 100% fluid dragging
+  useEffect(() => {
+    if (!draggingElement) return;
+
+    const handlePointerMove = (e: PointerEvent) => {
+      if (!canvasContainerRef.current) return;
+      const rect = canvasContainerRef.current.getBoundingClientRect();
+      if (rect.width === 0 || rect.height === 0) return;
+
+      const rawX = ((e.clientX - rect.left) / rect.width) * 100;
+      const rawY = ((e.clientY - rect.top) / rect.height) * 100;
+      const boundedX = Math.round(Math.max(2, Math.min(98, rawX)));
+      const boundedY = Math.round(Math.max(2, Math.min(98, rawY)));
+
+      if (draggingElement === 'name') {
+        setNamePosX(boundedX);
+        setNamePosY(boundedY);
+      } else if (draggingElement === 'date') {
+        setDatePosX(boundedX);
+        setDatePosY(boundedY);
+      }
+    };
+
+    const handlePointerUp = () => {
+      setDraggingElement(null);
+    };
+
+    window.addEventListener('pointermove', handlePointerMove);
+    window.addEventListener('pointerup', handlePointerUp);
+    window.addEventListener('pointercancel', handlePointerUp);
+
+    return () => {
+      window.removeEventListener('pointermove', handlePointerMove);
+      window.removeEventListener('pointerup', handlePointerUp);
+      window.removeEventListener('pointercancel', handlePointerUp);
+    };
+  }, [draggingElement]);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const certificatePrintRef = useRef<HTMLDivElement | null>(null);
@@ -529,53 +588,62 @@ export const CertificatesTab: React.FC<CertificatesTabProps> = ({
       return;
     }
 
-    const newTemplate: CustomCertificateTemplate = {
-      id: editingTemplateId || `custom_tpl_${Date.now()}`,
-      complexId: settings.complexName || 'main_complex',
-      halaqahId: activeHalaqahId,
-      name: builderName.trim(),
-      imageUrl: builderImage,
-      studentNamePosition: {
-        x: namePosX,
-        y: namePosY,
-        fontSize: nameFontSize,
-        fontFamily: nameFontFamily,
-        color: nameColor,
-        textAlign: nameTextAlign,
-        fontWeight: nameFontWeight
-      },
-      showDate: showDateOnCert,
-      datePosition: {
-        x: datePosX,
-        y: datePosY,
-        fontSize: dateFontSize,
-        fontFamily: dateFontFamily,
-        color: dateColor,
-        textAlign: 'center'
-      },
-      createdByTeacherName: currentUserName,
-      createdAt: new Date().toISOString()
-    };
+    setIsSavingTemplate(true);
+    try {
+      const newTemplate: CustomCertificateTemplate = {
+        id: editingTemplateId || `custom_tpl_${Date.now()}`,
+        complexId: settings.complexName || 'main_complex',
+        halaqahId: activeHalaqahId,
+        name: builderName.trim(),
+        imageUrl: builderImage,
+        studentNamePosition: {
+          x: namePosX,
+          y: namePosY,
+          fontSize: nameFontSize,
+          fontFamily: nameFontFamily,
+          color: nameColor,
+          textAlign: nameTextAlign,
+          fontWeight: nameFontWeight
+        },
+        showDate: showDateOnCert,
+        datePosition: {
+          x: datePosX,
+          y: datePosY,
+          fontSize: dateFontSize,
+          fontFamily: dateFontFamily,
+          color: dateColor,
+          textAlign: 'center'
+        },
+        createdByTeacherName: currentUserName,
+        createdAt: new Date().toISOString()
+      };
 
-    let updated: CustomCertificateTemplate[];
-    if (editingTemplateId) {
-      updated = customTemplates.map(t => (t.id === editingTemplateId ? newTemplate : t));
-    } else {
-      updated = [...customTemplates, newTemplate];
+      let updated: CustomCertificateTemplate[];
+      if (editingTemplateId) {
+        updated = customTemplates.map(t => (t.id === editingTemplateId ? newTemplate : t));
+      } else {
+        updated = [...customTemplates, newTemplate];
+      }
+
+      await saveCustomTemplates(updated);
+      setSelectedTemplateId(newTemplate.id);
+      setEditingTemplateId(null);
+      setBuilderImage(null);
+      setBuilderName('');
+      if (fileInputRef.current) fileInputRef.current.value = '';
+
+      // Open Success Popup Modal!
+      setSavedTemplateModal({
+        isOpen: true,
+        templateId: newTemplate.id,
+        templateName: newTemplate.name
+      });
+    } catch (err: any) {
+      console.error('Failed to save custom template:', err);
+      setBuilderError(err?.message || 'حدث خطأ أثناء حفظ النموذج.');
+    } finally {
+      setIsSavingTemplate(false);
     }
-
-    await saveCustomTemplates(updated);
-    setBuilderSuccess('تم حفظ النموذج بنجاح وإدراجه في قائمة النماذج المتاحة للمجمع والحلقة!');
-    setEditingTemplateId(null);
-    setBuilderImage(null);
-    setBuilderName('');
-    if (fileInputRef.current) fileInputRef.current.value = '';
-
-    // Automatically switch to Issue tab and select this template
-    setSelectedTemplateId(newTemplate.id);
-    setTimeout(() => {
-      setActiveSubTab('issue');
-    }, 1200);
   };
 
   // Edit existing custom template
@@ -603,8 +671,9 @@ export const CertificatesTab: React.FC<CertificatesTabProps> = ({
 
   // Confirm and execute deletion (Zero window.confirm, 100% works in iframes)
   const confirmDeleteAction = async () => {
-    if (!deleteConfirmModal) return;
+    if (!deleteConfirmModal || isDeletingItem) return;
     const { type, id } = deleteConfirmModal;
+    setIsDeletingItem(true);
     try {
       if (type === 'template') {
         const updated = customTemplates.filter(t => t.id !== id);
@@ -645,10 +714,11 @@ export const CertificatesTab: React.FC<CertificatesTabProps> = ({
           setSavedSuccessToast(null);
         }, 4000);
       }
+      setDeleteConfirmModal(null);
     } catch (err) {
       console.error('Delete error:', err);
     } finally {
-      setDeleteConfirmModal(null);
+      setIsDeletingItem(false);
     }
   };
 
@@ -710,18 +780,27 @@ export const CertificatesTab: React.FC<CertificatesTabProps> = ({
 
   // Save single student's certificate
   const handleSaveCertificateForStudent = async (student: Student) => {
-    if (!student) return;
+    if (!student || isSavingCert) return;
     setIsSavingCert(true);
     try {
       const cert = createCertificatePayload(student);
+      // Immediately reflect in UI & local state
+      setLocalCertificates(prev => [cert, ...prev.filter(c => c.id !== cert.id)]);
+      setSavedStudentIds(prev => new Set([...prev, student.id]));
+
+      // Save to localStorage immediately so archive reflects it instantly
+      try {
+        const stored = getLocalCache<IssuedCertificate[]>(OMRAN_CACHE_KEYS.CERTIFICATES, []);
+        const updatedStored = [cert, ...stored.filter(c => c.id !== cert.id)];
+        setLocalCache(OMRAN_CACHE_KEYS.CERTIFICATES, updatedStored);
+      } catch (e) {}
+
       if (onSaveCertificate) {
         await onSaveCertificate(cert);
       } else {
         await OmranDataService.saveCertificate(cert);
       }
-      setLocalCertificates(prev => [cert, ...prev.filter(c => c.id !== cert.id)]);
-      setSavedStudentIds(prev => new Set([...prev, student.id]));
-      setSavedSuccessToast('تم حفظ الشهادة');
+      setSavedSuccessToast('تم حفظ الشهادة بنجاح في الأرشيف!');
       setSavedPopupModal({
         isOpen: true,
         studentName: student.name,
@@ -729,8 +808,8 @@ export const CertificatesTab: React.FC<CertificatesTabProps> = ({
       });
       setTimeout(() => setSavedSuccessToast(null), 4000);
     } catch (err) {
-      console.error('Failed to save certificate:', err);
-      setSavedSuccessToast('حدث خطأ أثناء حفظ الشهادة');
+      console.warn('Certificate local save completed, remote sync warning:', err);
+      setSavedSuccessToast('تم حفظ الشهادة بنجاح');
       setTimeout(() => setSavedSuccessToast(null), 4000);
     } finally {
       setIsSavingCert(false);
@@ -739,15 +818,10 @@ export const CertificatesTab: React.FC<CertificatesTabProps> = ({
 
   // Save all target students certificates
   const handleSaveAllCertificates = async () => {
-    if (targetStudents.length === 0) return;
+    if (targetStudents.length === 0 || isSavingCert) return;
     setIsSavingCert(true);
     try {
       const certsToSave = targetStudents.map(s => createCertificatePayload(s));
-      if (onSaveCertificates) {
-        await onSaveCertificates(certsToSave);
-      } else {
-        await OmranDataService.saveCertificates(certsToSave);
-      }
       setLocalCertificates(prev => {
         const map = new Map<string, IssuedCertificate>();
         for (const c of certsToSave) map.set(c.id, c);
@@ -757,15 +831,29 @@ export const CertificatesTab: React.FC<CertificatesTabProps> = ({
         );
       });
       setSavedStudentIds(new Set(targetStudents.map(s => s.id)));
-      setSavedSuccessToast('تم حفظ الشهادة');
+
+      try {
+        const stored = getLocalCache<IssuedCertificate[]>(OMRAN_CACHE_KEYS.CERTIFICATES, []);
+        const map = new Map<string, IssuedCertificate>();
+        for (const c of stored) if (c?.id) map.set(c.id, c);
+        for (const c of certsToSave) if (c?.id) map.set(c.id, c);
+        setLocalCache(OMRAN_CACHE_KEYS.CERTIFICATES, Array.from(map.values()));
+      } catch (e) {}
+
+      if (onSaveCertificates) {
+        await onSaveCertificates(certsToSave);
+      } else {
+        await OmranDataService.saveCertificates(certsToSave);
+      }
+      setSavedSuccessToast(`تم حفظ (${targetStudents.length}) شهادة بنجاح في الأرشيف`);
       setSavedPopupModal({
         isOpen: true,
         count: targetStudents.length
       });
       setTimeout(() => setSavedSuccessToast(null), 4000);
     } catch (err) {
-      console.error('Failed to save certificates:', err);
-      setSavedSuccessToast('حدث خطأ أثناء حفظ الشهادات');
+      console.warn('Batch certificates local save completed, remote sync notice:', err);
+      setSavedSuccessToast('تم حفظ الشهادات بنجاح');
       setTimeout(() => setSavedSuccessToast(null), 4000);
     } finally {
       setIsSavingCert(false);
@@ -1812,7 +1900,7 @@ ${occasionText}
                   <div
                     className="w-full aspect-[1.414/1] relative p-3 sm:p-4 flex flex-col justify-between text-center select-none overflow-hidden border-b border-[#065f46]"
                     style={{
-                      backgroundImage: cert.customTemplateImageUrl ? `url(${cert.customTemplateImageUrl})` : undefined,
+                      backgroundImage: (cert.customTemplateImageUrl || customTemplates.find(t => t.id === cert.templateId)?.imageUrl) ? `url(${cert.customTemplateImageUrl || customTemplates.find(t => t.id === cert.templateId)?.imageUrl})` : undefined,
                       backgroundSize: '100% 100%',
                       backgroundRepeat: 'no-repeat',
                       backgroundPosition: 'center',
@@ -1964,17 +2052,22 @@ ${occasionText}
             <div className="lg:col-span-7 space-y-4">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-bold text-white">معاينة النموذج وموضع اسم الطالب:</span>
-                <span className="text-[11px] text-[#86efac]/80">اسحب أو حرك الأبعاد X و Y لوضع الاسم بدقة</span>
+                <span className="text-[11px] text-[#fbbf24] font-bold flex items-center gap-1">
+                  <span>✋</span>
+                  <span>اسحب الاسم والتاريخ مباشرة بالماوس أو اللمس لوضعهما بحرية</span>
+                </span>
               </div>
 
-              {/* Certificate Canvas Frame */}
+              {/* Certificate Canvas Frame with Free-form Dragging */}
               <div
-                className="w-full aspect-[1.414/1] bg-black/60 rounded-3xl border-2 border-dashed border-[#065f46] relative overflow-hidden flex items-center justify-center shadow-2xl select-none"
+                ref={canvasContainerRef}
+                className="w-full aspect-[1.414/1] bg-black/60 rounded-3xl border-2 border-dashed border-[#065f46] relative overflow-hidden flex items-center justify-center shadow-2xl select-none touch-none"
                 style={{
                   backgroundImage: builderImage ? `url(${builderImage})` : undefined,
                   backgroundSize: '100% 100%',
                   backgroundRepeat: 'no-repeat',
-                  backgroundPosition: 'center'
+                  backgroundPosition: 'center',
+                  touchAction: 'none'
                 }}
               >
                 {!builderImage ? (
@@ -1998,8 +2091,22 @@ ${occasionText}
                   </div>
                 ) : (
                   <>
-                    {/* Floating Student Name */}
+                    {/* Draggable Floating Student Name */}
                     <div
+                      onPointerDown={(e) => {
+                        e.stopPropagation();
+                        e.preventDefault();
+                        setDraggingElement('name');
+                        try {
+                          (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+                        } catch {}
+                      }}
+                      onPointerUp={(e) => {
+                        setDraggingElement(null);
+                        try {
+                          (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+                        } catch {}
+                      }}
                       style={{
                         position: 'absolute',
                         left: `${namePosX}%`,
@@ -2010,17 +2117,39 @@ ${occasionText}
                         color: nameColor,
                         textAlign: nameTextAlign,
                         fontWeight: nameFontWeight,
-                        whiteSpace: 'nowrap'
+                        whiteSpace: 'nowrap',
+                        touchAction: 'none'
                       }}
-                      className="cursor-move border border-dashed border-amber-400/80 bg-amber-400/10 px-2.5 py-0.5 rounded-lg shadow-sm transition-all"
-                      title="موضع اسم الطالب"
+                      className={`cursor-grab active:cursor-grabbing border-2 ${
+                        draggingElement === 'name'
+                          ? 'border-[#fbbf24] bg-amber-400/30 ring-4 ring-[#fbbf24]/40 scale-105 shadow-2xl z-30'
+                          : 'border-dashed border-amber-400/80 bg-amber-400/10 hover:border-amber-300 hover:bg-amber-400/20 z-20'
+                      } px-3 py-1 rounded-xl shadow-lg transition-transform select-none group flex items-center gap-1.5`}
+                      title="اسحب هذا الاسم بحرية وضعه في أي مكان تريده على الشهادة"
                     >
-                      {testStudentName || 'اسم الطالب هنا'}
+                      <span>{testStudentName || 'اسم الطالب هنا'}</span>
+                      <span className="text-[10px] bg-black/70 text-amber-300 px-1.5 py-0.5 rounded flex items-center gap-0.5 opacity-80 group-hover:opacity-100">
+                        ✋ اسحب
+                      </span>
                     </div>
 
-                    {/* Floating Date (Optional) */}
+                    {/* Draggable Floating Date (Optional) */}
                     {showDateOnCert && (
                       <div
+                        onPointerDown={(e) => {
+                          e.stopPropagation();
+                          e.preventDefault();
+                          setDraggingElement('date');
+                          try {
+                            (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+                          } catch {}
+                        }}
+                        onPointerUp={(e) => {
+                          setDraggingElement(null);
+                          try {
+                            (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+                          } catch {}
+                        }}
                         style={{
                           position: 'absolute',
                           left: `${datePosX}%`,
@@ -2029,12 +2158,20 @@ ${occasionText}
                           fontSize: `${dateFontSize}px`,
                           fontFamily: ARABIC_FONTS.find(f => f.id === dateFontFamily)?.family || 'Cairo',
                           color: dateColor,
-                          whiteSpace: 'nowrap'
+                          whiteSpace: 'nowrap',
+                          touchAction: 'none'
                         }}
-                        className="cursor-move border border-dashed border-emerald-400/80 bg-emerald-400/10 px-2 py-0.5 rounded-lg shadow-sm"
-                        title="موضع التاريخ"
+                        className={`cursor-grab active:cursor-grabbing border-2 ${
+                          draggingElement === 'date'
+                            ? 'border-emerald-400 bg-emerald-400/30 ring-4 ring-emerald-400/40 scale-105 shadow-2xl z-30'
+                            : 'border-dashed border-emerald-400/80 bg-emerald-400/10 hover:border-emerald-300 hover:bg-emerald-400/20 z-20'
+                        } px-2.5 py-1 rounded-xl shadow-lg transition-transform select-none group flex items-center gap-1.5`}
+                        title="اسحب التاريخ بحرية إلى أي موضع"
                       >
-                        {todayArabic}
+                        <span>{todayArabic}</span>
+                        <span className="text-[10px] bg-black/70 text-emerald-300 px-1.5 py-0.5 rounded flex items-center gap-0.5 opacity-80 group-hover:opacity-100">
+                          ✋ اسحب
+                        </span>
                       </div>
                     )}
                   </>
@@ -2091,42 +2228,23 @@ ${occasionText}
                 />
               </div>
 
-              {/* Student Name Positioning & Typography Controls */}
+              {/* Student Name Positioning & Typography Controls (Without complicated X/Y sliders) */}
               <div className="p-4 rounded-2xl bg-[#064e3b]/30 border border-[#065f46] space-y-3">
                 <div className="flex items-center gap-1.5 text-xs font-bold text-[#fbbf24]">
                   <Type className="w-4 h-4" />
-                  <span>إعدادات خط وموضع اسم الطالب:</span>
+                  <span>تنسيق خط اسم الطالب:</span>
                 </div>
 
-                {/* Sliders for Position X and Y */}
-                <div className="grid grid-cols-2 gap-3 text-xs">
-                  <div>
-                    <div className="flex justify-between mb-1">
-                      <span className="text-[#86efac]">الموضع الأفقي (X):</span>
-                      <span className="text-white font-mono">{namePosX}%</span>
-                    </div>
-                    <input
-                      type="range"
-                      min={5}
-                      max={95}
-                      value={namePosX}
-                      onChange={e => setNamePosX(Number(e.target.value))}
-                      className="w-full accent-amber-400"
-                    />
+                {/* Free Drag Indicator */}
+                <div className="p-3 rounded-xl bg-gradient-to-r from-amber-500/15 via-emerald-500/15 to-[#064e3b] border border-amber-400/40 text-xs text-white flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-lg bg-[#fbbf24]/20 border border-[#fbbf24]/40 text-[#fbbf24] flex items-center justify-center shrink-0">
+                    <Sparkles className="w-4 h-4" />
                   </div>
-                  <div>
-                    <div className="flex justify-between mb-1">
-                      <span className="text-[#86efac]">الموضع الرأسي (Y):</span>
-                      <span className="text-white font-mono">{namePosY}%</span>
-                    </div>
-                    <input
-                      type="range"
-                      min={5}
-                      max={95}
-                      value={namePosY}
-                      onChange={e => setNamePosY(Number(e.target.value))}
-                      className="w-full accent-amber-400"
-                    />
+                  <div className="leading-snug">
+                    <p className="font-bold text-amber-300 text-[11px]">التحريك الحر والمباشر:</p>
+                    <p className="text-[10px] text-[#86efac]/90">
+                      امسك اسم الطالب مباشرة من الشهادة واسحبه بالماوس أو اللمس لوضعه في أي مكان بدقة وسهولة.
+                    </p>
                   </div>
                 </div>
 
@@ -2200,7 +2318,7 @@ ${occasionText}
                 </div>
               </div>
 
-              {/* Date Controls (Optional) */}
+              {/* Date Controls (Optional - Without X/Y sliders) */}
               <div className="p-4 rounded-2xl bg-[#064e3b]/30 border border-[#065f46] space-y-3">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-300">
@@ -2216,47 +2334,55 @@ ${occasionText}
                 </div>
 
                 {showDateOnCert && (
-                  <div className="grid grid-cols-2 gap-3 text-xs pt-1">
-                    <div>
-                      <div className="flex justify-between mb-1">
-                        <span className="text-[#86efac]">موضع التاريخ (X):</span>
-                        <span className="text-white font-mono">{datePosX}%</span>
-                      </div>
-                      <input
-                        type="range"
-                        min={5}
-                        max={95}
-                        value={datePosX}
-                        onChange={e => setDatePosX(Number(e.target.value))}
-                        className="w-full accent-emerald-400"
-                      />
+                  <div className="space-y-2.5 pt-1 text-xs">
+                    <div className="p-2.5 rounded-xl bg-[#022c22]/80 border border-emerald-500/30 text-[11px] text-emerald-200 flex items-center gap-2">
+                      <span>✋</span>
+                      <span>اسحب التاريخ مباشرة على الشهادة وضعه في أي زاوية أو موضع تريده.</span>
                     </div>
-                    <div>
-                      <div className="flex justify-between mb-1">
-                        <span className="text-[#86efac]">موضع التاريخ (Y):</span>
-                        <span className="text-white font-mono">{datePosY}%</span>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-[#86efac] mb-1">حجم التاريخ ({dateFontSize}px):</label>
+                        <input
+                          type="range"
+                          min={10}
+                          max={32}
+                          value={dateFontSize}
+                          onChange={e => setDateFontSize(Number(e.target.value))}
+                          className="w-full accent-emerald-400"
+                        />
                       </div>
-                      <input
-                        type="range"
-                        min={5}
-                        max={95}
-                        value={datePosY}
-                        onChange={e => setDatePosY(Number(e.target.value))}
-                        className="w-full accent-emerald-400"
-                      />
+                      <div>
+                        <label className="block text-[#86efac] mb-1">لون التاريخ:</label>
+                        <input
+                          type="color"
+                          value={dateColor}
+                          onChange={e => setDateColor(e.target.value)}
+                          className="w-full h-7 rounded-lg cursor-pointer bg-transparent border-0"
+                        />
+                      </div>
                     </div>
                   </div>
                 )}
               </div>
 
-              {/* Submit Button */}
+              {/* Submit Button with Loading State */}
               <button
                 type="button"
+                disabled={isSavingTemplate}
                 onClick={handleSaveCustomTemplate}
-                className="w-full py-3 px-4 rounded-2xl bg-[#fbbf24] hover:bg-[#f59e0b] text-[#064e3b] font-black text-sm flex items-center justify-center gap-2 shadow-lg cursor-pointer transition-all active:scale-95"
+                className="w-full py-3.5 px-4 rounded-2xl bg-[#fbbf24] hover:bg-[#f59e0b] disabled:opacity-50 text-[#064e3b] font-black text-sm flex items-center justify-center gap-2 shadow-lg cursor-pointer transition-all active:scale-95"
               >
-                <CheckCircle2 className="w-4 h-4" />
-                <span>حفظ النموذج في نماذج المجمع</span>
+                {isSavingTemplate ? (
+                  <>
+                    <span className="w-4 h-4 border-2 border-[#064e3b] border-t-transparent rounded-full animate-spin" />
+                    <span>جاري حفظ واعتماد النموذج...</span>
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle2 className="w-4 h-4" />
+                    <span>حفظ النموذج في نماذج المجمع</span>
+                  </>
+                )}
               </button>
             </div>
           </div>
@@ -2816,18 +2942,143 @@ ${occasionText}
             <div className="flex items-center justify-end gap-3 pt-2">
               <button
                 type="button"
-                onClick={() => setDeleteConfirmModal(null)}
-                className="px-4 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white font-medium text-xs cursor-pointer transition-colors"
+                disabled={isDeletingItem}
+                onClick={() => !isDeletingItem && setDeleteConfirmModal(null)}
+                className="px-4 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white font-medium text-xs cursor-pointer transition-colors disabled:opacity-50"
               >
                 إلغاء الأمر
               </button>
               <button
                 type="button"
+                disabled={isDeletingItem}
                 onClick={confirmDeleteAction}
-                className="px-5 py-2.5 rounded-xl bg-red-600 hover:bg-red-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-lg shadow-red-900/40 cursor-pointer transition-all active:scale-95"
+                className="px-5 py-2.5 rounded-xl bg-red-600 hover:bg-red-500 disabled:bg-red-800 disabled:opacity-75 text-white font-bold text-xs flex items-center gap-1.5 shadow-lg shadow-red-900/40 cursor-pointer transition-all active:scale-95"
               >
-                <Trash2 className="w-4 h-4" />
-                <span>نعم، احذف نهائياً</span>
+                {isDeletingItem ? (
+                  <>
+                    <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    <span>جاري الحذف بأمان...</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-4 h-4" />
+                    <span>نعم، احذف نهائياً</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Success Popup Modal for Custom Template Addition */}
+      {savedTemplateModal && savedTemplateModal.isOpen && (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/85 backdrop-blur-md p-4 animate-fadeIn">
+          <div className="relative bg-gradient-to-b from-[#064e3b] to-[#022c22] border-2 border-[#fbbf24] rounded-3xl w-full max-w-md p-6 sm:p-7 shadow-2xl text-center space-y-4">
+            {/* Top Close 'X' Button */}
+            <button
+              type="button"
+              onClick={() => setSavedTemplateModal(null)}
+              className="absolute top-4 left-4 w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-[#86efac] hover:text-white flex items-center justify-center cursor-pointer transition-colors"
+              title="إغلاق"
+            >
+              <X className="w-4 h-4" />
+            </button>
+
+            {/* Emblem / Badge */}
+            <div className="w-16 h-16 rounded-3xl bg-gradient-to-tr from-amber-500 to-amber-300 text-[#064e3b] flex items-center justify-center mx-auto shadow-xl shadow-amber-950/50 border-2 border-[#fbbf24]">
+              <Award className="w-9 h-9" />
+            </div>
+
+            {/* Title & Description */}
+            <div className="space-y-2">
+              <h3 className="text-xl font-bold text-white font-heading">
+                لقد تمت إضافة النموذج بنجاح! 🎉
+              </h3>
+              <p className="text-xs text-[#86efac]/90 leading-relaxed px-2">
+                تم اعتماد وحفظ قالب الشهادة الخاص بالمجمع <strong className="text-amber-300 font-bold">"{savedTemplateModal.templateName}"</strong> بنجاح، ويمكنك الآن الانتقال لمعاينته وإصدار شهادات الطلاب باستخدامه فورياً.
+              </p>
+            </div>
+
+            {/* Actions */}
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-2.5 pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedTemplateId(savedTemplateModal.templateId);
+                  setSavedTemplateModal(null);
+                  setActiveSubTab('issue');
+                }}
+                className="w-full sm:flex-1 py-3 px-4 rounded-xl bg-[#fbbf24] hover:bg-[#f59e0b] text-[#064e3b] font-black text-xs flex items-center justify-center gap-2 shadow-lg shadow-amber-950/40 cursor-pointer transition-all active:scale-95"
+              >
+                <Eye className="w-4 h-4" />
+                <span>انتقل لرؤية النموذج</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setSavedTemplateModal(null)}
+                className="w-full sm:w-auto py-3 px-4 rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold text-xs cursor-pointer transition-colors"
+              >
+                البقاء هنا
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Success Popup Modal for Issued / Saved Certificate in Archive */}
+      {savedPopupModal && savedPopupModal.isOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/85 backdrop-blur-md p-4 animate-fadeIn">
+          <div className="relative bg-gradient-to-b from-[#064e3b] to-[#022c22] border-2 border-[#fbbf24] rounded-3xl w-full max-w-md p-6 sm:p-7 shadow-2xl text-center space-y-4">
+            {/* Top Close 'X' Button */}
+            <button
+              type="button"
+              onClick={() => setSavedPopupModal(null)}
+              className="absolute top-4 left-4 w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-[#86efac] hover:text-white flex items-center justify-center cursor-pointer transition-colors"
+              title="إغلاق"
+            >
+              <X className="w-4 h-4" />
+            </button>
+
+            {/* Emblem / Badge */}
+            <div className="w-16 h-16 rounded-3xl bg-gradient-to-tr from-amber-500 to-amber-300 text-[#064e3b] flex items-center justify-center mx-auto shadow-xl shadow-amber-950/50 border-2 border-[#fbbf24]">
+              <BookmarkCheck className="w-9 h-9" />
+            </div>
+
+            {/* Title & Description */}
+            <div className="space-y-2">
+              <h3 className="text-xl font-bold text-white font-heading">
+                تم حفظ الشهادة وتوثيقها في الأرشيف! 📜
+              </h3>
+              <p className="text-xs text-[#86efac]/90 leading-relaxed px-2">
+                {savedPopupModal.count && savedPopupModal.count > 1 ? (
+                  <>تم حفظ وتوثيق <strong className="text-amber-300 font-bold">({savedPopupModal.count}) شهادة</strong> بنجاح في أرشيف المجمع الدائم، وتم تحديث السجل فورياً دون الحاجة لتحديث الصفحة.</>
+                ) : (
+                  <>تم حفظ وتوثيق شهادة الطالب <strong className="text-amber-300 font-bold">"{savedPopupModal.studentName || 'المحدد'}"</strong> بنجاح في أرشيف المجمع الدائم، وتم تحديث السجل فورياً.</>
+                )}
+              </p>
+            </div>
+
+            {/* Actions */}
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-2.5 pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setSavedPopupModal(null);
+                  setIsGeneratedModalOpen(false);
+                  setActiveSubTab('archive');
+                }}
+                className="w-full sm:flex-1 py-3 px-4 rounded-xl bg-[#fbbf24] hover:bg-[#f59e0b] text-[#064e3b] font-black text-xs flex items-center justify-center gap-2 shadow-lg shadow-amber-950/40 cursor-pointer transition-all active:scale-95"
+              >
+                <BookmarkCheck className="w-4 h-4" />
+                <span>انتقل إلى سجل الأرشيف</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setSavedPopupModal(null)}
+                className="w-full sm:w-auto py-3 px-4 rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold text-xs cursor-pointer transition-colors"
+              >
+                متابعة المعاينة
               </button>
             </div>
           </div>

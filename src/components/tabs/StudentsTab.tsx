@@ -121,6 +121,7 @@ export const StudentsTab: React.FC<StudentsTabProps> = ({
   const [editingStudent, setEditingStudent] = useState<Student | null>(null);
   const [viewingPlanStudent, setViewingPlanStudent] = useState<Student | null>(null);
   const [studentToDelete, setStudentToDelete] = useState<Student | null>(null);
+  const [isDeletingStudent, setIsDeletingStudent] = useState(false);
   const [quickAssignStudent, setQuickAssignStudent] = useState<Student | null>(null);
   const [quickSelectedHalaqahId, setQuickSelectedHalaqahId] = useState<string>('');
   const [isQuickAssigning, setIsQuickAssigning] = useState(false);
@@ -1079,23 +1080,39 @@ export const StudentsTab: React.FC<StudentsTabProps> = ({
             <div className="flex items-center justify-center gap-3 pt-2 flex-col sm:flex-row">
               <button
                 type="button"
-                onClick={() => setStudentToDelete(null)}
-                className="w-full sm:flex-1 py-2.5 rounded-2xl text-xs font-bold bg-[#022c22] text-[#86efac] hover:text-white border border-[#065f46] cursor-pointer"
+                disabled={isDeletingStudent}
+                onClick={() => !isDeletingStudent && setStudentToDelete(null)}
+                className="w-full sm:flex-1 py-2.5 rounded-2xl text-xs font-bold bg-[#022c22] text-[#86efac] hover:text-white border border-[#065f46] cursor-pointer disabled:opacity-50"
               >
                 إلغاء
               </button>
               <button
                 type="button"
+                disabled={isDeletingStudent}
                 onClick={async () => {
-                  if (studentToDelete) {
-                    const id = studentToDelete.id;
-                    setStudentToDelete(null);
-                    await onDeleteStudent(id);
+                  if (studentToDelete && !isDeletingStudent) {
+                    setIsDeletingStudent(true);
+                    try {
+                      const id = studentToDelete.id;
+                      await onDeleteStudent(id);
+                      setStudentToDelete(null);
+                    } catch (e) {
+                      console.error('Delete student failed:', e);
+                    } finally {
+                      setIsDeletingStudent(false);
+                    }
                   }
                 }}
-                className="w-full sm:flex-1 py-2.5 rounded-2xl text-xs font-black bg-red-600 hover:bg-red-700 text-white shadow-lg cursor-pointer transition-all"
+                className="w-full sm:flex-1 py-2.5 rounded-2xl text-xs font-black bg-red-600 hover:bg-red-700 disabled:bg-red-800 disabled:opacity-75 text-white shadow-lg cursor-pointer transition-all flex items-center justify-center gap-2"
               >
-                نعم، تأكيد الحذف
+                {isDeletingStudent ? (
+                  <>
+                    <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    <span>جاري الحذف...</span>
+                  </>
+                ) : (
+                  <span>نعم، تأكيد الحذف</span>
+                )}
               </button>
             </div>
           </div>
