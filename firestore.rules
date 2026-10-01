@@ -131,6 +131,30 @@ service cloud.firestore {
         && request.resource.data.studentId is string;
       allow delete: if isValidId(certificateId);
     }
+
+    // Teacher Attendance records
+    match /teacher_attendance/{attId} {
+      allow read: if true;
+      allow create, update: if isValidId(attId)
+        && request.resource.data.teacherId is string;
+      allow delete: if isValidId(attId);
+    }
+
+    // Teacher Shifts
+    match /teacher_shifts/{shiftId} {
+      allow read: if true;
+      allow create, update: if isValidId(shiftId)
+        && request.resource.data.name is string;
+      allow delete: if isValidId(shiftId);
+    }
+
+    // Mosques collection (الجوامع والمساجد المضافة)
+    match /mosques/{mosqueId} {
+      allow read: if true;
+      allow create, update: if isValidId(mosqueId)
+        && request.resource.data.name is string;
+      allow delete: if isValidId(mosqueId);
+    }
   }
 }
 

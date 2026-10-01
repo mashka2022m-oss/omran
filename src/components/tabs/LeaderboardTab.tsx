@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
+import confetti from 'canvas-confetti';
 import {
   Trophy,
   Medal,
@@ -16,7 +17,9 @@ import {
   Flame,
   Calendar,
   Layers,
-  ChevronLeft
+  ChevronLeft,
+  Plus,
+  Check
 } from 'lucide-react';
 import {
   Student,
@@ -39,6 +42,7 @@ interface LeaderboardTabProps {
   activeHalaqahId?: string;
   currentUserName?: string;
   onSaveLeaderboardSettings?: (settings: LeaderboardSettings) => Promise<void>;
+  onAwardBonusPoints?: (studentId: string, points: number, reason: string) => Promise<void>;
 }
 
 export const LeaderboardTab: React.FC<LeaderboardTabProps> = ({
@@ -57,7 +61,8 @@ export const LeaderboardTab: React.FC<LeaderboardTabProps> = ({
   isDeveloper = false,
   activeHalaqahId = 'all',
   currentUserName,
-  onSaveLeaderboardSettings
+  onSaveLeaderboardSettings,
+  onAwardBonusPoints
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedHalaqahFilter, setSelectedHalaqahFilter] = useState<string>(
@@ -69,6 +74,37 @@ export const LeaderboardTab: React.FC<LeaderboardTabProps> = ({
     leaderboardSettings?.scope === 'per_halaqah' ? 'per_halaqah' : 'all_unified'
   );
   const [isSavingSettings, setIsSavingSettings] = useState(false);
+
+  // Bonus Points Award Modal state
+  const [awardModalStudent, setAwardModalStudent] = useState<Student | null>(null);
+  const [bonusPointsAmount, setBonusPointsAmount] = useState<number>(10);
+  const [bonusPointsReason, setBonusPointsReason] = useState<string>('تميز وانضباط قرآني');
+  const [isSubmittingBonus, setIsSubmittingBonus] = useState<boolean>(false);
+  const [bonusSuccessMsg, setBonusSuccessMsg] = useState<string | null>(null);
+
+  const handleConfirmAwardBonus = async () => {
+    if (!awardModalStudent || !onAwardBonusPoints) return;
+    if (bonusPointsAmount <= 0) return;
+    setIsSubmittingBonus(true);
+    setBonusSuccessMsg(null);
+    try {
+      await onAwardBonusPoints(awardModalStudent.id, bonusPointsAmount, bonusPointsReason);
+      confetti({
+        particleCount: 80,
+        spread: 70,
+        origin: { y: 0.6 }
+      });
+      setBonusSuccessMsg(`تمت إضافة (+${bonusPointsAmount}) نقطة بنجاح إلى رصيد الطالب ${awardModalStudent.name}!`);
+      setTimeout(() => {
+        setAwardModalStudent(null);
+        setBonusSuccessMsg(null);
+        setIsSubmittingBonus(false);
+      }, 1600);
+    } catch (e: any) {
+      console.error(e);
+      setIsSubmittingBonus(false);
+    }
+  };
 
   // Filter students by selected halaqah (if not 'all')
   const filteredPool = useMemo(() => {
@@ -321,13 +357,33 @@ export const LeaderboardTab: React.FC<LeaderboardTabProps> = ({
                   </div>
                 </div>
 
-                <button
-                  type="button"
-                  className="w-full py-2.5 rounded-xl bg-[#fbbf24]/20 hover:bg-[#fbbf24]/30 text-[#fbbf24] border border-[#fbbf24]/40 font-bold text-xs flex items-center justify-center gap-1.5 transition-colors"
-                >
-                  <Sparkles className="w-3.5 h-3.5" />
-                  <span>عرض تفاصيل النقاط ومصادرها</span>
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedStudentForBreakdown(item.student);
+                    }}
+                    className="flex-1 py-2 rounded-xl bg-[#fbbf24]/20 hover:bg-[#fbbf24]/30 text-[#fbbf24] border border-[#fbbf24]/40 font-bold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                  >
+                    <Sparkles className="w-3.5 h-3.5" />
+                    <span>عرض التفاصيل</span>
+                  </button>
+                  {onAwardBonusPoints && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setAwardModalStudent(item.student);
+                      }}
+                      className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-amber-400 to-amber-500 hover:brightness-110 text-[#064e3b] font-black text-xs flex items-center justify-center gap-1 shadow-md transition-all cursor-pointer"
+                      title="إضافة نقاط تشجيعية"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>منح نقاط</span>
+                    </button>
+                  )}
+                </div>
               </div>
             );
           })}
@@ -421,13 +477,30 @@ export const LeaderboardTab: React.FC<LeaderboardTabProps> = ({
                         {item.totalPoints}
                       </td>
                       <td className="p-3 text-left">
-                        <button
-                          type="button"
-                          className="px-3 py-1 rounded-lg bg-emerald-800/80 hover:bg-[#fbbf24] text-emerald-100 hover:text-[#064e3b] text-[11px] font-bold transition-colors inline-flex items-center gap-1 cursor-pointer"
-                        >
-                          <span>عرض النقاط</span>
-                          <ChevronLeft className="w-3.5 h-3.5" />
-                        </button>
+                        <div className="flex items-center justify-end gap-1.5">
+                          {onAwardBonusPoints && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setAwardModalStudent(item.student);
+                              }}
+                              className="px-2.5 py-1 rounded-lg bg-amber-400/20 hover:bg-amber-400 text-amber-300 hover:text-[#064e3b] text-[11px] font-black border border-amber-400/40 transition-all flex items-center gap-1 cursor-pointer"
+                              title="إضافة نقاط تشجيعية لهذا الطالب"
+                            >
+                              <Plus className="w-3 h-3" />
+                              <span>منح نقاط</span>
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => setSelectedStudentForBreakdown(item.student)}
+                            className="px-3 py-1 rounded-lg bg-emerald-800/80 hover:bg-[#fbbf24] text-emerald-100 hover:text-[#064e3b] text-[11px] font-bold transition-colors inline-flex items-center gap-1 cursor-pointer"
+                          >
+                            <span>عرض النقاط</span>
+                            <ChevronLeft className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );
@@ -623,15 +696,179 @@ export const LeaderboardTab: React.FC<LeaderboardTabProps> = ({
               </div>
             </div>
 
-            <div className="flex justify-end pt-3 border-t border-emerald-800">
+            <div className="flex items-center justify-between pt-3 border-t border-emerald-800 gap-2 flex-wrap">
+              {onAwardBonusPoints && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const st = selectedStudentForBreakdown;
+                    setSelectedStudentForBreakdown(null);
+                    setAwardModalStudent(st);
+                  }}
+                  className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-amber-400 to-amber-500 hover:brightness-110 text-[#064e3b] font-black text-xs flex items-center gap-1.5 shadow-md cursor-pointer transition-all"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>منح نقاط تشجيعية لهذا الطالب</span>
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => setSelectedStudentForBreakdown(null)}
-                className="px-6 py-2.5 rounded-xl bg-[#fbbf24] text-[#064e3b] font-black text-xs cursor-pointer shadow-md"
+                className="px-6 py-2.5 rounded-xl bg-emerald-900/60 hover:bg-emerald-900 text-emerald-200 font-bold text-xs cursor-pointer shadow-md mr-auto"
               >
                 إغلاق النافذة
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* AWARD BONUS POINTS MODAL (منح نقاط تشجيعية للطلاب من لوحة الشرف) */}
+      {awardModalStudent && (
+        <div className="fixed inset-0 z-[10000] bg-black/85 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="bg-[#022c22] border-2 border-[#fbbf24] rounded-3xl w-full max-w-lg p-6 sm:p-7 shadow-[0_0_35px_rgba(251,191,36,0.3)] space-y-5 text-right relative">
+            <button
+              onClick={() => {
+                if (!isSubmittingBonus) {
+                  setAwardModalStudent(null);
+                  setBonusSuccessMsg(null);
+                }
+              }}
+              className="absolute top-4 left-4 p-2 text-emerald-300 hover:text-white rounded-xl bg-emerald-950/40 cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            {/* Header */}
+            <div className="flex items-center gap-3 border-b border-emerald-800 pb-3">
+              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-amber-400 to-amber-500 text-[#064e3b] flex items-center justify-center font-black text-xl shadow-lg">
+                <Sparkles className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-base sm:text-lg font-black text-white font-heading">
+                  منح نقاط تشجيعية للطالب
+                </h3>
+                <p className="text-xs text-amber-300 font-bold">
+                  {awardModalStudent.name} (رصيده الحالي: {awardModalStudent.points || 0} نقطة)
+                </p>
+              </div>
+            </div>
+
+            {bonusSuccessMsg ? (
+              <div className="p-4 rounded-2xl bg-amber-400/20 border border-amber-400/40 text-amber-300 text-center font-bold text-sm flex items-center justify-center gap-2 animate-fadeIn">
+                <Check className="w-5 h-5 text-amber-400" />
+                <span>{bonusSuccessMsg}</span>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {/* Presets and Custom Points */}
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-[#86efac] block">
+                    اختر مقدار النقاط المراد إضافتها:
+                  </label>
+                  <div className="grid grid-cols-4 gap-2">
+                    {[5, 10, 15, 20, 25, 50, 100].map(pts => (
+                      <button
+                        key={pts}
+                        type="button"
+                        onClick={() => setBonusPointsAmount(pts)}
+                        className={`py-2 px-1 rounded-xl text-xs font-black transition-all cursor-pointer ${
+                          bonusPointsAmount === pts
+                            ? 'bg-[#fbbf24] text-[#064e3b] shadow-md scale-105'
+                            : 'bg-[#064e3b] text-emerald-200 hover:text-white border border-[#065f46]'
+                        }`}
+                      >
+                        +{pts} نقطة
+                      </button>
+                    ))}
+                    <div className="relative">
+                      <input
+                        type="number"
+                        min={1}
+                        max={1000}
+                        value={bonusPointsAmount}
+                        onChange={e => setBonusPointsAmount(Math.max(1, Number(e.target.value)))}
+                        className="w-full py-2 px-2 bg-[#022c22] border border-[#065f46] focus:border-[#fbbf24] rounded-xl text-center text-xs font-black text-[#fbbf24] outline-none"
+                        placeholder="مخصص"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Reason Presets */}
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-[#86efac] block">
+                    سبب منح النقاط التكريمية:
+                  </label>
+                  <div className="flex flex-wrap gap-1.5">
+                    {[
+                      'انضباط وتميز قرآني',
+                      'إتقان استثنائي في التسميع',
+                      'تفوق في مسابقة الحفظ',
+                      'حفظ متن تجويدي إضافي',
+                      'التزام فائق بالمراجعة اليومية',
+                      'حسن خلق وأدب رفيع'
+                    ].map(r => (
+                      <button
+                        key={r}
+                        type="button"
+                        onClick={() => setBonusPointsReason(r)}
+                        className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
+                          bonusPointsReason === r
+                            ? 'bg-[#064e3b] text-[#fbbf24] border border-[#fbbf24]'
+                            : 'bg-[#022c22] text-emerald-300/80 border border-[#065f46] hover:text-white'
+                        }`}
+                      >
+                        {r}
+                      </button>
+                    ))}
+                  </div>
+
+                  <input
+                    type="text"
+                    value={bonusPointsReason}
+                    onChange={e => setBonusPointsReason(e.target.value)}
+                    placeholder="أو اكتب سبباً مخصصاً..."
+                    className="w-full mt-1.5 py-2 px-3 bg-[#064e3b] border border-[#065f46] focus:border-[#fbbf24] rounded-xl text-xs text-white outline-none"
+                  />
+                </div>
+
+                {/* Preview Banner */}
+                <div className="p-3.5 rounded-2xl bg-[#011a14] border border-[#065f46] flex items-center justify-between text-xs">
+                  <span className="text-[#86efac]">الرصيد بعد الإضافة سيكون:</span>
+                  <span className="font-mono font-black text-[#fbbf24] text-sm">
+                    {(awardModalStudent.points || 0) + (Number(bonusPointsAmount) || 0)} نقطة
+                  </span>
+                </div>
+
+                {/* Actions */}
+                <div className="flex items-center justify-end gap-2 pt-2 border-t border-emerald-800">
+                  <button
+                    type="button"
+                    disabled={isSubmittingBonus}
+                    onClick={() => setAwardModalStudent(null)}
+                    className="px-4 py-2 rounded-xl bg-emerald-950 text-emerald-300 text-xs font-bold cursor-pointer"
+                  >
+                    إلغاء
+                  </button>
+                  <button
+                    type="button"
+                    disabled={isSubmittingBonus || bonusPointsAmount <= 0}
+                    onClick={handleConfirmAwardBonus}
+                    className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-amber-400 to-amber-500 hover:brightness-110 text-[#064e3b] font-black text-xs flex items-center gap-1.5 shadow-lg cursor-pointer transition-all disabled:opacity-50"
+                  >
+                    {isSubmittingBonus ? (
+                      <span>جارٍ اعتماد النقاط...</span>
+                    ) : (
+                      <>
+                        <Sparkles className="w-4 h-4" />
+                        <span>اعتماد وإضافة (+{bonusPointsAmount}) نقطة</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}

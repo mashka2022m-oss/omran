@@ -188,6 +188,33 @@ export const EvaluationTab: React.FC<EvaluationTabProps> = ({
   const [criteriaValues, setCriteriaValues] = useState<Record<string, any>>({});
   const [teacherNotes, setTeacherNotes] = useState<string>('أداء طيب ومتقن ما شاء الله، نسأل الله له التوفيق والرفعة.');
 
+  // Live calculation of criteria points earned today (وفق القاعدة المعتمدة: نقاط التقييم فقط دون نقاط للأوجه)
+  const liveCriteriaPoints = useMemo(() => {
+    let calculated = 0;
+    criteria.forEach(crit => {
+      const val = criteriaValues[crit.id];
+      const weight = typeof crit.pointsWeight === 'number' ? crit.pointsWeight : 10;
+      if (val !== undefined && val !== null && val !== '') {
+        if (crit.type === 'stars') {
+          const stars = Number(val) || 0;
+          calculated += Math.round((stars / 5) * weight);
+        } else if (crit.type === 'score') {
+          const score = Number(val) || 0;
+          const maxScore = crit.maxScore || 10;
+          calculated += Math.round((score / maxScore) * weight);
+        } else if (crit.type === 'options') {
+          const opts = crit.options || [];
+          const idx = opts.indexOf(String(val));
+          if (idx === 0) calculated += weight;
+          else if (idx === 1) calculated += Math.round(weight * 0.75);
+          else if (idx === 2) calculated += Math.round(weight * 0.5);
+          else if (idx >= 3) calculated += Math.round(weight * 0.25);
+        }
+      }
+    });
+    return calculated;
+  }, [criteria, criteriaValues]);
+
   // UI state
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccessMsg, setSaveSuccessMsg] = useState('');
@@ -1034,8 +1061,9 @@ export const EvaluationTab: React.FC<EvaluationTabProps> = ({
         }
       }
 
-      const pagesPts = pagesCompletedToday.length * 5;
-      const totalPtsToday = calculatedCriteriaPoints + pagesPts;
+      // وفق القاعدة المعتمدة: الطالب لا يأخذ نقاطاً على الأوجه المسمعة، وإنما فقط على تقييم التسميع
+      const pagesPts = 0;
+      const totalPtsToday = calculatedCriteriaPoints;
 
       const fullEvaluation: StudentEvaluation = {
         id: `eval_${selectedDate}_${activeStudent.id}`,
@@ -1057,7 +1085,7 @@ export const EvaluationTab: React.FC<EvaluationTabProps> = ({
           tomorrowTargetRepetitions: targetRepetitions || 3,
           tomorrowDailyNote: `تكرار الاستماع والمراجعة ${targetRepetitions || 3} مرات`,
           criteriaPointsEarnedToday: calculatedCriteriaPoints,
-          pagesPointsEarnedToday: pagesPts,
+          pagesPointsEarnedToday: 0,
           pointsEarnedToday: totalPtsToday,
           pagesCompletedToday
         },
@@ -2822,6 +2850,30 @@ export const EvaluationTab: React.FC<EvaluationTabProps> = ({
                     className="w-full bg-[#064e3b] border border-[#065f46] focus:border-[#fbbf24] rounded-2xl py-2 px-3.5 text-xs text-[#f0f9f6] outline-none resize-none"
                     dir="rtl"
                   />
+                </div>
+
+                {/* ملخص النقاط اليومية المعتمد: نقاط التقييم فقط */}
+                <div className="mt-3 p-4 rounded-2xl bg-[#011a14]/90 border border-amber-500/40 shadow-lg flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-amber-500/20 text-[#fbbf24] border border-amber-400/40 flex items-center justify-center shrink-0">
+                      <Award className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-xs text-[#86efac] font-bold">ملخص النقاط اليومية للتسميع:</span>
+                        <span className="text-sm font-black text-[#fbbf24] font-mono bg-[#064e3b] px-3 py-0.5 rounded-lg border border-[#065f46]">
+                          +{liveCriteriaPoints} نقطة تقييم مكتسبة
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-[#86efac]/80 mt-0.5">
+                        وفق القاعدة المعتمدة: تُمنح النقاط بناءً على تقييم جودة التسميع ومعايير الإتقان فقط (دون احتساب نقاط على الأوجه المسمّعة).
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1.5 self-end sm:self-center px-3 py-1 rounded-xl bg-[#064e3b]/80 border border-[#065f46] text-[11px] text-amber-200">
+                    <Sparkles className="w-3.5 h-3.5 text-[#fbbf24]" />
+                    <span>رصيد الطالب الحالي: <strong className="text-white font-mono">{activeStudent.points || 0}</strong> نقطة</span>
+                  </div>
                 </div>
               </div>
 

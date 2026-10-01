@@ -51,7 +51,8 @@ import {
   RecordingsConfig,
   SurahRecordingSegment,
   IssuedCertificate,
-  StudentListeningLog
+  StudentListeningLog,
+  QuranRecitationItem
 } from '../types';
 import { StudentExamTaker } from './StudentExamTaker';
 import { QuranAyahAudioPlayer } from './quran/QuranAyahAudioPlayer';
@@ -568,6 +569,73 @@ export const ParentPortalView: React.FC<ParentPortalViewProps> = ({
   }, [currentStudent]);
 
   const [selectedCertificateForView, setSelectedCertificateForView] = useState<IssuedCertificate | null>(null);
+
+  // Tomorrow's Real Assignment Dictated by Teacher (خطة ومقرر الغد الحقيقي الذي حدده المعلم)
+  const tomorrowPlanInfo = useMemo(() => {
+    const latestEval = sortedEvaluations[0];
+    const aiAssignment = currentStudent.aiPlan?.currentDailyAssignment;
+
+    // 1. Tomorrow's New Memorization (الجديد المقرّر من المعلم)
+    let newMemorizationText = '';
+    let newDetail: any = null;
+
+    if (latestEval?.recitationDetails?.tomorrowNewItem) {
+      const it = latestEval.recitationDetails.tomorrowNewItem;
+      newDetail = it;
+      const sInfo = getSurahInfo(it.surahNumber);
+      const toInfo = it.toSurahNumber ? getSurahInfo(it.toSurahNumber) : sInfo;
+      newMemorizationText = it.formattedText || (
+        it.surahNumber === (it.toSurahNumber || it.surahNumber) && it.fromAyah === 1 && it.toAyah >= sInfo.numberOfAyahs
+          ? `سورة ${sInfo.name} كاملة (الآيات 1 - ${sInfo.numberOfAyahs})`
+          : `سورة ${sInfo.name}: من الآية (${it.fromAyah}) إلى الآية (${it.toAyah})`
+      );
+    } else if (aiAssignment?.newMemorization && !aiAssignment.newMemorization.includes('حسب توجيه')) {
+      newMemorizationText = aiAssignment.newMemorization;
+      newDetail = aiAssignment.newItem;
+    } else if (currentStudent.targetSurahName) {
+      newMemorizationText = `سورة ${currentStudent.targetSurahName} (من آية ${currentStudent.targetFromAyah || 1} إلى ${currentStudent.targetToAyah || currentStudent.currentAyah})`;
+    } else {
+      const curS = currentStudent.currentSurah || 78;
+      const curA = currentStudent.currentAyah || 1;
+      const sInfo = getSurahInfo(curS);
+      const nextA = Math.min(curA + 5, sInfo.numberOfAyahs);
+      newMemorizationText = `سورة ${sInfo.name}: من الآية (${curA}) إلى الآية (${nextA})`;
+    }
+
+    // 2. Tomorrow's Review Items (مقرر المراجعة والتثبيت والتراكمي المحدد من المعلم)
+    let reviewItemsList: QuranRecitationItem[] = [];
+    if (latestEval?.recitationDetails?.tomorrowReviewItems && latestEval.recitationDetails.tomorrowReviewItems.length > 0) {
+      reviewItemsList = latestEval.recitationDetails.tomorrowReviewItems;
+    } else if (aiAssignment?.reviewItems && aiAssignment.reviewItems.length > 0) {
+      reviewItemsList = aiAssignment.reviewItems;
+    } else if (currentStudent.persistentReviewItems && currentStudent.persistentReviewItems.length > 0) {
+      reviewItemsList = currentStudent.persistentReviewItems;
+    } else if (latestEval?.recitationDetails?.tomorrowReviewItem) {
+      reviewItemsList = [latestEval.recitationDetails.tomorrowReviewItem];
+    } else if (aiAssignment?.reviewItem) {
+      reviewItemsList = [aiAssignment.reviewItem];
+    }
+
+    const reviewSummaryText = (aiAssignment?.review && !aiAssignment.review.includes('المحفوظ السابق'))
+      ? aiAssignment.review
+      : (latestEval?.recitationDetails?.tomorrowReviewItem?.formattedText || (
+        reviewItemsList.length > 0
+          ? reviewItemsList.map(r => r.formattedText || `${r.type}: سورة ${r.surahName} (${r.fromAyah}-${r.toAyah})`).join(' • ')
+          : (currentStudent.reviewSurahName ? `سورة ${currentStudent.reviewSurahName} (من آية ${currentStudent.reviewFromAyah || 1} إلى ${currentStudent.reviewToAyah || 1})` : 'لم يُحدّد المعلم مقرراً للمراجعة لغد - التركيز على الحفظ الجديد')
+      ));
+
+    const teacherNote = latestEval?.recitationDetails?.tomorrowDailyNote || aiAssignment?.dailyNote || '';
+    const sheikh = latestEval?.recitationDetails?.tomorrowSuggestedSheikh || aiAssignment?.suggestedSheikh || '';
+
+    return {
+      newMemorizationText,
+      newDetail,
+      reviewItemsList,
+      reviewSummaryText,
+      teacherNote,
+      sheikh
+    };
+  }, [sortedEvaluations, currentStudent]);
 
   if (activeTakingExam) {
     return (
@@ -1390,7 +1458,7 @@ export const ParentPortalView: React.FC<ParentPortalViewProps> = ({
           <div className="flex items-center justify-between pb-3 border-b border-[#065f46]">
             <h3 className="text-base sm:text-lg font-bold font-heading text-white flex items-center gap-2">
               <Award className="w-5 h-5 text-[#fbbf24]" />
-              <span>المقرر والتكليف القادم (خطة الغد)</span>
+              <span>المقرر والتكليف القادم (خطة الغد المعتمدة من المعلم)</span>
             </h3>
             <span className="text-xs px-2.5 py-1 rounded-full bg-[#fbbf24]/20 text-[#fbbf24] font-bold border border-[#fbbf24]/30">
               متابعة منزلية
@@ -1399,33 +1467,88 @@ export const ParentPortalView: React.FC<ParentPortalViewProps> = ({
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* New Target */}
-            <div className="bg-[#022c22] border border-[#065f46] rounded-2xl p-4 space-y-2">
-              <div className="flex items-center gap-2 text-xs font-bold text-[#86efac]">
-                <BookOpen className="w-4 h-4 text-[#fbbf24]" />
-                <span>ورد الحفظ الجديد المطلوب غداً</span>
+            <div className="bg-[#022c22] border border-[#065f46] rounded-2xl p-5 space-y-3 flex flex-col justify-between">
+              <div className="space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 text-xs font-bold text-[#86efac]">
+                    <BookOpen className="w-4 h-4 text-[#fbbf24]" />
+                    <span>ورد الحفظ الجديد المطلوب غداً</span>
+                  </div>
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#064e3b] text-[#fbbf24] font-bold border border-[#065f46]">
+                    حفظ جديد
+                  </span>
+                </div>
+                <p className="text-base sm:text-lg font-black text-white leading-relaxed font-heading">
+                  {tomorrowPlanInfo.newMemorizationText}
+                </p>
               </div>
-              <p className="text-sm sm:text-base font-bold text-white">
-                {student.targetSurahName ? (
-                  <>سورة {student.targetSurahName} (من آية {student.targetFromAyah || 1} إلى {student.targetToAyah || student.currentAyah})</>
-                ) : (
-                  'مواصلة الحفظ حسب توجيه المعلم'
-                )}
-              </p>
+
+              {tomorrowPlanInfo.sheikh && (
+                <div className="pt-2 border-t border-[#065f46]/60 flex items-center gap-1.5 text-xs text-[#86efac]/90">
+                  <Volume2 className="w-3.5 h-3.5 text-[#fbbf24]" />
+                  <span>القارئ المعلم المقترح: <strong className="text-white">{tomorrowPlanInfo.sheikh}</strong></span>
+                </div>
+              )}
             </div>
 
             {/* Review Target */}
-            <div className="bg-[#022c22] border border-[#065f46] rounded-2xl p-4 space-y-2">
-              <div className="flex items-center gap-2 text-xs font-bold text-[#86efac]">
-                <RotateCcw className="w-4 h-4 text-[#fbbf24]" />
-                <span>مقرر المراجعة والتثبيت</span>
-              </div>
-              <p className="text-sm sm:text-base font-bold text-white">
-                {student.reviewSurahName ? (
-                  <>سورة {student.reviewSurahName} (من آية {student.reviewFromAyah || 1} إلى {student.reviewToAyah || 1})</>
+            <div className="bg-[#022c22] border border-[#065f46] rounded-2xl p-5 space-y-3 flex flex-col justify-between">
+              <div className="space-y-2.5">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 text-xs font-bold text-[#86efac]">
+                    <RotateCcw className="w-4 h-4 text-[#fbbf24]" />
+                    <span>مقرر المراجعة والتثبيت والتراكمي</span>
+                  </div>
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-950 text-emerald-300 font-bold border border-emerald-700/50">
+                    {tomorrowPlanInfo.reviewItemsList.length > 1 ? `${tomorrowPlanInfo.reviewItemsList.length} مقررات مراجعة` : 'مراجعة وتثبيت'}
+                  </span>
+                </div>
+
+                {tomorrowPlanInfo.reviewItemsList.length > 0 ? (
+                  <div className="space-y-2">
+                    {tomorrowPlanInfo.reviewItemsList.map((rev, rIdx) => {
+                      const sInfo = getSurahInfo(rev.surahNumber);
+                      const toInfo = rev.toSurahNumber ? getSurahInfo(rev.toSurahNumber) : sInfo;
+                      return (
+                        <div key={rev.id || rIdx} className="bg-[#064e3b]/50 p-3 rounded-2xl border border-emerald-700/60 space-y-1.5 shadow-sm">
+                          <div className="flex items-center justify-between gap-1 text-[11px]">
+                            <span className={`px-2.5 py-0.5 rounded-full font-bold flex items-center gap-1 ${
+                              rev.type?.includes('تراكمي') || rev.type?.includes('تراكمية')
+                                ? 'bg-gradient-to-r from-amber-400 to-amber-500 text-[#064e3b] font-black shadow-sm'
+                                : rev.type?.includes('كبرى') || rev.type?.includes('اختبار')
+                                ? 'bg-indigo-600/40 text-indigo-200 border border-indigo-500/50'
+                                : 'bg-[#064e3b] text-[#fbbf24] border border-[#065f46]'
+                            }`}>
+                              <Layers className="w-3 h-3" />
+                              <span>{rev.type || 'مراجعة وتثبيت'}</span>
+                            </span>
+                            <span className="text-emerald-300 font-mono text-[11px]">
+                              {sInfo.name === toInfo.name ? `سورة ${sInfo.name}` : `من ${sInfo.name} إلى ${toInfo.name}`}
+                            </span>
+                          </div>
+                          <div className="text-sm sm:text-base font-black text-white font-heading">
+                            {rev.formattedText || (
+                              rev.isFullSurah
+                                ? `سورة ${sInfo.name} كاملة (${sInfo.numberOfAyahs} آية)`
+                                : `سورة ${sInfo.name}: من الآية (${rev.fromAyah}) إلى (${rev.toAyah})`
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
                 ) : (
-                  'تثبيت ومراجعة المحفوظ السابق'
+                  <p className="text-base sm:text-lg font-black text-white leading-relaxed font-heading">
+                    {tomorrowPlanInfo.reviewSummaryText}
+                  </p>
                 )}
-              </p>
+              </div>
+
+              {tomorrowPlanInfo.teacherNote && (
+                <div className="pt-2 border-t border-[#065f46]/60 text-xs text-amber-200/90 italic">
+                  💡 {tomorrowPlanInfo.teacherNote}
+                </div>
+              )}
             </div>
           </div>
         </div>

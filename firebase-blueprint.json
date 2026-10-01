@@ -265,9 +265,80 @@
         "createdByName": { "type": "string", "maxLength": 100 }
       },
       "required": ["id", "studentId", "studentName", "occasion", "templateId"]
+    },
+    "TeacherAttendanceRecord": {
+      "title": "TeacherAttendanceRecord",
+      "description": "سجل تحضير وانصراف المعلم اليومي بمحيط المسجد",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "date": { "type": "string", "maxLength": 30 },
+        "shiftId": { "type": "string", "maxLength": 128 },
+        "shiftName": { "type": "string", "maxLength": 150 },
+        "teacherId": { "type": "string", "maxLength": 128 },
+        "teacherName": { "type": "string", "maxLength": 150 },
+        "status": { "type": "string", "enum": ["حاضر", "غائب", "معتذر", "متأخر"] },
+        "checkInTime": { "type": "string", "maxLength": 50 },
+        "checkInTimestamp": { "type": "string", "maxLength": 50 },
+        "checkInDistanceMeters": { "type": "number" },
+        "checkOutTime": { "type": "string", "maxLength": 50 },
+        "checkOutTimestamp": { "type": "string", "maxLength": 50 },
+        "checkOutDistanceMeters": { "type": "number" },
+        "note": { "type": "string", "maxLength": 500 },
+        "recordedBy": { "type": "string", "maxLength": 50 },
+        "createdAt": { "type": "string", "maxLength": 50 }
+      },
+      "required": ["id", "date", "teacherId", "status"]
+    },
+    "TeacherShift": {
+      "title": "TeacherShift",
+      "description": "فترة أو مناوبة دوام المعلمين ومواعيد الحضور والانصراف",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "name": { "type": "string", "maxLength": 150 },
+        "checkInStart": { "type": "string", "maxLength": 20 },
+        "checkInEnd": { "type": "string", "maxLength": 20 },
+        "checkOutStart": { "type": "string", "maxLength": 20 },
+        "checkOutEnd": { "type": "string", "maxLength": 20 },
+        "assignedTeacherIds": { "type": "array" },
+        "mosqueId": { "type": "string", "maxLength": 128 },
+        "mosqueName": { "type": "string", "maxLength": 150 },
+        "createdAt": { "type": "string", "maxLength": 50 }
+      },
+      "required": ["id", "name"]
+    },
+    "MosqueItem": {
+      "title": "MosqueItem",
+      "description": "بيانات الجامع أو المسجد ونطاق الحضور الجغرافي",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "name": { "type": "string", "maxLength": 150 },
+        "neighborhood": { "type": "string", "maxLength": 150 },
+        "complexId": { "type": "string", "maxLength": 128 },
+        "latitude": { "type": "number" },
+        "longitude": { "type": "number" },
+        "allowedRadiusMeters": { "type": "number" },
+        "isLocationSet": { "type": "boolean" },
+        "createdAt": { "type": "string", "maxLength": 50 }
+      },
+      "required": ["id", "name"]
     }
   },
   "firestore": {
+    "/mosques/{mosqueId}": {
+      "schema": "MosqueItem",
+      "description": "قائمة الجوامع والمساجد المضافة التابعة للمجمع"
+    },
+    "/teacher_attendance/{attId}": {
+      "schema": "TeacherAttendanceRecord",
+      "description": "سجلات حضور وانصراف المعلمين اليومية"
+    },
+    "/teacher_shifts/{shiftId}": {
+      "schema": "TeacherShift",
+      "description": "فترات ومناوبات دوام المعلمين"
+    },
     "/complexes/{complexId}": {
       "schema": "QuranComplex",
       "description": "قائمة المجمعات القرآنية والمشرفين التابعين لها"

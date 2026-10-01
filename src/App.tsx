@@ -21,7 +21,8 @@ import {
   UserCog,
   Building2,
   ClipboardList,
-  Trophy
+  Trophy,
+  Clock
 } from 'lucide-react';
 import {
   Student,
@@ -87,6 +88,7 @@ import { ExamsTab } from './components/tabs/ExamsTab';
 import { AccountsTab } from './components/tabs/AccountsTab';
 import { CertificatesTab } from './components/tabs/CertificatesTab';
 import { LeaderboardTab } from './components/tabs/LeaderboardTab';
+import { TeacherAttendanceTab } from './components/tabs/TeacherAttendanceTab';
 import { EditAccountModal } from './components/EditAccountModal';
 
 export function App() {
@@ -1255,6 +1257,18 @@ export function App() {
     });
   };
 
+  // Award Bonus Points to Student directly from Leaderboard
+  const handleAwardBonusPoints = async (studentId: string, pointsToAdd: number, reason: string) => {
+    const targetStudent = students.find(s => s.id === studentId);
+    if (!targetStudent) return;
+    const updatedStudent: Student = {
+      ...targetStudent,
+      points: Math.max(0, (targetStudent.points || 0) + pointsToAdd),
+      criteriaPoints: Math.max(0, (targetStudent.criteriaPoints || 0) + pointsToAdd)
+    };
+    await handleUpdateStudent(updatedStudent);
+  };
+
   // 10. Update Settings
   const handleUpdateSettings = async (newSettings: AppSettings) => {
     setSettings(newSettings);
@@ -1670,7 +1684,8 @@ export function App() {
   const navItems = [
     { id: 'home', label: 'الرئيسية', icon: Home },
     { id: 'students', label: 'الطلاب والتسجيل', icon: Users, badge: displayedStudents.length },
-    { id: 'attendance', label: 'الحضور والغياب', icon: UserCheck },
+    { id: 'attendance', label: 'حضور الطلاب', icon: UserCheck },
+    { id: 'teacher_attendance', label: 'تحضير المعلمين', icon: Clock },
     { id: 'evaluation', label: 'تقييم التسميع', icon: BookOpen },
     { id: 'exams', label: 'قسم الاختبارات', icon: FileText, badge: scopedExams.length > 0 ? scopedExams.length : undefined },
     { id: 'certificates', label: 'قسم الشهادات', icon: Award },
@@ -1987,6 +2002,17 @@ export function App() {
               />
             )}
 
+            {activeTab === 'teacher_attendance' && (
+              <TeacherAttendanceTab
+                teachers={scopedTeachers}
+                currentTeacher={currentTeacher}
+                currentUserName={currentTeacher?.name || currentUser?.username || scopedSettings.teacherName}
+                isSupervisor={isSupervisor}
+                isDeveloper={isDeveloper}
+                activeComplex={activeComplex}
+              />
+            )}
+
             {activeTab === 'leaderboard' && (
               <LeaderboardTab
                 students={scopedStudents}
@@ -2000,6 +2026,7 @@ export function App() {
                 activeHalaqahId={activeHalaqahId}
                 currentUserName={currentTeacher?.name || currentUser?.username || scopedSettings.teacherName}
                 onSaveLeaderboardSettings={handleSaveLeaderboardSettings}
+                onAwardBonusPoints={handleAwardBonusPoints}
               />
             )}
 

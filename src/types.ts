@@ -312,6 +312,7 @@ export interface QuranRecitationItem {
   toSurahName?: string;   // End surah name
   toAyah: number;      // End ayah
   isFullSurah?: boolean;
+  formattedText?: string;
   notes?: string;
   didNotRecite?: boolean; // خيار لم يُسمّع
   didNotReciteReason?: string; // سبب عدم التسميع (لم يحفظ، غياب، أو سبب مخصص من المعلم)
@@ -381,6 +382,7 @@ export interface Student {
     isCompleted?: boolean;
   };
   criteriaPoints?: number; // نقاط المعايير المكتسبة
+  bonusPoints?: number; // نقاط إضافية وتشجيعية ممنوحة من المعلم أو المشرف في لوحة الشرف
   points?: number; // إجمالي النقاط الكلي للطالب
   createdAt: string;
 }
@@ -855,6 +857,93 @@ export interface IssuedCertificate {
   dateGregorian: string;
   createdAt: string;
   createdByName?: string;
+}
+
+// =========================================================================
+// Teacher Attendance & Shifts Types (نظام تحضير المعلمين الذكي بنطاق المسجد)
+// =========================================================================
+export type TeacherAttendanceStatus = 'حاضر' | 'غائب' | 'معتذر' | 'متأخر';
+
+export interface MosqueItem {
+  id: string;
+  name: string; // اسم الجامع (يكتبه المشرف ويحفظه)
+  neighborhood?: string; // الحي أو الموقع التوضيحي
+  complexId?: string;
+  latitude?: number;
+  longitude?: number;
+  allowedRadiusMeters?: number; // default: 1000 (1 km)
+  isLocationSet: boolean;
+  createdAt: string;
+}
+
+export interface TeacherShift {
+  id: string;
+  name: string; // e.g. "الفترة العصرية", "الفترة المسائية", "حلقة الفجر"
+  complexId?: string;
+  mosqueId?: string; // الجامع المحدد لهذه الفترة
+  mosqueName?: string; // اسم الجامع
+  checkInStart: string; // "15:30"
+  checkInEnd: string;   // "16:00"
+  checkOutStart: string; // "17:30"
+  checkOutEnd: string;   // "18:00"
+  assignedTeacherIds: string[]; // IDs of teachers on duty
+  createdAt: string;
+}
+
+export interface MosqueLocationConfig {
+  complexId?: string;
+  mosqueName: string;
+  latitude: number;
+  longitude: number;
+  allowedRadiusMeters: number; // default: 1000 (1 km)
+  updatedAt?: string;
+}
+
+export interface TeacherAttendanceRecord {
+  id: string; // e.g. "tatt_{date}_{shiftId}_{teacherId}"
+  date: string; // YYYY-MM-DD
+  shiftId: string;
+  shiftName: string;
+  teacherId: string;
+  teacherName: string;
+  complexId?: string;
+  mosqueId?: string;
+  mosqueName?: string;
+  status: TeacherAttendanceStatus;
+  checkInTime?: string; // "03:45 م"
+  checkInTimestamp?: string;
+  checkInLatitude?: number;
+  checkInLongitude?: number;
+  checkInDistanceMeters?: number;
+  checkOutTime?: string;
+  checkOutTimestamp?: string;
+  checkOutDistanceMeters?: number;
+  note?: string; // عذر أو ملاحظة
+  recordedBy: 'self' | 'supervisor' | 'manual';
+  createdAt: string;
+}
+
+/**
+ * Computes Haversine distance in meters between two GPS coordinates
+ */
+export function calculateHaversineDistanceMeters(
+  lat1: number,
+  lon1: number,
+  lat2: number,
+  lon2: number
+): number {
+  const R = 6371e3; // Earth radius in metres
+  const phi1 = (lat1 * Math.PI) / 180;
+  const phi2 = (lat2 * Math.PI) / 180;
+  const deltaPhi = ((lat2 - lat1) * Math.PI) / 180;
+  const deltaLambda = ((lon2 - lon1) * Math.PI) / 180;
+
+  const a =
+    Math.sin(deltaPhi / 2) * Math.sin(deltaPhi / 2) +
+    Math.cos(phi1) * Math.cos(phi2) * Math.sin(deltaLambda / 2) * Math.sin(deltaLambda / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+  return Math.round(R * c);
 }
 
 

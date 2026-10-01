@@ -39,6 +39,10 @@ import {
   RecordingsConfig,
   StudentListeningLog,
   IssuedCertificate,
+  TeacherShift,
+  MosqueLocationConfig,
+  MosqueItem,
+  TeacherAttendanceRecord,
   normalizeTeacherText
 } from '../types';
 
@@ -58,25 +62,10 @@ export const db = (() => {
   try {
     return getFirestore(app, TARGET_FIRESTORE_DATABASE_ID);
   } catch (err) {
-    console.warn(`[Firestore init fallback for ${TARGET_FIRESTORE_DATABASE_ID}]:`, err);
     return getFirestore(app);
   }
 })();
 export const auth = getAuth(app);
-
-// Validate Connection to Firestore on boot
-async function testConnection() {
-  try {
-    await getDocFromServer(doc(db, 'test', 'connection'));
-  } catch (error) {
-    if (error instanceof Error && error.message.includes('the client is offline')) {
-      console.error("Please check your Firebase configuration.");
-    }
-  }
-}
-if (typeof window !== 'undefined') {
-  testConnection();
-}
 
 // Safe Analytics Initialization
 export let analytics: ReturnType<typeof getAnalytics> | null = null;
@@ -532,6 +521,10 @@ export const OMRAN_CACHE_KEYS = {
   EXAMS: 'omran_exams_data',
   SUBMISSIONS: 'omran_submissions_data',
   CERTIFICATES: 'omran_certificates_data',
+  TEACHER_SHIFTS: 'omran_teacher_shifts_data',
+  TEACHER_ATTENDANCE: 'omran_teacher_attendance_data',
+  MOSQUE_LOCATION: 'omran_mosque_location_data',
+  MOSQUES: 'omran_mosques_data',
   DELETED_STUDENTS: 'omran_deleted_students',
   DELETED_CERTIFICATES: 'omran_deleted_certificates',
   INITIALIZED_FLAG: 'omran_platform_initialized_flag'
@@ -2633,5 +2626,163 @@ export class OmranDataService {
       submissionsCount: submissionsList.length,
       recordingsCount: recordingsList.length
     };
+  }
+
+  // =========================================================================
+  // Teacher Attendance, Shifts, and Mosque Geolocation
+  // =========================================================================
+  static async loadMosqueLocation(complexId?: string): Promise<MosqueLocationConfig | null> {
+    const docKey = complexId ? `mosque_location_${complexId}` : 'mosque_location_default';
+    const local = getLocalCache<MosqueLocationConfig | null>(`${OMRAN_CACHE_KEYS.MOSQUE_LOCATION}_${docKey}`, null);
+    try {
+      const snap = await getDoc(doc(db, 'settings', docKey));
+      if (snap.exists()) {
+        const data = snap.data() as MosqueLocationConfig;
+        setLocalCache(`${OMRAN_CACHE_KEYS.MOSQUE_LOCATION}_${docKey}`, data);
+        return data;
+      }
+    } catch (e) {
+      console.warn('Load mosque location fallback to local:', e);
+    }
+    return local;
+  }
+
+  static async saveMosqueLocation(config: MosqueLocationConfig): Promise<void> {
+    const docKey = config.complexId ? `mosque_location_${config.complexId}` : 'mosque_location_default';
+    setLocalCache(`${OMRAN_CACHE_KEYS.MOSQUE_LOCATION}_${docKey}`, config);
+    try {
+      await setDoc(doc(db, 'settings', docKey), cleanFirestoreData(config), { merge: true });
+    } catch (e) {
+      handleFirestoreError(e, OperationType.WRITE, `settings/${docKey}`);
+      throw e;
+    }
+  }
+
+  static async loadTeacherShifts(complexId?: string): Promise<TeacherShift[]> {
+    const local = getLocalCache<TeacherShift[]>(OMRAN_CACHE_KEYS.TEACHER_SHIFTS, []);
+    try {
+      const snap = await getDocs(collection(db, 'teacher_shifts'));
+      const list = snap.docs.map(d => ({ ...d.data(), id: d.id } as TeacherShift));
+      const filtered = complexId ? list.filter(s => !s.complexId || s.complexId === complexId) : list;
+      if (filtered.length > 0) {
+        setLocalCache(OMRAN_CACHE_KEYS.TEACHER_SHIFTS, list);
+        return filtered;
+      }
+    } catch (e) {
+      console.warn('Load teacher shifts fallback to local:', e);
+    }
+    return complexId ? local.filter(s => !s.complexId || s.complexId === complexId) : local;
+  }
+
+  static async saveTeacherShift(shift: TeacherShift): Promise<void> {
+    const local = getLocalCache<TeacherShift[]>(OMRAN_CACHE_KEYS.TEACHER_SHIFTS, []);
+    const updated = [...local.filter(s => s.id !== shift.id), shift];
+    setLocalCache(OMRAN_CACHE_KEYS.TEACHER_SHIFTS, updated);
+    try {
+      await setDoc(doc(db, 'teacher_shifts', shift.id), cleanFirestoreData(shift), { merge: true });
+    } catch (e) {
+      handleFirestoreError(e, OperationType.WRITE, `teacher_shifts/${shift.id}`);
+      throw e;
+    }
+  }
+
+  static async deleteTeacherShift(shiftId: string): Promise<void> {
+    const local = getLocalCache<TeacherShift[]>(OMRAN_CACHE_KEYS.TEACHER_SHIFTS, []);
+    setLocalCache(OMRAN_CACHE_KEYS.TEACHER_SHIFTS, local.filter(s => s.id !== shiftId));
+    try {
+      await deleteDoc(doc(db, 'teacher_shifts', shiftId));
+    } catch (e) {
+      handleFirestoreError(e, OperationType.DELETE, `teacher_shifts/${shiftId}`);
+      throw e;
+    }
+  }
+
+  static async loadTeacherAttendance(date?: string, complexId?: string): Promise<TeacherAttendanceRecord[]> {
+    const cacheKey = date ? `${OMRAN_CACHE_KEYS.TEACHER_ATTENDANCE}_${date}` : OMRAN_CACHE_KEYS.TEACHER_ATTENDANCE;
+    const local = getLocalCache<TeacherAttendanceRecord[]>(cacheKey, []);
+    try {
+      let q = collection(db, 'teacher_attendance');
+      const snap = await getDocs(q);
+      const list = snap.docs.map(d => ({ ...d.data(), id: d.id } as TeacherAttendanceRecord));
+      let filtered = list;
+      if (date) {
+        filtered = filtered.filter(r => r.date === date);
+      }
+      if (complexId) {
+        filtered = filtered.filter(r => !r.complexId || r.complexId === complexId);
+      }
+      setLocalCache(cacheKey, filtered);
+      return filtered;
+    } catch (e) {
+      console.warn('Load teacher attendance fallback to local:', e);
+      return local;
+    }
+  }
+
+  static async saveTeacherAttendanceRecord(record: TeacherAttendanceRecord): Promise<void> {
+    const cacheKey = `${OMRAN_CACHE_KEYS.TEACHER_ATTENDANCE}_${record.date}`;
+    const local = getLocalCache<TeacherAttendanceRecord[]>(cacheKey, []);
+    const updated = [...local.filter(r => r.id !== record.id), record];
+    setLocalCache(cacheKey, updated);
+    try {
+      await setDoc(doc(db, 'teacher_attendance', record.id), cleanFirestoreData(record), { merge: true });
+    } catch (e) {
+      handleFirestoreError(e, OperationType.WRITE, `teacher_attendance/${record.id}`);
+      throw e;
+    }
+  }
+
+  static async deleteTeacherAttendanceRecord(recordId: string, date?: string): Promise<void> {
+    if (date) {
+      const cacheKey = `${OMRAN_CACHE_KEYS.TEACHER_ATTENDANCE}_${date}`;
+      const local = getLocalCache<TeacherAttendanceRecord[]>(cacheKey, []);
+      setLocalCache(cacheKey, local.filter(r => r.id !== recordId));
+    }
+    try {
+      await deleteDoc(doc(db, 'teacher_attendance', recordId));
+    } catch (e) {
+      handleFirestoreError(e, OperationType.DELETE, `teacher_attendance/${recordId}`);
+      throw e;
+    }
+  }
+
+  // =========================================================================
+  // Mosques Management (إدارة الجوامع والمساجد المتعددة)
+  // =========================================================================
+  static async loadMosques(complexId?: string): Promise<MosqueItem[]> {
+    const local = getLocalCache<MosqueItem[]>(OMRAN_CACHE_KEYS.MOSQUES, []);
+    try {
+      const snap = await getDocs(collection(db, 'mosques'));
+      const list = snap.docs.map(d => ({ ...d.data(), id: d.id } as MosqueItem));
+      const filtered = complexId ? list.filter(m => !m.complexId || m.complexId === complexId) : list;
+      if (filtered.length > 0) {
+        setLocalCache(OMRAN_CACHE_KEYS.MOSQUES, list);
+        return filtered;
+      }
+    } catch (e) {
+      // quiet fallback
+    }
+    return complexId ? local.filter(m => !m.complexId || m.complexId === complexId) : local;
+  }
+
+  static async saveMosque(mosque: MosqueItem): Promise<void> {
+    const local = getLocalCache<MosqueItem[]>(OMRAN_CACHE_KEYS.MOSQUES, []);
+    const updated = [...local.filter(m => m.id !== mosque.id), mosque];
+    setLocalCache(OMRAN_CACHE_KEYS.MOSQUES, updated);
+    try {
+      await setDoc(doc(db, 'mosques', mosque.id), cleanFirestoreData(mosque), { merge: true });
+    } catch (e) {
+      // quiet fallback
+    }
+  }
+
+  static async deleteMosque(mosqueId: string): Promise<void> {
+    const local = getLocalCache<MosqueItem[]>(OMRAN_CACHE_KEYS.MOSQUES, []);
+    setLocalCache(OMRAN_CACHE_KEYS.MOSQUES, local.filter(m => m.id !== mosqueId));
+    try {
+      await deleteDoc(doc(db, 'mosques', mosqueId));
+    } catch (e) {
+      // quiet fallback
+    }
   }
 }
