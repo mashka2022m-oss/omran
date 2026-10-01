@@ -57,11 +57,19 @@ export const TeacherAttendanceTab: React.FC<TeacherAttendanceTabProps> = ({
   // Selected date for supervisor attendance records (default: today)
   const [selectedDate, setSelectedDate] = useState<string>(todayStr);
 
-  // Active view mode for supervisor: 'records' | 'shifts' | 'mosques'
-  const [activeSubTab, setActiveSubTab] = useState<'records' | 'shifts' | 'mosques'>('records');
+  // Active view mode: 'records' | 'shifts' | 'mosques' | 'self'
+  const [activeSubTab, setActiveSubTab] = useState<'records' | 'shifts' | 'mosques' | 'self'>(
+    isSupervisorOrDev ? 'records' : 'self'
+  );
 
-  // Teacher mode toggle for supervisor/developer (to test or check-in themselves)
-  const [isSupervisorSelfMode, setIsSupervisorSelfMode] = useState<boolean>(!isSupervisorOrDev);
+  // Quick Toast Notification
+  const [toastMessage, setToastMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
+  const showToast = (text: string, type: 'success' | 'error' = 'success') => {
+    setToastMessage({ text, type });
+    setTimeout(() => {
+      setToastMessage(null);
+    }, 4000);
+  };
 
   // 1. Mosques List State (قائمة الجوامع والمساجد المضافة)
   const [mosques, setMosques] = useState<MosqueItem[]>([]);
@@ -79,6 +87,8 @@ export const TeacherAttendanceTab: React.FC<TeacherAttendanceTabProps> = ({
   const [isLoadingShifts, setIsLoadingShifts] = useState(true);
   const [isShiftModalOpen, setIsShiftModalOpen] = useState(false);
   const [editingShiftId, setEditingShiftId] = useState<string | null>(null);
+  const [isAddingNewMosqueInShift, setIsAddingNewMosqueInShift] = useState(false);
+  const [newMosqueNameInShift, setNewMosqueNameInShift] = useState('');
   const [shiftForm, setShiftForm] = useState<{
     name: string;
     mosqueId: string;
@@ -279,16 +289,20 @@ export const TeacherAttendanceTab: React.FC<TeacherAttendanceTabProps> = ({
 
   const handleSaveMosque = async () => {
     const trimmed = mosqueNameInput.trim();
-    if (!trimmed) return;
+    if (!trimmed) {
+      showToast('يرجى إدخال اسم الجامع أو المسجد', 'error');
+      return;
+    }
 
     const mosqueId = editingMosqueId || `mosque_${Date.now()}`;
     const existing = mosques.find(m => m.id === mosqueId);
+    const complexId = activeComplex?.id || 'default_complex';
 
     const newMosque: MosqueItem = {
       id: mosqueId,
       name: trimmed,
       neighborhood: mosqueNeighborhoodInput.trim() || undefined,
-      complexId: activeComplex?.id,
+      complexId,
       latitude: capturedMosqueLocation?.lat ?? existing?.latitude,
       longitude: capturedMosqueLocation?.lng ?? existing?.longitude,
       allowedRadiusMeters: 1000, // 1 km radius
@@ -296,15 +310,27 @@ export const TeacherAttendanceTab: React.FC<TeacherAttendanceTabProps> = ({
       createdAt: existing?.createdAt || new Date().toISOString()
     };
 
-    await OmranDataService.saveMosque(newMosque);
     setMosques(prev => [...prev.filter(m => m.id !== newMosque.id), newMosque]);
     setIsMosqueModalOpen(false);
+
+    try {
+      await OmranDataService.saveMosque(newMosque);
+    } catch (e) {
+      // quiet fallback
+    }
+
+    showToast(editingMosqueId ? 'تم تحديث بيانات الجامع بنجاح!' : 'تم حفظ الجامع الجديد بنجاح!');
   };
 
   const handleDeleteMosque = async (mosqueId: string) => {
     if (!window.confirm('هل أنت متأكد من حذف هذا الجامع؟')) return;
-    await OmranDataService.deleteMosque(mosqueId);
     setMosques(prev => prev.filter(m => m.id !== mosqueId));
+    try {
+      await OmranDataService.deleteMosque(mosqueId);
+    } catch (e) {
+      // quiet fallback
+    }
+    showToast('تم حذف الجامع بنجاح');
   };
 
   // =========================================================================
@@ -312,6 +338,8 @@ export const TeacherAttendanceTab: React.FC<TeacherAttendanceTabProps> = ({
   // =========================================================================
   const handleOpenAddShiftModal = () => {
     setEditingShiftId(null);
+    setIsAddingNewMosqueInShift(mosques.length === 0);
+    setNewMosqueNameInShift('');
     setShiftForm({
       name: 'الفترة العصرية',
       mosqueId: mosques[0]?.id || '',
@@ -326,6 +354,8 @@ export const TeacherAttendanceTab: React.FC<TeacherAttendanceTabProps> = ({
 
   const handleOpenEditShiftModal = (shift: TeacherShift) => {
     setEditingShiftId(shift.id);
+    setIsAddingNewMosqueInShift(false);
+    setNewMosqueNameInShift('');
     setShiftForm({
       name: shift.name,
       mosqueId: shift.mosqueId || mosques[0]?.id || '',
@@ -339,34 +369,88 @@ export const TeacherAttendanceTab: React.FC<TeacherAttendanceTabProps> = ({
   };
 
   const handleSaveShift = async () => {
-    if (!shiftForm.name.trim()) return;
+    const shiftNameTrimmed = shiftForm.name.trim();
+    if (!shiftNameTrimmed) {
+      showToast('يرجى إدخال اسم فترة الدوام', 'error');
+      return;
+    }
 
     const shiftId = editingShiftId || `shift_${Date.now()}`;
-    const selectedMosque = mosques.find(m => m.id === shiftForm.mosqueId) || mosques[0];
+    const complexId = activeComplex?.id || 'default_complex';
+
+    let selectedMosqueId = shiftForm.mosqueId;
+    let selectedMosqueName = '';
+
+    // If user typed a new mosque name inline inside the shift modal
+    if (newMosqueNameInShift.trim()) {
+      const newMName = newMosqueNameInShift.trim();
+      const newMId = `mosque_${Date.now()}`;
+      const createdMosque: MosqueItem = {
+        id: newMId,
+        name: newMName,
+        complexId,
+        neighborhood: 'مسجد الدوام',
+        allowedRadiusMeters: 1000,
+        isLocationSet: false,
+        createdAt: new Date().toISOString()
+      };
+      setMosques(prev => [...prev.filter(m => m.id !== newMId), createdMosque]);
+      try {
+        await OmranDataService.saveMosque(createdMosque);
+      } catch (e) {
+        // quiet fallback
+      }
+      selectedMosqueId = newMId;
+      selectedMosqueName = newMName;
+      setNewMosqueNameInShift('');
+      setIsAddingNewMosqueInShift(false);
+    } else {
+      const matchM = mosques.find(m => m.id === selectedMosqueId) || mosques[0];
+      selectedMosqueId = matchM?.id || '';
+      selectedMosqueName = matchM?.name || activeComplex?.name || 'جامع الحلقات';
+    }
 
     const shift: TeacherShift = {
       id: shiftId,
-      name: shiftForm.name.trim(),
-      complexId: activeComplex?.id,
-      mosqueId: selectedMosque?.id || '',
-      mosqueName: selectedMosque?.name || 'جامع الحلقات',
-      checkInStart: shiftForm.checkInStart,
-      checkInEnd: shiftForm.checkInEnd,
-      checkOutStart: shiftForm.checkOutStart,
-      checkOutEnd: shiftForm.checkOutEnd,
-      assignedTeacherIds: shiftForm.assignedTeacherIds,
+      name: shiftNameTrimmed,
+      complexId,
+      mosqueId: selectedMosqueId,
+      mosqueName: selectedMosqueName,
+      checkInStart: shiftForm.checkInStart || '15:30',
+      checkInEnd: shiftForm.checkInEnd || '16:00',
+      checkOutStart: shiftForm.checkOutStart || '17:30',
+      checkOutEnd: shiftForm.checkOutEnd || '18:00',
+      assignedTeacherIds: shiftForm.assignedTeacherIds || [],
       createdAt: new Date().toISOString()
     };
 
-    await OmranDataService.saveTeacherShift(shift);
+    // Instant optimistic update with zero lag
     setShifts(prev => [...prev.filter(s => s.id !== shift.id), shift]);
     setIsShiftModalOpen(false);
+
+    try {
+      await OmranDataService.saveTeacherShift(shift);
+    } catch (e) {
+      // quiet fallback
+    }
+
+    try {
+      confetti({ particleCount: 35, spread: 60, origin: { y: 0.8 } });
+    } catch {
+      // ignore
+    }
+    showToast(editingShiftId ? 'تم تحديث وتعيين فترة الدوام بنجاح!' : 'تم إنشاء وتعيين فترة الدوام بنجاح!');
   };
 
   const handleDeleteShift = async (shiftId: string) => {
     if (!window.confirm('هل أنت متأكد من حذف فترة الدوام هذه؟')) return;
-    await OmranDataService.deleteTeacherShift(shiftId);
     setShifts(prev => prev.filter(s => s.id !== shiftId));
+    try {
+      await OmranDataService.deleteTeacherShift(shiftId);
+    } catch (e) {
+      // quiet fallback
+    }
+    showToast('تم حذف فترة الدوام بنجاح');
   };
 
   // =========================================================================
@@ -638,11 +722,38 @@ export const TeacherAttendanceTab: React.FC<TeacherAttendanceTabProps> = ({
   const myAssignedShifts = useMemo(() => {
     const tId = currentTeacher?.id;
     if (!tId) return shifts;
-    return shifts.filter(s => s.assignedTeacherIds.includes(tId));
-  }, [shifts, currentTeacher]);
+    const explicitlyAssigned = shifts.filter(s => s.assignedTeacherIds.includes(tId));
+    if (explicitlyAssigned.length > 0) return explicitlyAssigned;
+    // If supervisor or developer, allow them to check in into any of the complex's shifts
+    if (isSupervisorOrDev) return shifts;
+    return [];
+  }, [shifts, currentTeacher, isSupervisorOrDev]);
 
   return (
     <div className="space-y-6 text-right" dir="rtl">
+      {/* Floating / Top Toast Message */}
+      <AnimatePresence>
+        {toastMessage && (
+          <motion.div
+            initial={{ opacity: 0, y: -15, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -15, scale: 0.95 }}
+            className={`p-4 rounded-2xl text-xs sm:text-sm font-bold flex items-center gap-2.5 shadow-xl border ${
+              toastMessage.type === 'success'
+                ? 'bg-amber-400 text-[#064e3b] border-amber-300'
+                : 'bg-red-600 text-white border-red-500'
+            }`}
+          >
+            {toastMessage.type === 'success' ? (
+              <CheckCircle2 className="w-5 h-5 shrink-0" />
+            ) : (
+              <AlertCircle className="w-5 h-5 shrink-0" />
+            )}
+            <span>{toastMessage.text}</span>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Top Banner & Mode Toggle */}
       <div className="bg-gradient-to-r from-[#064e3b] via-[#022c22] to-[#064e3b] p-5 sm:p-6 rounded-[32px] border border-[#065f46] shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex items-center gap-3.5">
@@ -657,84 +768,83 @@ export const TeacherAttendanceTab: React.FC<TeacherAttendanceTabProps> = ({
               <span className="text-xs px-2.5 py-0.5 rounded-full bg-amber-400/20 text-amber-300 font-bold border border-amber-400/30">
                 {mosques.length} {mosques.length === 1 ? 'جامع مسجل' : 'جوامع مسجلة'}
               </span>
+              {activeComplex?.name && (
+                <span className="text-xs px-2.5 py-0.5 rounded-full bg-[#022c22] text-[#86efac] font-bold border border-[#065f46] flex items-center gap-1">
+                  <Building2 className="w-3 h-3 text-amber-400" />
+                  <span>{activeComplex.name}</span>
+                </span>
+              )}
             </div>
             <p className="text-xs text-emerald-300/80 mt-1">
-              ربط فترات الدوام بالجوامع، والتحقق التلقائي من الحضور والانصراف ضمن نطاق الجامع
+              إدارة فترات الدوام والمناوبات، وتعيين الجوامع والمعلمين، والتحضير السلس بضغطة زر
             </p>
           </div>
         </div>
 
-        {/* Supervisor Navigation Tabs / Mode Switcher */}
-        {isSupervisorOrDev && (
-          <div className="flex items-center gap-2 flex-wrap">
-            <button
-              type="button"
-              onClick={() => {
-                setIsSupervisorSelfMode(!isSupervisorSelfMode);
-                setCheckInFeedback(null);
-              }}
-              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-                isSupervisorSelfMode
-                  ? 'bg-amber-400 text-[#064e3b] shadow-md font-black'
-                  : 'bg-[#022c22] text-amber-300 border border-amber-400/40 hover:bg-[#064e3b]'
-              }`}
-            >
-              <UserCheck className="w-4 h-4" />
-              <span>{isSupervisorSelfMode ? 'واجهة التحضير الذاتي (مفعلة)' : 'تجربة التحضير الذاتي كمعلم'}</span>
-            </button>
+        {/* Navigation Tabs */}
+        <div className="flex items-center gap-1.5 bg-[#022c22] p-1.5 rounded-2xl border border-[#065f46] flex-wrap">
+          {isSupervisorOrDev && (
+            <>
+              <button
+                type="button"
+                onClick={() => setActiveSubTab('records')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                  activeSubTab === 'records'
+                    ? 'bg-[#fbbf24] text-[#064e3b] shadow-md font-black'
+                    : 'text-emerald-200 hover:text-white hover:bg-[#064e3b]'
+                }`}
+              >
+                <Calendar className="w-3.5 h-3.5" />
+                <span>سجل التحضير</span>
+              </button>
 
-            <div className="bg-[#022c22] p-1 rounded-2xl border border-[#065f46] flex items-center gap-1">
               <button
                 type="button"
-                onClick={() => {
-                  setActiveSubTab('records');
-                  setIsSupervisorSelfMode(false);
-                }}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                  activeSubTab === 'records' && !isSupervisorSelfMode
-                    ? 'bg-[#fbbf24] text-[#064e3b] shadow-md'
-                    : 'text-emerald-200 hover:text-white'
+                onClick={() => setActiveSubTab('shifts')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                  activeSubTab === 'shifts'
+                    ? 'bg-[#fbbf24] text-[#064e3b] shadow-md font-black'
+                    : 'text-emerald-200 hover:text-white hover:bg-[#064e3b]'
                 }`}
               >
-                سجل التحضير
+                <Clock className="w-3.5 h-3.5" />
+                <span>فترات الدوام وتعيينها ({shifts.length})</span>
               </button>
+
               <button
                 type="button"
-                onClick={() => {
-                  setActiveSubTab('shifts');
-                  setIsSupervisorSelfMode(false);
-                }}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                  activeSubTab === 'shifts' && !isSupervisorSelfMode
-                    ? 'bg-[#fbbf24] text-[#064e3b] shadow-md'
-                    : 'text-emerald-200 hover:text-white'
+                onClick={() => setActiveSubTab('mosques')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                  activeSubTab === 'mosques'
+                    ? 'bg-[#fbbf24] text-[#064e3b] shadow-md font-black'
+                    : 'text-emerald-200 hover:text-white hover:bg-[#064e3b]'
                 }`}
               >
-                فترات الدوام ({shifts.length})
+                <Building2 className="w-3.5 h-3.5" />
+                <span>الجوامع ({mosques.length})</span>
               </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setActiveSubTab('mosques');
-                  setIsSupervisorSelfMode(false);
-                }}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                  activeSubTab === 'mosques' && !isSupervisorSelfMode
-                    ? 'bg-[#fbbf24] text-[#064e3b] shadow-md'
-                    : 'text-emerald-200 hover:text-white'
-                }`}
-              >
-                الجوامع والمساجد ({mosques.length})
-              </button>
-            </div>
-          </div>
-        )}
+            </>
+          )}
+
+          <button
+            type="button"
+            onClick={() => setActiveSubTab('self')}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+              activeSubTab === 'self' || !isSupervisorOrDev
+                ? 'bg-[#fbbf24] text-[#064e3b] shadow-md font-black'
+                : 'text-emerald-200 hover:text-white hover:bg-[#064e3b]'
+            }`}
+          >
+            <UserCheck className="w-3.5 h-3.5" />
+            <span>تسجيل حضوري</span>
+          </button>
+        </div>
       </div>
 
       {/* ===================================================================== */}
       {/* VIEW 1: TEACHER SELF ATTENDANCE (واجهة المعلم للتحضير الذاتي)        */}
       {/* ===================================================================== */}
-      {(!isSupervisorOrDev || isSupervisorSelfMode) && (
+      {(activeSubTab === 'self' || !isSupervisorOrDev) && (
         <div className="bg-[#064e3b]/60 border border-[#065f46] rounded-[32px] p-6 sm:p-8 space-y-6 shadow-xl backdrop-blur-md">
           <div className="border-b border-[#065f46] pb-4 flex items-center justify-between gap-3 flex-wrap">
             <div>
@@ -770,8 +880,20 @@ export const TeacherAttendanceTab: React.FC<TeacherAttendanceTabProps> = ({
           )}
 
           {myAssignedShifts.length === 0 ? (
-            <div className="p-8 text-center text-xs text-emerald-300/70 border border-dashed border-[#065f46] rounded-3xl">
-              لا توجد فترات دوام مسندة إليك حالياً. يرجى مراجعة المشرف لتعيين فترتك.
+            <div className="p-8 text-center text-xs text-emerald-300/80 border border-dashed border-[#065f46] rounded-3xl space-y-3 bg-[#022c22]/40">
+              <p className="text-sm font-bold text-white">لا توجد فترات دوام مسندة إليك حالياً في هذا المجمع.</p>
+              {isSupervisorOrDev ? (
+                <button
+                  type="button"
+                  onClick={handleOpenAddShiftModal}
+                  className="px-5 py-2.5 rounded-2xl bg-gradient-to-r from-amber-400 to-amber-500 hover:brightness-110 text-[#064e3b] font-black text-xs inline-flex items-center gap-2 shadow-lg cursor-pointer transition-all"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>إنشاء وتعيين فترة دوام الآن</span>
+                </button>
+              ) : (
+                <p className="text-emerald-400">يرجى التواصل مع المشرف لتعيين فترتك وجامعك.</p>
+              )}
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

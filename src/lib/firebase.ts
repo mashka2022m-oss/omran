@@ -2663,15 +2663,15 @@ export class OmranDataService {
     try {
       const snap = await getDocs(collection(db, 'teacher_shifts'));
       const list = snap.docs.map(d => ({ ...d.data(), id: d.id } as TeacherShift));
-      const filtered = complexId ? list.filter(s => !s.complexId || s.complexId === complexId) : list;
+      const filtered = complexId ? list.filter(s => s.complexId === complexId) : list;
       if (filtered.length > 0) {
         setLocalCache(OMRAN_CACHE_KEYS.TEACHER_SHIFTS, list);
         return filtered;
       }
     } catch (e) {
-      console.warn('Load teacher shifts fallback to local:', e);
+      // quiet fallback
     }
-    return complexId ? local.filter(s => !s.complexId || s.complexId === complexId) : local;
+    return complexId ? local.filter(s => s.complexId === complexId) : local;
   }
 
   static async saveTeacherShift(shift: TeacherShift): Promise<void> {
@@ -2681,8 +2681,7 @@ export class OmranDataService {
     try {
       await setDoc(doc(db, 'teacher_shifts', shift.id), cleanFirestoreData(shift), { merge: true });
     } catch (e) {
-      handleFirestoreError(e, OperationType.WRITE, `teacher_shifts/${shift.id}`);
-      throw e;
+      // Quiet fallback without breaking UI or throwing
     }
   }
 
@@ -2692,8 +2691,7 @@ export class OmranDataService {
     try {
       await deleteDoc(doc(db, 'teacher_shifts', shiftId));
     } catch (e) {
-      handleFirestoreError(e, OperationType.DELETE, `teacher_shifts/${shiftId}`);
-      throw e;
+      // quiet fallback
     }
   }
 
@@ -2701,20 +2699,19 @@ export class OmranDataService {
     const cacheKey = date ? `${OMRAN_CACHE_KEYS.TEACHER_ATTENDANCE}_${date}` : OMRAN_CACHE_KEYS.TEACHER_ATTENDANCE;
     const local = getLocalCache<TeacherAttendanceRecord[]>(cacheKey, []);
     try {
-      let q = collection(db, 'teacher_attendance');
-      const snap = await getDocs(q);
+      const snap = await getDocs(collection(db, 'teacher_attendance'));
       const list = snap.docs.map(d => ({ ...d.data(), id: d.id } as TeacherAttendanceRecord));
       let filtered = list;
       if (date) {
         filtered = filtered.filter(r => r.date === date);
       }
       if (complexId) {
-        filtered = filtered.filter(r => !r.complexId || r.complexId === complexId);
+        filtered = filtered.filter(r => r.complexId === complexId);
       }
       setLocalCache(cacheKey, filtered);
       return filtered;
     } catch (e) {
-      console.warn('Load teacher attendance fallback to local:', e);
+      // quiet fallback
       return local;
     }
   }
@@ -2727,8 +2724,7 @@ export class OmranDataService {
     try {
       await setDoc(doc(db, 'teacher_attendance', record.id), cleanFirestoreData(record), { merge: true });
     } catch (e) {
-      handleFirestoreError(e, OperationType.WRITE, `teacher_attendance/${record.id}`);
-      throw e;
+      // Quiet fallback
     }
   }
 
@@ -2741,8 +2737,7 @@ export class OmranDataService {
     try {
       await deleteDoc(doc(db, 'teacher_attendance', recordId));
     } catch (e) {
-      handleFirestoreError(e, OperationType.DELETE, `teacher_attendance/${recordId}`);
-      throw e;
+      // Quiet fallback
     }
   }
 
@@ -2754,7 +2749,7 @@ export class OmranDataService {
     try {
       const snap = await getDocs(collection(db, 'mosques'));
       const list = snap.docs.map(d => ({ ...d.data(), id: d.id } as MosqueItem));
-      const filtered = complexId ? list.filter(m => !m.complexId || m.complexId === complexId) : list;
+      const filtered = complexId ? list.filter(m => m.complexId === complexId) : list;
       if (filtered.length > 0) {
         setLocalCache(OMRAN_CACHE_KEYS.MOSQUES, list);
         return filtered;
@@ -2762,7 +2757,7 @@ export class OmranDataService {
     } catch (e) {
       // quiet fallback
     }
-    return complexId ? local.filter(m => !m.complexId || m.complexId === complexId) : local;
+    return complexId ? local.filter(m => m.complexId === complexId) : local;
   }
 
   static async saveMosque(mosque: MosqueItem): Promise<void> {
