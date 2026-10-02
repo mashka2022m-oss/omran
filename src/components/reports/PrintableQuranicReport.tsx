@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   BookOpen,
   Award,
@@ -21,6 +21,7 @@ import {
 import { Student, AttendanceRecord, StudentEvaluation, AppSettings, getStudentParentPhone, QuranComplex } from '../../types';
 import { getSurahInfo } from '../../data/quranData';
 import { calculateStudentCompletedPages } from '../../data/quranPagesData';
+import { hexToRgb } from '../../lib/themeUtils';
 
 export type ReportDocumentType = 'individual' | 'all_students' | 'attendance' | 'custom';
 
@@ -84,6 +85,26 @@ export const PrintableQuranicReport: React.FC<PrintableQuranicReportProps> = ({
 }) => {
   if (!isOpen) return null;
 
+  const docPrimary = complex?.theme?.primaryColor || complex?.theme?.secondaryColor || '#064e3b';
+  const docAccent = complex?.theme?.accentColor || '#b45309';
+  const docSecondary = complex?.theme?.secondaryColor || complex?.theme?.cardColor || '#065f46';
+  const docCardBg = `rgba(${hexToRgb(docPrimary)}, 0.05)`;
+  const docCardGold = `rgba(${hexToRgb(docAccent)}, 0.08)`;
+  const effectiveLogoUrl = (complex?.logoUrl || settings?.themeLogoUrl || '').trim();
+  const effectiveStampUrl = (complex?.stampUrl || settings?.themeStampUrl || '').trim();
+  const displayComplexName = complex?.name || settings?.complexName || 'مجمع تحفيظ القرآن الكريم';
+  const complexInitial = displayComplexName.replace(/^(مجمع|مراكز|حلقات|جمعية)\s+/i, '').trim().charAt(0) || 'ق';
+  const [logoFailed, setLogoFailed] = useState(false);
+  const [stampFailed, setStampFailed] = useState(false);
+
+  React.useEffect(() => {
+    setLogoFailed(false);
+  }, [effectiveLogoUrl]);
+
+  React.useEffect(() => {
+    setStampFailed(false);
+  }, [effectiveStampUrl]);
+
   const todayDateObj = new Date();
   const todayFormatted = todayDateObj.toLocaleDateString('ar-SA', {
     weekday: 'long',
@@ -93,7 +114,7 @@ export const PrintableQuranicReport: React.FC<PrintableQuranicReportProps> = ({
   });
   const todayGregorian = todayDateObj.toLocaleDateString('en-GB');
 
-  // Trigger high-fidelity print with platform emerald & gold styling intact
+  // Trigger high-fidelity print with complex theme styling intact
   const handlePrint = () => {
     const printEl = document.getElementById('printable-quranic-document');
     if (!printEl) {
@@ -154,7 +175,7 @@ export const PrintableQuranicReport: React.FC<PrintableQuranicReportProps> = ({
             padding: 0 !important;
             width: 100% !important;
             background: #ffffff !important;
-            color: #064e3b !important;
+            color: ${docPrimary} !important;
             font-family: 'Cairo', 'Amiri', -apple-system, BlinkMacSystemFont, sans-serif !important;
             direction: rtl !important;
             text-align: right !important;
@@ -191,7 +212,7 @@ export const PrintableQuranicReport: React.FC<PrintableQuranicReportProps> = ({
 
           /* OUTER & INNER LUXURY ISLAMIC FRAMES */
           .omran-doc-outer {
-            border: 2.5px solid #064e3b !important;
+            border: 2.5px solid ${docPrimary} !important;
             border-radius: 8px !important;
             padding: 2.5mm !important;
             background: #ffffff !important;
@@ -199,7 +220,7 @@ export const PrintableQuranicReport: React.FC<PrintableQuranicReportProps> = ({
             width: 100% !important;
           }
           .omran-doc-inner {
-            border: 1.5px solid #b45309 !important;
+            border: 1.5px solid ${docAccent} !important;
             border-radius: 6px !important;
             padding: 3.5mm !important;
             background: #ffffff !important;
@@ -209,7 +230,7 @@ export const PrintableQuranicReport: React.FC<PrintableQuranicReportProps> = ({
           /* CORNER ORNAMENTS: Absolute positioning so they NEVER push content down */
           .corner-glyph {
             position: absolute !important;
-            color: #b45309 !important;
+            color: ${docAccent} !important;
             font-size: 13px !important;
             line-height: 1 !important;
             font-family: serif !important;
@@ -231,7 +252,7 @@ export const PrintableQuranicReport: React.FC<PrintableQuranicReportProps> = ({
             font-size: 10pt !important;
             font-family: 'Amiri', serif !important;
             font-weight: bold !important;
-            color: #064e3b !important;
+            color: ${docPrimary} !important;
             letter-spacing: 0.5px !important;
             display: inline-block !important;
           }
@@ -241,7 +262,7 @@ export const PrintableQuranicReport: React.FC<PrintableQuranicReportProps> = ({
             display: flex !important;
             align-items: center !important;
             justify-content: space-between !important;
-            border-bottom: 2px solid #064e3b !important;
+            border-bottom: 2px solid ${docPrimary} !important;
             padding-bottom: 5px !important;
             margin-bottom: 6px !important;
             gap: 8px !important;
@@ -255,7 +276,7 @@ export const PrintableQuranicReport: React.FC<PrintableQuranicReportProps> = ({
           .org-title {
             font-size: 9pt !important;
             font-weight: 900 !important;
-            color: #064e3b !important;
+            color: ${docPrimary} !important;
             display: block !important;
           }
           .org-sub {
@@ -269,22 +290,22 @@ export const PrintableQuranicReport: React.FC<PrintableQuranicReportProps> = ({
           }
           .report-title-badge {
             display: inline-block !important;
-            background-color: #064e3b !important;
-            color: #fbbf24 !important;
+            background-color: ${docPrimary} !important;
+            color: ${docAccent} !important;
             padding: 4px 12px !important;
             border-radius: 6px !important;
-            border: 1.5px solid #b45309 !important;
+            border: 1.5px solid ${docAccent} !important;
           }
           .report-title-badge h1 {
             font-size: 10.5pt !important;
             font-weight: 900 !important;
-            color: #fbbf24 !important;
+            color: ${docAccent} !important;
             margin: 0 !important;
             letter-spacing: 0.2px !important;
           }
           .quran-ayah-motto {
             font-size: 7pt !important;
-            color: #b45309 !important;
+            color: ${docAccent} !important;
             font-weight: 700 !important;
             margin-top: 2px !important;
           }
@@ -301,8 +322,8 @@ export const PrintableQuranicReport: React.FC<PrintableQuranicReportProps> = ({
             display: grid !important;
             grid-template-columns: repeat(4, 1fr) !important;
             gap: 6px !important;
-            background-color: #f0fdf4 !important;
-            border: 1.5px solid #065f46 !important;
+            background-color: ${docCardBg} !important;
+            border: 1.5px solid ${docPrimary} !important;
             border-radius: 6px !important;
             padding: 5px 8px !important;
             margin-bottom: 6px !important;
@@ -320,7 +341,7 @@ export const PrintableQuranicReport: React.FC<PrintableQuranicReportProps> = ({
           .identity-val {
             font-size: 8pt !important;
             font-weight: 900 !important;
-            color: #064e3b !important;
+            color: ${docPrimary} !important;
             display: block !important;
           }
 
@@ -332,15 +353,15 @@ export const PrintableQuranicReport: React.FC<PrintableQuranicReportProps> = ({
             margin-bottom: 6px !important;
           }
           .stat-card-green {
-            background-color: #f0fdf4 !important;
-            border: 1px solid #16a34a !important;
+            background-color: ${docCardBg} !important;
+            border: 1px solid ${docPrimary} !important;
             border-radius: 6px !important;
             padding: 4px !important;
             text-align: center !important;
           }
           .stat-card-gold {
-            background-color: #fefce8 !important;
-            border: 1px solid #f59e0b !important;
+            background-color: ${docCardGold} !important;
+            border: 1px solid ${docAccent} !important;
             border-radius: 6px !important;
             padding: 4px !important;
             text-align: center !important;
@@ -369,7 +390,7 @@ export const PrintableQuranicReport: React.FC<PrintableQuranicReportProps> = ({
           .section-heading {
             font-size: 8.5pt !important;
             font-weight: 800 !important;
-            color: #064e3b !important;
+            color: ${docPrimary} !important;
             margin-bottom: 4px !important;
             display: flex !important;
             align-items: center !important;
@@ -389,10 +410,10 @@ export const PrintableQuranicReport: React.FC<PrintableQuranicReportProps> = ({
             page-break-after: auto !important;
           }
           th {
-            background-color: #064e3b !important;
-            color: #fbbf24 !important;
+            background-color: ${docPrimary} !important;
+            color: ${docAccent} !important;
             font-weight: 800 !important;
-            border: 1px solid #065f46 !important;
+            border: 1px solid ${docPrimary} !important;
             padding: 4px 6px !important;
             font-size: 8pt !important;
             text-align: right !important;
@@ -436,8 +457,8 @@ export const PrintableQuranicReport: React.FC<PrintableQuranicReportProps> = ({
 
           /* 6. ADVICE / RECOMMENDATION BOX */
           .advice-banner {
-            background-color: #fefce8 !important;
-            border: 1.2px solid #f59e0b !important;
+            background-color: ${docCardGold} !important;
+            border: 1.2px solid ${docAccent} !important;
             border-radius: 5px !important;
             padding: 4px 8px !important;
             font-size: 7.5pt !important;
@@ -452,7 +473,7 @@ export const PrintableQuranicReport: React.FC<PrintableQuranicReportProps> = ({
             display: flex !important;
             align-items: center !important;
             justify-content: space-between !important;
-            border-top: 1.5px solid #064e3b !important;
+            border-top: 1.5px solid ${docPrimary} !important;
             padding-top: 4px !important;
             margin-top: 5px !important;
             page-break-inside: avoid !important;
@@ -463,11 +484,11 @@ export const PrintableQuranicReport: React.FC<PrintableQuranicReportProps> = ({
             line-height: 1.3 !important;
           }
           .seal-badge {
-            width: 46px !important;
-            height: 46px !important;
+            width: 48px !important;
+            height: 48px !important;
             border-radius: 50% !important;
-            border: 1.5px double #b45309 !important;
-            background-color: #fefce8 !important;
+            border: 1.5px double ${docAccent} !important;
+            background-color: ${docCardGold} !important;
             display: flex !important;
             flex-direction: column !important;
             align-items: center !important;
@@ -596,56 +617,76 @@ export const PrintableQuranicReport: React.FC<PrintableQuranicReportProps> = ({
           {/* THE OFFICIAL PRINTABLE QURANIC DOCUMENT */}
           <div
             id="printable-quranic-document"
-            className="omran-doc-outer bg-white text-[#064e3b] w-full max-w-[210mm] p-2.5 sm:p-3 shadow-2xl relative font-sans border-2 border-[#064e3b] rounded-xl"
+            className="omran-doc-outer bg-white w-full max-w-[210mm] p-2.5 sm:p-3 shadow-2xl relative font-sans rounded-xl"
+            style={{ borderColor: docPrimary, color: docPrimary, border: `2.5px solid ${docPrimary}` }}
             dir="rtl"
           >
             {/* Islamic Gold Decorative Outer Frame */}
-            <div className="omran-doc-inner border-[1.5px] border-[#b45309] p-3 sm:p-3.5 rounded-lg relative bg-white">
+            <div
+              className="omran-doc-inner p-3 sm:p-3.5 rounded-lg relative bg-white"
+              style={{ border: `1.5px solid ${docAccent}` }}
+            >
               {/* Ornate Corner Motif Glyphs */}
-              <div className="corner-glyph corner-tr select-none">❖</div>
-              <div className="corner-glyph corner-tl select-none">❖</div>
-              <div className="corner-glyph corner-br select-none">❖</div>
-              <div className="corner-glyph corner-bl select-none">❖</div>
+              <div className="corner-glyph corner-tr select-none" style={{ color: docAccent }}>❖</div>
+              <div className="corner-glyph corner-tl select-none" style={{ color: docAccent }}>❖</div>
+              <div className="corner-glyph corner-br select-none" style={{ color: docAccent }}>❖</div>
+              <div className="corner-glyph corner-bl select-none" style={{ color: docAccent }}>❖</div>
 
               {/* 1. TOP BASMALA */}
               <div className="basmala-banner text-center mb-1">
-                <span className="basmala-text font-serif font-bold">
+                <span className="basmala-text font-serif font-bold" style={{ color: docPrimary }}>
                   ۩ بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ ۩
                 </span>
               </div>
 
               {/* 2. OFFICIAL EMBLEM & REPORT HEADER */}
-              <div className="header-row flex items-center justify-between border-b-2 border-[#064e3b] pb-2 mb-2 gap-3">
+              <div
+                className="header-row flex items-center justify-between pb-2 mb-2 gap-3"
+                style={{ borderBottom: `2px solid ${docPrimary}` }}
+              >
                 {/* Right: Complex & Halaqah */}
                 <div className="header-org text-right space-y-0.5">
-                  <div className="flex items-center gap-1.5">
-                    {complex?.logoUrl ? (
+                  <div className="flex items-center gap-2">
+                    {effectiveLogoUrl && !logoFailed ? (
                       <img
-                        src={complex.logoUrl}
-                        alt="شعار المجمع"
-                        style={{ width: '28px', height: '28px', objectFit: 'contain', borderRadius: '4px' }}
+                        src={effectiveLogoUrl}
+                        alt={displayComplexName}
+                        onError={() => setLogoFailed(true)}
+                        style={{ width: '36px', height: '36px', objectFit: 'contain', borderRadius: '6px', border: `1px solid ${docAccent}` }}
                       />
                     ) : (
-                      <span className="w-5 h-5 rounded-md bg-[#064e3b] text-[#fbbf24] flex items-center justify-center font-bold text-xs shadow-sm border border-[#fbbf24]/50">
-                        {complex?.name ? complex.name.replace(/^(مجمع|مراكز|حلقات)\s+/i, '').charAt(0) || 'ق' : 'ق'}
+                      <span
+                        className="w-8 h-8 rounded-lg flex items-center justify-center font-black text-sm shadow-sm border"
+                        style={{
+                          backgroundColor: docPrimary,
+                          color: docAccent,
+                          borderColor: docAccent
+                        }}
+                      >
+                        {complexInitial}
                       </span>
                     )}
-                    <strong className="org-title font-heading">
-                      {complex?.name || settings.complexName || 'مجمع تحفيظ القرآن الكريم'}
-                    </strong>
+                    <div>
+                      <strong className="org-title font-heading" style={{ color: docPrimary }}>
+                        {displayComplexName}
+                      </strong>
+                    </div>
                   </div>
                   <p className="org-sub font-bold text-slate-800">
-                    حلقة: <span className="text-[#064e3b] font-black">{settings.halaqahName || 'الحلقة القرآنية'}</span>
+                    حلقة: <span className="font-black" style={{ color: docPrimary }}>{settings.halaqahName || 'الحلقة القرآنية'}</span>
                   </p>
                   <p className="org-sub text-slate-700">
-                    المعلم المشرف: فضيلة الشيخ / <span className="font-bold text-[#064e3b]">{teacherName || settings.teacherName}</span>
+                    المعلم المشرف: فضيلة الشيخ / <span className="font-bold" style={{ color: docPrimary }}>{teacherName || settings.teacherName}</span>
                   </p>
                 </div>
 
                 {/* Center: Main Title Ribbon */}
                 <div className="header-center text-center">
-                  <div className="report-title-badge shadow-sm">
-                    <h1 className="font-heading">
+                  <div
+                    className="report-title-badge shadow-sm"
+                    style={{ backgroundColor: docPrimary, color: docAccent, borderColor: docAccent, border: `1.5px solid ${docAccent}` }}
+                  >
+                    <h1 className="font-heading" style={{ color: docAccent }}>
                       {documentType === 'custom'
                         ? 'تقرير المتابعة المخصص لطلاب الحلقة القرآنية'
                         : documentType === 'all_students'
@@ -659,16 +700,16 @@ export const PrintableQuranicReport: React.FC<PrintableQuranicReportProps> = ({
                         : 'سجل التقييم والإنجاز القرآني الشامل للطالب'}
                     </h1>
                   </div>
-                  <p className="quran-ayah-motto font-bold">
+                  <p className="quran-ayah-motto font-bold" style={{ color: docAccent }}>
                     ﴿ وَفِي ذَٰلِكَ فَلْيَتَنَافَسِ الْمُتَنَافِسُونَ ﴾
                   </p>
                 </div>
 
                 {/* Left: Metadata & Date */}
                 <div className="header-meta text-left space-y-0.5">
-                  <p className="font-bold text-[#064e3b]">التاريخ: <span className="text-slate-800">{todayFormatted}</span></p>
+                  <p className="font-bold" style={{ color: docPrimary }}>التاريخ: <span className="text-slate-800">{todayFormatted}</span></p>
                   <p className="font-mono text-slate-600">موافق: {todayGregorian}</p>
-                  <p className="font-mono text-[#b45309] font-bold">كود: DOC-{Date.now().toString().slice(-6)}</p>
+                  <p className="font-mono font-bold" style={{ color: docAccent }}>كود: DOC-{Date.now().toString().slice(-6)}</p>
                 </div>
               </div>
 
@@ -681,7 +722,7 @@ export const PrintableQuranicReport: React.FC<PrintableQuranicReportProps> = ({
                   <div className="student-identity-box">
                     <div className="identity-col">
                       <span className="identity-lbl">اسم الطالب المكرم:</span>
-                      <strong className="identity-val">{student.name}</strong>
+                      <strong className="identity-val" style={{ color: docPrimary }}>{student.name}</strong>
                     </div>
                     <div className="identity-col">
                       <span className="identity-lbl">المستوى القرآني:</span>
@@ -693,7 +734,7 @@ export const PrintableQuranicReport: React.FC<PrintableQuranicReportProps> = ({
                     </div>
                     <div className="identity-col">
                       <span className="identity-lbl">موضع الحفظ الحالي:</span>
-                      <strong className="identity-val text-[#b45309]">
+                      <strong className="identity-val" style={{ color: docAccent }}>
                         سورة {student.currentSurahName || studentSurah?.name || 'النبأ'} (آية {student.currentAyah || 1})
                       </strong>
                     </div>
@@ -703,25 +744,25 @@ export const PrintableQuranicReport: React.FC<PrintableQuranicReportProps> = ({
                   <div className="stats-grid-4">
                     <div className="stat-card-green">
                       <span className="stat-lbl">نسبة المواظبة والحضور:</span>
-                      <span className="stat-num text-[#15803d]">{attendanceRate}%</span>
+                      <span className="stat-num" style={{ color: docPrimary }}>{attendanceRate}%</span>
                       <span className="stat-sub">({presentsCount} من {totalDaysRecorded} يوم)</span>
                     </div>
 
                     <div className="stat-card-gold">
                       <span className="stat-lbl">الآيات التي سمعها:</span>
-                      <span className="stat-num text-[#b45309]">{totalVersesHeard}</span>
+                      <span className="stat-num" style={{ color: docAccent }}>{totalVersesHeard}</span>
                       <span className="stat-sub">آية مسجلة ومحفوظة</span>
                     </div>
 
                     <div className="stat-card-green">
                       <span className="stat-lbl">الأوجه المحفوظة:</span>
-                      <span className="stat-num text-[#064e3b]">{totalPagesCompleted}</span>
+                      <span className="stat-num" style={{ color: docPrimary }}>{totalPagesCompleted}</span>
                       <span className="stat-sub">وجهاً من مصحف المدينة</span>
                     </div>
 
                     <div className="stat-card-gold">
                       <span className="stat-lbl">رصيد النقاط المحققة:</span>
-                      <span className="stat-num text-[#b45309]">{student.points || 0}</span>
+                      <span className="stat-num" style={{ color: docAccent }}>{student.points || 0}</span>
                       <span className="stat-sub">نقطة في معايير التميز</span>
                     </div>
                   </div>
@@ -857,7 +898,7 @@ export const PrintableQuranicReport: React.FC<PrintableQuranicReportProps> = ({
                         return (
                           <tr key={std.id}>
                             <td style={{ textAlign: 'center', fontWeight: 'bold', fontFamily: 'monospace' }}>{idx + 1}</td>
-                            <td style={{ fontWeight: 'bold', color: '#064e3b' }}>{std.name}</td>
+                            <td style={{ fontWeight: 'bold', color: docPrimary }}>{std.name}</td>
                             {customFields.includeParentPhone && (
                               <td style={{ textAlign: 'center', fontFamily: 'monospace', fontWeight: 'bold' }} dir="ltr">
                                 {getStudentParentPhone(std) || '—'}
@@ -865,7 +906,7 @@ export const PrintableQuranicReport: React.FC<PrintableQuranicReportProps> = ({
                             )}
                             {customFields.includeMemorization && (
                               <td>
-                                <span style={{ fontWeight: 'bold', color: '#064e3b', display: 'block' }}>{newText}</span>
+                                <span style={{ fontWeight: 'bold', color: docPrimary, display: 'block' }}>{newText}</span>
                                 <span style={{ fontSize: '6.5pt', color: '#64748b' }}>{revText}</span>
                               </td>
                             )}
@@ -877,7 +918,7 @@ export const PrintableQuranicReport: React.FC<PrintableQuranicReportProps> = ({
                               </td>
                             )}
                             {customFields.includePagesAndVerses && (
-                              <td style={{ textAlign: 'center', fontWeight: 'bold', color: '#b45309', fontFamily: 'monospace' }}>
+                              <td style={{ textAlign: 'center', fontWeight: 'bold', color: docAccent, fontFamily: 'monospace' }}>
                                 {pagesCount} وجه
                               </td>
                             )}
@@ -949,27 +990,44 @@ export const PrintableQuranicReport: React.FC<PrintableQuranicReportProps> = ({
               )}
 
               {/* 3. OFFICIAL ELECTRONIC CERTIFICATION & GOLD SEAL */}
-              <div className="seal-row">
+              <div className="seal-row" style={{ borderTop: `1.5px solid ${docPrimary}` }}>
                 <div className="seal-info">
-                  <div style={{ fontWeight: 'bold', color: '#064e3b', display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '2px' }}>
-                    <ShieldCheck style={{ width: '13px', height: '13px' }} className="text-[#b45309]" />
-                    <span>الاعتماد الرسمي لإدارة {complex?.name || 'المجمع القرآني'}:</span>
+                  <div style={{ fontWeight: 'bold', color: docPrimary, display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '2px' }}>
+                    <ShieldCheck style={{ width: '13px', height: '13px', color: docAccent }} />
+                    <span>الاعتماد الرسمي لإدارة {displayComplexName}:</span>
                   </div>
                   <p style={{ fontSize: '7.5pt', color: '#1e293b' }}>
-                    هذه الوثيقة صادرة ومعتمدة رسمياً من إدارة {complex?.name || 'المجمع القرآني'}
+                    هذه الوثيقة صادرة ومعتمدة رسمياً من إدارة {displayComplexName}
                   </p>
                 </div>
 
                 {/* Bottom Left: Official Stamp or Seal Badge */}
-                <div className="seal-badge" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  {complex?.stampUrl ? (
+                <div
+                  className="seal-badge"
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    border: `1.5px double ${docAccent}`,
+                    backgroundColor: docCardGold
+                  }}
+                >
+                  {effectiveStampUrl && !stampFailed ? (
                     <img
-                      src={complex.stampUrl}
+                      src={effectiveStampUrl}
                       alt="ختم المجمع"
+                      onError={() => setStampFailed(true)}
                       style={{ width: '56px', height: '56px', objectFit: 'contain', borderRadius: '50%' }}
                     />
                   ) : (
-                    <span style={{ fontSize: '7.5pt', color: '#b45309', fontWeight: '900', lineHeight: 1.2 }}>معتمد رسمياً</span>
+                    <div className="flex flex-col items-center justify-center p-1 text-center">
+                      <span style={{ fontSize: '8pt', color: docAccent, fontWeight: '900', lineHeight: 1.1 }}>
+                        ختم معتمد
+                      </span>
+                      <span style={{ fontSize: '6pt', color: docPrimary, fontWeight: 'bold', marginTop: '1px' }}>
+                        {complexInitial}
+                      </span>
+                    </div>
                   )}
                 </div>
               </div>

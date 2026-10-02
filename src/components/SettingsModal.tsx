@@ -29,6 +29,7 @@ import {
 } from 'lucide-react';
 import { TeacherAccount, Halaqah, Student, AppSettings, QuranComplex, ComplexThemeConfig, isTeacherSupervisor, getThreePartNameValidation } from '../types';
 import { ISLAMIC_THEME_PRESETS, generateHarmoniousIslamicPalette, IslamicThemePreset, hexToRgb, lightenHex } from '../lib/themeUtils';
+import { compressImageToDataUrl } from '../lib/imageCompressor';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -50,6 +51,7 @@ interface SettingsModalProps {
   onBatchTransferStudents?: (studentIds: string[], targetHalaqahId: string, targetHalaqahName: string) => Promise<void>;
   onSwitchActiveHalaqah?: (halaqahId: string) => void;
   onSaveComplex?: (complex: QuranComplex) => Promise<void>;
+  onUpdateSettings?: (settings: AppSettings) => Promise<void>;
 }
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({
@@ -71,7 +73,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onTransferStudent,
   onBatchTransferStudents,
   onSwitchActiveHalaqah,
-  onSaveComplex
+  onSaveComplex,
+  onUpdateSettings
 }) => {
   const [activeSubTab, setActiveSubTab] = useState<'theme' | 'halaqahs' | 'teachers' | 'transfer'>('theme');
 
@@ -85,8 +88,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   }, [complexes, selectedThemeComplexId, activeComplex]);
 
   const [themeComplexName, setThemeComplexName] = useState<string>(() => targetThemeComplex?.name || '');
-  const [themeLogoUrl, setThemeLogoUrl] = useState<string>(() => targetThemeComplex?.logoUrl || '');
-  const [themeStampUrl, setThemeStampUrl] = useState<string>(() => targetThemeComplex?.stampUrl || '');
+  const [themeLogoUrl, setThemeLogoUrl] = useState<string>(() => targetThemeComplex?.logoUrl || settings?.themeLogoUrl || '');
+  const [themeStampUrl, setThemeStampUrl] = useState<string>(() => targetThemeComplex?.stampUrl || settings?.themeStampUrl || '');
   const [themeColors, setThemeColors] = useState<ComplexThemeConfig>(() => {
     return targetThemeComplex?.theme || ISLAMIC_THEME_PRESETS[0].colors;
   });
@@ -99,14 +102,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   useEffect(() => {
     if (targetThemeComplex) {
       setThemeComplexName(targetThemeComplex.name || '');
-      setThemeLogoUrl(targetThemeComplex.logoUrl || '');
-      setThemeStampUrl(targetThemeComplex.stampUrl || '');
+      setThemeLogoUrl(targetThemeComplex.logoUrl || settings?.themeLogoUrl || '');
+      setThemeStampUrl(targetThemeComplex.stampUrl || settings?.themeStampUrl || '');
       setThemeColors(targetThemeComplex.theme || ISLAMIC_THEME_PRESETS[0].colors);
       setFileError(null);
     }
-  }, [targetThemeComplex?.id]);
+  }, [targetThemeComplex?.id, settings?.themeLogoUrl, settings?.themeStampUrl]);
 
-  const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleLogoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     const maxBytes = 5 * 1024 * 1024; // 5MB strict limit
@@ -117,14 +120,19 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       return;
     }
     setFileError(null);
-    const reader = new FileReader();
-    reader.onload = () => {
-      setThemeLogoUrl(reader.result as string);
-    };
-    reader.readAsDataURL(file);
+    try {
+      const compressed = await compressImageToDataUrl(file, 512, 512, 0.88);
+      setThemeLogoUrl(compressed);
+    } catch {
+      const reader = new FileReader();
+      reader.onload = () => {
+        setThemeLogoUrl(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
   };
 
-  const handleStampChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleStampChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     const maxBytes = 5 * 1024 * 1024; // 5MB strict limit
@@ -135,11 +143,16 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       return;
     }
     setFileError(null);
-    const reader = new FileReader();
-    reader.onload = () => {
-      setThemeStampUrl(reader.result as string);
-    };
-    reader.readAsDataURL(file);
+    try {
+      const compressed = await compressImageToDataUrl(file, 512, 512, 0.88);
+      setThemeStampUrl(compressed);
+    } catch {
+      const reader = new FileReader();
+      reader.onload = () => {
+        setThemeStampUrl(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
   };
 
   const handleSaveTheme = async () => {
@@ -151,15 +164,26 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     try {
       setIsSavingTheme(true);
       setFileError(null);
+      const finalName = themeComplexName.trim() || targetThemeComplex.name;
       const updated: QuranComplex = {
         ...targetThemeComplex,
-        name: themeComplexName.trim() || targetThemeComplex.name,
+        name: finalName,
         logoUrl: themeLogoUrl || undefined,
         stampUrl: themeStampUrl || undefined,
         theme: themeColors,
         updatedAt: new Date().toISOString()
       };
       await onSaveComplex(updated);
+
+      if (onUpdateSettings) {
+        await onUpdateSettings({
+          ...settings,
+          complexName: finalName,
+          themeLogoUrl: themeLogoUrl || undefined,
+          themeStampUrl: themeStampUrl || undefined
+        });
+      }
+
       setThemeSuccessMsg(`تم حفظ وتطبيق هوية وثيم "${updated.name}" بنجاح! تم اعتماد اسم المجمع والشعار والختم والألوان بالكامل.`);
       setTimeout(() => setThemeSuccessMsg(null), 5000);
     } catch (err: any) {

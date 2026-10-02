@@ -83,6 +83,13 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenPrivacyPolicy,
   onOpenEditAccount
 }) => {
+  const effectiveLogoUrl = (activeComplex?.logoUrl || settings?.themeLogoUrl || '').trim();
+  const [logoImgFailed, setLogoImgFailed] = React.useState(false);
+
+  React.useEffect(() => {
+    setLogoImgFailed(false);
+  }, [effectiveLogoUrl]);
+
   const todayArabic = new Intl.DateTimeFormat('ar-SA', {
     weekday: 'long',
     year: 'numeric',
@@ -94,7 +101,8 @@ export const Navbar: React.FC<NavbarProps> = ({
   const selectableHalaqahs = isSupervisor ? halaqahs : assignedHalaqahs;
   const currentHalaqah = halaqahs.find(h => h.id === activeHalaqahId) || selectableHalaqahs[0] || halaqahs[0];
   const displayHalaqahName = currentHalaqah ? currentHalaqah.name : settings.halaqahName;
-  const displayComplexName = activeComplex?.name || complexName || 'مجمع تحفيظ القرآن الكريم';
+  const displayComplexName = activeComplex?.name || complexName || settings.complexName || 'مجمع تحفيظ القرآن الكريم';
+  const complexInitial = displayComplexName.replace(/^(مجمع|مراكز|حلقات|جمعية)\s+/i, '').trim().charAt(0) || 'ق';
 
   return (
     <header
@@ -106,27 +114,50 @@ export const Navbar: React.FC<NavbarProps> = ({
     >
       <div className="max-w-7xl mx-auto flex items-center justify-between gap-2 sm:gap-4">
         {/* Brand & Logo: Complex Name and Logo */}
-        <div className="flex items-center gap-3.5">
+        <div className="flex items-center gap-3 sm:gap-3.5">
           <div
-            className="relative flex items-center justify-center w-11 h-11 rounded-xl bg-[#fbbf24] text-[#064e3b] shadow-[0_0_20px_rgba(251,191,36,0.35)] border border-[#fbbf24] overflow-hidden shrink-0"
-            style={activeComplex?.theme?.accentColor ? {
-              backgroundColor: activeComplex.theme.accentColor,
-              borderColor: activeComplex.theme.accentColor
-            } : undefined}
+            className="relative flex items-center justify-center w-11 h-11 rounded-2xl shadow-lg border overflow-hidden shrink-0 transition-transform duration-200 hover:scale-105"
+            style={activeComplex?.theme ? {
+              backgroundColor: activeComplex.theme.cardColor || activeComplex.theme.secondaryColor,
+              borderColor: activeComplex.theme.accentColor ? `${activeComplex.theme.accentColor}99` : 'rgba(251,191,36,0.6)',
+              color: activeComplex.theme.accentColor || '#fbbf24'
+            } : {
+              backgroundColor: '#064e3b',
+              borderColor: 'rgba(251,191,36,0.5)',
+              color: '#fbbf24'
+            }}
           >
-            {activeComplex?.logoUrl ? (
+            {effectiveLogoUrl && !logoImgFailed ? (
               <img
-                src={activeComplex.logoUrl}
+                src={effectiveLogoUrl}
                 alt={displayComplexName}
+                onError={() => setLogoImgFailed(true)}
                 className="w-full h-full object-cover"
               />
             ) : (
-              <>
-                <span className="font-heading font-black text-2xl">
-                  {displayComplexName.replace(/^(مجمع|مراكز|حلقات)\s+/i, '').charAt(0) || 'ق'}
+              <div
+                className="relative flex flex-col items-center justify-center w-full h-full p-1 shadow-inner"
+                style={{
+                  background: activeComplex?.theme
+                    ? `linear-gradient(135deg, ${activeComplex.theme.secondaryColor}, ${activeComplex.theme.primaryColor || activeComplex.theme.backgroundColor})`
+                    : 'linear-gradient(135deg, #064e3b, #022c22)'
+                }}
+              >
+                <div className="flex items-center justify-center w-6 h-6 rounded-lg bg-black/25 border border-amber-400/40 shadow-inner">
+                  <span
+                    className="font-black text-sm tracking-tight leading-none drop-shadow-sm font-heading"
+                    style={{ color: activeComplex?.theme?.accentColor || '#fbbf24' }}
+                  >
+                    {complexInitial}
+                  </span>
+                </div>
+                <span
+                  className="text-[7.5px] font-bold tracking-tight mt-0.5"
+                  style={{ color: activeComplex?.theme?.textColor || '#ffffff' }}
+                >
+                  مجمع
                 </span>
-                <div className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-white rounded-full border-2 border-[#064e3b]" />
-              </>
+              </div>
             )}
           </div>
           <div>
@@ -444,8 +475,21 @@ export const Navbar: React.FC<NavbarProps> = ({
           )}
 
           {currentUser && (
-            <div className="flex items-center gap-2 bg-[#022c22]/80 border border-[#065f46] rounded-2xl px-2.5 sm:px-3.5 py-1.5 shadow-inner">
-              <div className="w-8 h-8 rounded-xl bg-emerald-500/20 text-[#fbbf24] flex items-center justify-center text-sm font-bold border border-emerald-500/30 shrink-0">
+            <div
+              className="flex items-center gap-2 bg-[#022c22]/80 border border-[#065f46] rounded-2xl px-2.5 sm:px-3.5 py-1.5 shadow-inner"
+              style={activeComplex?.theme ? {
+                backgroundColor: `${activeComplex.theme.primaryColor}cc`,
+                borderColor: `${activeComplex.theme.cardColor || activeComplex.theme.secondaryColor}`
+              } : undefined}
+            >
+              <div
+                className="w-8 h-8 rounded-xl bg-emerald-500/20 text-[#fbbf24] flex items-center justify-center text-sm font-bold border border-emerald-500/30 shrink-0"
+                style={activeComplex?.theme ? {
+                  backgroundColor: `${activeComplex.theme.accentColor}25`,
+                  borderColor: `${activeComplex.theme.accentColor}40`,
+                  color: activeComplex.theme.accentColor
+                } : undefined}
+              >
                 {currentUser.username.charAt(0)}
               </div>
               <div className="text-right hidden sm:block">

@@ -474,11 +474,25 @@ export const CertificatesTab: React.FC<CertificatesTabProps> = ({
   // Selected template object
   const activeTemplate = useMemo(() => {
     const ready = READY_MADE_TEMPLATES.find(t => t.id === selectedTemplateId);
-    if (ready) return { type: 'ready' as const, data: ready };
+    if (ready) {
+      if (ready.id === 'platform_emerald_royal' && activeComplex?.theme) {
+        return {
+          type: 'ready' as const,
+          data: {
+            ...ready,
+            name: `قالب هوية وثيم ${activeComplex.name || 'المجمع'}`,
+            subtitle: `مستوحى مباشرة من الهوية المعتمدة وألوان ${activeComplex.name || 'المجمع'}`,
+            accentColor: activeComplex.theme.accentColor || ready.accentColor,
+            textColor: activeComplex.theme.textColor || ready.textColor
+          }
+        };
+      }
+      return { type: 'ready' as const, data: ready };
+    }
     const custom = customTemplates.find(t => t.id === selectedTemplateId);
     if (custom) return { type: 'custom' as const, data: custom };
     return { type: 'ready' as const, data: READY_MADE_TEMPLATES[0] };
-  }, [selectedTemplateId, customTemplates]);
+  }, [selectedTemplateId, customTemplates, activeComplex]);
 
   // Today dates
   const todayArabic = useMemo(() => {
@@ -960,8 +974,17 @@ export const CertificatesTab: React.FC<CertificatesTabProps> = ({
       }
     } else {
       // Ready-made platform certificate
+      const isEmeraldTheme = activeTemplate.data.id === 'platform_emerald_royal';
+      const cTheme = activeComplex?.theme;
+      const certAccentColor = activeTemplate.data.accentColor || '#fbbf24';
+      const certTextColor = activeTemplate.data.textColor || '#ffffff';
+
       const grad = ctx.createLinearGradient(0, 0, width, height);
-      if (activeTemplate.data.id === 'platform_emerald_royal') {
+      if (isEmeraldTheme && cTheme) {
+        grad.addColorStop(0, cTheme.primaryColor || '#022c22');
+        grad.addColorStop(0.5, cTheme.secondaryColor || '#064e3b');
+        grad.addColorStop(1, cTheme.primaryColor || '#022c22');
+      } else if (isEmeraldTheme) {
         grad.addColorStop(0, '#022c22');
         grad.addColorStop(0.5, '#064e3b');
         grad.addColorStop(1, '#022c22');
@@ -982,16 +1005,86 @@ export const CertificatesTab: React.FC<CertificatesTabProps> = ({
 
       // Outer gold border
       ctx.lineWidth = 18;
-      ctx.strokeStyle = activeTemplate.data.accentColor;
+      ctx.strokeStyle = certAccentColor;
       ctx.strokeRect(36, 36, width - 72, height - 72);
 
       // Inner thin border
       ctx.lineWidth = 3.5;
-      ctx.strokeStyle = activeTemplate.data.id === 'platform_imperial_gold' ? '#b4530944' : '#ffffff44';
+      ctx.strokeStyle = activeTemplate.data.id === 'platform_imperial_gold' ? '#b4530944' : `${certAccentColor}44`;
       ctx.strokeRect(56, 56, width - 112, height - 112);
 
+      // 0. Top Official Complex Logo & Identity (Top-Right)
+      const complexLogoToDraw = (activeComplex?.logoUrl || settings?.themeLogoUrl || '').trim();
+      const complexName = activeComplex?.name || activeComplexName || settings.complexName || 'مجمع تحفيظ القرآن الكريم';
+      let logoDrawn = false;
+      if (complexLogoToDraw) {
+        try {
+          const lImg = new Image();
+          lImg.crossOrigin = 'anonymous';
+          await new Promise<void>((resolve, reject) => {
+            lImg.onload = () => resolve();
+            lImg.onerror = () => reject();
+            lImg.src = complexLogoToDraw;
+          });
+          ctx.save();
+          ctx.beginPath();
+          ctx.arc(width - 150, 130, 48, 0, Math.PI * 2);
+          ctx.closePath();
+          ctx.clip();
+          ctx.drawImage(lImg, width - 150 - 48, 130 - 48, 96, 96);
+          ctx.restore();
+
+          // Border ring around logo
+          ctx.lineWidth = 3.5;
+          ctx.strokeStyle = certAccentColor;
+          ctx.beginPath();
+          ctx.arc(width - 150, 130, 48, 0, Math.PI * 2);
+          ctx.stroke();
+
+          // Caption under logo
+          ctx.font = "bold 16px 'Cairo', sans-serif";
+          ctx.fillStyle = certAccentColor;
+          ctx.textAlign = 'center';
+          const shortName = complexName.length > 20 ? complexName.substring(0, 20) + '...' : complexName;
+          ctx.fillText(shortName, width - 150, 195);
+          logoDrawn = true;
+        } catch (e) {
+          logoDrawn = false;
+        }
+      }
+
+      if (!logoDrawn) {
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(width - 150, 130, 44, 0, Math.PI * 2);
+        ctx.fillStyle = `${certAccentColor}22`;
+        ctx.fill();
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = certAccentColor;
+        ctx.stroke();
+        ctx.font = "900 34px 'Cairo', sans-serif";
+        ctx.fillStyle = certAccentColor;
+        ctx.textAlign = 'center';
+        ctx.fillText(complexName.replace(/^(مجمع|مراكز|حلقات|جمعية)\s+/i, '').trim().charAt(0) || 'ق', width - 150, 142);
+        ctx.font = "bold 15px 'Cairo', sans-serif";
+        const shortName = complexName.length > 20 ? complexName.substring(0, 20) + '...' : complexName;
+        ctx.fillText(shortName, width - 150, 195);
+        ctx.restore();
+      }
+
+      // Top-Left: Official Accreditation Emblem
+      ctx.save();
+      ctx.font = "bold 18px 'Cairo', sans-serif";
+      ctx.fillStyle = certAccentColor;
+      ctx.textAlign = 'center';
+      ctx.fillText('اعتماد رسمي موثق', 150, 125);
+      ctx.font = "14px 'Cairo', sans-serif";
+      ctx.fillStyle = certTextColor;
+      ctx.fillText('منظومة عمران القرآنية', 150, 150);
+      ctx.restore();
+
       // 1. Basmalah
-      ctx.fillStyle = activeTemplate.data.accentColor;
+      ctx.fillStyle = certAccentColor;
       ctx.textAlign = 'center';
       ctx.font = "bold 34px 'Amiri', serif";
       ctx.fillText('بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ', width / 2, 130);
@@ -1002,28 +1095,27 @@ export const CertificatesTab: React.FC<CertificatesTabProps> = ({
 
       // 3. Title
       ctx.font = "900 58px 'Cairo', sans-serif";
-      ctx.fillStyle = activeTemplate.data.accentColor;
+      ctx.fillStyle = certAccentColor;
       ctx.fillText('شَهَادَةُ تَمَيُّزٍ وَإِتْقَانٍ قُرْآنِيٍّ', width / 2, 305);
 
       // 4. Intro text
       ctx.font = "26px 'Cairo', sans-serif";
-      ctx.fillStyle = activeTemplate.data.textColor;
+      ctx.fillStyle = certTextColor;
       ctx.fillText('يَسُرُّ إِدَارَةَ الحِلْقَةِ أَنْ تَمْنَحَ هذِهِ الشَّهَادَةَ المُبَارَكَةَ لِلطَّالِبِ النَّجِيبِ:', width / 2, 400);
 
       // 5. Student Name
       ctx.font = "bold 68px 'Amiri', serif";
-      ctx.fillStyle = activeTemplate.data.accentColor;
+      ctx.fillStyle = certAccentColor;
       ctx.fillText(student.name, width / 2, 510);
 
       // 6. Occasion
       ctx.font = "26px 'Cairo', sans-serif";
-      ctx.fillStyle = activeTemplate.data.textColor;
+      ctx.fillStyle = certTextColor;
       const occText = getOccasionDescription();
       ctx.fillText(occText, width / 2, 600);
 
       // 7. Halaqah & Complex
       const halaqahName = student.halaqahName || settings.halaqahName;
-      const complexName = activeComplex?.name || settings.complexName || 'مجمع تحفيظ القرآن الكريم';
       ctx.font = "22px 'Cairo', sans-serif";
       ctx.fillText(`الحلقة: ${halaqahName} • المجمع: ${complexName}`, width / 2, 680);
 
@@ -1041,14 +1133,15 @@ export const CertificatesTab: React.FC<CertificatesTabProps> = ({
 
       // 9. Complex Official Seal in bottom-left corner
       let stampDrawn = false;
-      if (activeComplex?.stampUrl) {
+      const complexStampToDraw = (activeComplex?.stampUrl || settings?.themeStampUrl || '').trim();
+      if (complexStampToDraw) {
         try {
           const sImg = new Image();
           sImg.crossOrigin = 'anonymous';
           await new Promise<void>((resolve, reject) => {
             sImg.onload = () => resolve();
             sImg.onerror = () => reject();
-            sImg.src = activeComplex.stampUrl!;
+            sImg.src = complexStampToDraw;
           });
           ctx.save();
           ctx.beginPath();
@@ -1057,6 +1150,14 @@ export const CertificatesTab: React.FC<CertificatesTabProps> = ({
           ctx.clip();
           ctx.drawImage(sImg, 125, 995, 110, 110);
           ctx.restore();
+
+          // Border ring around stamp
+          ctx.lineWidth = 3;
+          ctx.strokeStyle = certAccentColor;
+          ctx.beginPath();
+          ctx.arc(180, 1050, 55, 0, Math.PI * 2);
+          ctx.stroke();
+
           stampDrawn = true;
         } catch (e) {
           stampDrawn = false;
@@ -1065,12 +1166,12 @@ export const CertificatesTab: React.FC<CertificatesTabProps> = ({
 
       if (!stampDrawn) {
         ctx.textAlign = 'center';
-        ctx.fillStyle = activeTemplate.data.accentColor;
+        ctx.fillStyle = certAccentColor;
         ctx.beginPath();
         ctx.arc(180, 1050, 55, 0, Math.PI * 2);
         ctx.fill();
 
-        ctx.fillStyle = activeTemplate.data.id === 'platform_imperial_gold' ? '#ffffff' : '#064e3b';
+        ctx.fillStyle = activeTemplate.data.id === 'platform_imperial_gold' ? '#ffffff' : (cTheme?.primaryColor || '#064e3b');
         ctx.font = "bold 15px 'Cairo', sans-serif";
         const shortComp = complexName.length > 18 ? complexName.substring(0, 18) + '...' : complexName;
         ctx.fillText(shortComp, 180, 1042);
@@ -1080,7 +1181,7 @@ export const CertificatesTab: React.FC<CertificatesTabProps> = ({
 
       // 10. Dates (Centered cleanly along the bottom)
       ctx.font = "20px 'Cairo', sans-serif";
-      ctx.fillStyle = activeTemplate.data.textColor;
+      ctx.fillStyle = certTextColor;
       ctx.textAlign = 'center';
       ctx.fillText(`تاريخ الإصدار: ${todayArabic} • الموافق: ${todayGregorian}`, width / 2 + 50, 1055);
     }
@@ -1939,31 +2040,46 @@ ${occasionText}
                       backgroundRepeat: 'no-repeat',
                       backgroundPosition: 'center',
                       backgroundColor: cert.templateType === 'ready'
-                        ? (cert.templateId === 'platform_imperial_gold' ? '#fef9c3' : (cert.templateId === 'platform_classic_heritage' ? '#fffefb' : (cert.templateId === 'platform_celestial_sapphire' ? '#0f172a' : '#022c22')))
-                        : '#064e3b'
+                        ? (cert.templateId === 'platform_imperial_gold'
+                            ? '#fef9c3'
+                            : (cert.templateId === 'platform_classic_heritage'
+                                ? '#fffefb'
+                                : (cert.templateId === 'platform_celestial_sapphire'
+                                    ? '#0f172a'
+                                    : (activeComplex?.theme?.primaryColor || '#022c22'))))
+                        : (activeComplex?.theme?.secondaryColor || '#064e3b')
                     }}
                   >
                     {/* Inner gold frame */}
-                    <div className="absolute inset-1.5 border border-[#fbbf24]/50 rounded-xl pointer-events-none" />
+                    <div
+                      className="absolute inset-1.5 border rounded-xl pointer-events-none"
+                      style={{ borderColor: activeComplex?.theme?.accentColor ? `${activeComplex.theme.accentColor}77` : 'rgba(251,191,36,0.5)' }}
+                    />
 
                     {/* Top Header */}
                     <div className="relative z-10 pt-0.5">
-                      <div className="text-[8.5px] font-serif font-bold text-[#fbbf24]">
+                      <div
+                        className="text-[8.5px] font-serif font-bold"
+                        style={{ color: activeComplex?.theme?.accentColor || '#fbbf24' }}
+                      >
                         بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ
                       </div>
-                      <div className="text-[10px] sm:text-[11px] font-heading font-black text-[#fbbf24] mt-0.5">
+                      <div
+                        className="text-[10px] sm:text-[11px] font-heading font-black mt-0.5"
+                        style={{ color: activeComplex?.theme?.accentColor || '#fbbf24' }}
+                      >
                         {cert.occasion === 'اجتياز اختبار قرآني' ? 'شَهَادَةُ اجْتِيَازِ وَتَفَوُّقِ فِي الاخْتِبَارِ' : 'شَهَادَةُ تَمَيُّزٍ وَإِتْقَانٍ قُرْآنِيٍّ'}
                       </div>
                     </div>
 
                     {/* Center Student Name in large calligraphic font */}
                     <div className="relative z-10 my-auto py-1">
-                      <p className="text-[8px] sm:text-[9px] opacity-80" style={{ color: cert.templateId === 'platform_imperial_gold' || cert.templateId === 'platform_classic_heritage' ? '#064e3b' : '#86efac' }}>
+                      <p className="text-[8px] sm:text-[9px] opacity-80" style={{ color: cert.templateId === 'platform_imperial_gold' || cert.templateId === 'platform_classic_heritage' ? '#064e3b' : (activeComplex?.theme?.textColor || '#86efac') }}>
                         تُمنح للطالب النجيب:
                       </p>
                       <div
                         className="font-quran text-lg sm:text-2xl font-black py-0.5 leading-tight truncate px-2"
-                        style={{ color: cert.templateId === 'platform_imperial_gold' ? '#b45309' : '#fbbf24' }}
+                        style={{ color: cert.templateId === 'platform_imperial_gold' ? '#b45309' : (activeComplex?.theme?.accentColor || '#fbbf24') }}
                       >
                         {cert.studentName}
                       </div>
@@ -2709,12 +2825,21 @@ ${occasionText}
                 return (
                   <div
                     id="cert-single-preview"
-                    className="w-full max-w-[850px] min-h-[540px] sm:min-h-[580px] md:aspect-[1.414/1] rounded-3xl relative overflow-hidden shadow-2xl flex flex-col justify-between p-5 sm:p-8 md:p-12 text-center border-4 border-[#fbbf24] select-none shrink-0 my-auto"
+                    className="w-full max-w-[850px] min-h-[540px] sm:min-h-[580px] md:aspect-[1.414/1] rounded-3xl relative overflow-hidden shadow-2xl flex flex-col justify-between p-5 sm:p-8 md:p-12 text-center border-4 select-none shrink-0 my-auto"
                     style={{
                       backgroundImage: activeTemplate.type === 'custom' ? `url(${activeTemplate.data.imageUrl})` : undefined,
                       backgroundSize: '100% 100%',
                       backgroundRepeat: 'no-repeat',
-                      backgroundColor: activeTemplate.type === 'ready' ? (activeTemplate.data.id === 'platform_imperial_gold' ? '#fef9c3' : (activeTemplate.data.id === 'platform_classic_heritage' ? '#fffefb' : (activeTemplate.data.id === 'platform_celestial_sapphire' ? '#0f172a' : '#022c22'))) : '#000000'
+                      backgroundColor: activeTemplate.type === 'ready'
+                        ? (activeTemplate.data.id === 'platform_imperial_gold'
+                            ? '#fef9c3'
+                            : (activeTemplate.data.id === 'platform_classic_heritage'
+                                ? '#fffefb'
+                                : (activeTemplate.data.id === 'platform_celestial_sapphire'
+                                    ? '#0f172a'
+                                    : (activeComplex?.theme?.primaryColor || '#022c22'))))
+                        : '#000000',
+                      borderColor: activeTemplate.data.accentColor || '#fbbf24'
                     }}
                   >
                     {/* If Custom Template: Render floating name & date */}
@@ -2757,16 +2882,64 @@ ${occasionText}
                     ) : (
                       /* Ready-Made Platform Design */
                       <>
-                        {/* Top Bismillah & Quranic Verse (Cleanly spaced without overlap) */}
-                        <div className="flex flex-col items-center justify-center pt-2 sm:pt-1 pb-1">
-                          <div
-                            className="font-quran text-sm sm:text-base md:text-xl font-bold tracking-wide leading-normal mb-1.5"
-                            style={{ color: activeTemplate.data.accentColor }}
-                          >
-                            بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ
+                        {/* Top Official Complex Logo, Bismillah & Quranic Verse */}
+                        <div className="w-full flex flex-col items-center justify-center pt-2 sm:pt-1 pb-1">
+                          <div className="w-full flex items-center justify-between px-2 sm:px-6 mb-2">
+                            {/* Right: Complex Logo & Identity */}
+                            <div className="flex items-center gap-2">
+                              {activeComplex?.logoUrl ? (
+                                <img
+                                  src={activeComplex.logoUrl}
+                                  alt={complexName}
+                                  className="w-10 h-10 sm:w-11 sm:h-11 object-contain rounded-xl border border-amber-400/50 shadow-md bg-black/20"
+                                />
+                              ) : (
+                                <div
+                                  className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center font-black text-sm border shadow-md"
+                                  style={{
+                                    backgroundColor: activeComplex?.theme?.cardColor || '#064e3b',
+                                    color: activeTemplate.data.accentColor,
+                                    borderColor: activeTemplate.data.accentColor
+                                  }}
+                                >
+                                  {complexName.replace(/^(مجمع|مراكز|حلقات|جمعية)\s+/i, '').trim().charAt(0) || 'ق'}
+                                </div>
+                              )}
+                              <div className="text-right hidden sm:block">
+                                <strong className="text-xs font-heading font-black block" style={{ color: activeTemplate.data.accentColor }}>
+                                  {complexName}
+                                </strong>
+                                <span className="text-[9px] opacity-75 block" style={{ color: activeTemplate.data.textColor }}>
+                                  منظومة الحلقات القرآنية
+                                </span>
+                              </div>
+                            </div>
+
+                            {/* Center: Bismillah */}
+                            <div
+                              className="font-quran text-sm sm:text-base md:text-xl font-bold tracking-wide leading-normal"
+                              style={{ color: activeTemplate.data.accentColor }}
+                            >
+                              بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ
+                            </div>
+
+                            {/* Left: Official Accreditation Badge */}
+                            <div className="text-left hidden sm:block">
+                              <span
+                                className="text-[10px] font-mono px-2 py-0.5 rounded-md border font-bold"
+                                style={{
+                                  color: activeTemplate.data.accentColor,
+                                  borderColor: `${activeTemplate.data.accentColor}55`,
+                                  backgroundColor: 'rgba(0,0,0,0.25)'
+                                }}
+                              >
+                                وثيقة معتمدة
+                              </span>
+                            </div>
                           </div>
+
                           <div
-                            className="font-quran text-xs sm:text-sm md:text-base opacity-90 leading-relaxed mb-3 sm:mb-4 px-2 text-center max-w-lg"
+                            className="font-quran text-xs sm:text-sm md:text-base opacity-90 leading-relaxed mb-2 px-2 text-center max-w-lg"
                             style={{ color: activeTemplate.data.accentColor }}
                           >
                             ﴿ يَرْفَعِ اللَّهُ الَّذِينَ آمَنُوا مِنكُمْ وَالَّذِينَ أُوتُوا الْعِلْمَ دَرَجَاتٍ ﴾

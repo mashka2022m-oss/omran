@@ -2466,6 +2466,7 @@ export function App() {
         onBatchTransferStudents={handleBatchTransferStudents}
         onSwitchActiveHalaqah={setActiveHalaqahId}
         onSaveComplex={handleSaveComplex}
+        onUpdateSettings={handleUpdateSettings}
       />
 
       {/* Complex Management Modal (إدارة المجمعات القرآنية) - مقتصر على المطور والمشرف العام */}

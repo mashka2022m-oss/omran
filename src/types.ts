@@ -480,6 +480,8 @@ export interface AppSettings {
   halaqahName: string;
   teacherName: string;
   complexName?: string;
+  themeLogoUrl?: string; // شعار المجمع العام
+  themeStampUrl?: string; // ختم المجمع العام
   newPagePoints?: number; // نقاط كل وجه جديد (الافتراضي: 5)
   reviewPagePoints?: number; // نقاط كل وجه مراجعة (الافتراضي: 1)
   dailyListeningPoints?: number; // نقاط إنجاز الاستماع اليومي (الافتراضي: 5)

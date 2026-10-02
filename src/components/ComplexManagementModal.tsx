@@ -16,10 +16,13 @@ import {
   BookOpen,
   Sparkles,
   UserPlus,
-  Palette
+  Palette,
+  Upload,
+  Image as ImageIcon
 } from 'lucide-react';
 import { QuranComplex, Halaqah, TeacherAccount, Student, getThreePartNameValidation } from '../types';
 import { ISLAMIC_THEME_PRESETS } from '../lib/themeUtils';
+import { compressImageToDataUrl } from '../lib/imageCompressor';
 
 interface ComplexManagementModalProps {
   isOpen: boolean;
@@ -193,7 +196,11 @@ export const ComplexManagementModal: React.FC<ComplexManagementModalProps> = ({
         supervisorTeacherId: supId,
         supervisorTeacherName: supName,
         databaseConfig: editingComplex.databaseConfig,
-        createdAt: editingComplex.createdAt || new Date().toISOString()
+        logoUrl: editingComplex.logoUrl || undefined,
+        stampUrl: editingComplex.stampUrl || undefined,
+        theme: editingComplex.theme || undefined,
+        createdAt: editingComplex.createdAt || new Date().toISOString(),
+        updatedAt: new Date().toISOString()
       };
 
       await onSaveComplex(fullComplex);
@@ -578,6 +585,138 @@ export const ComplexManagementModal: React.FC<ComplexManagementModalProps> = ({
                     </div>
                   </div>
                 )}
+              </div>
+
+              {/* Branding, Logo & Official Seal Section */}
+              <div className="bg-[#022c22]/90 border border-[#065f46] rounded-2xl p-4 space-y-4">
+                <div className="flex items-center gap-2">
+                  <ImageIcon className="w-4 h-4 text-amber-400" />
+                  <span className="text-xs font-bold text-amber-300">الشعار والختم الرسمي للمجمع (للمنصة والتقارير والشهادات):</span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {/* 1. Complex Logo */}
+                  <div className="p-3 rounded-xl bg-[#064e3b]/30 border border-[#065f46] space-y-2">
+                    <label className="block text-[11px] font-bold text-emerald-200">
+                      شعار المجمع القرآني (Logo):
+                    </label>
+                    <div className="flex items-center gap-3">
+                      <div className="w-14 h-14 rounded-xl border border-amber-400/40 bg-[#022c22] flex items-center justify-center overflow-hidden shrink-0 shadow-inner">
+                        {editingComplex.logoUrl ? (
+                          <img
+                            src={editingComplex.logoUrl}
+                            alt="شعار المجمع"
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <BookOpen className="w-6 h-6 text-amber-400/60" />
+                        )}
+                      </div>
+                      <div className="flex-1 space-y-1.5">
+                        <label className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#064e3b] hover:bg-emerald-700 text-amber-300 text-xs font-bold border border-amber-400/40 cursor-pointer transition-colors shadow-sm">
+                          <Upload className="w-3.5 h-3.5" />
+                          <span>رفع شعار (صورة)</span>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            onChange={async e => {
+                              const file = e.target.files?.[0];
+                              if (!file) return;
+                              if (file.size > 5 * 1024 * 1024) {
+                                setStatusMsg({ type: 'error', text: 'حجم صورة الشعار يجب ألا يتجاوز 5 ميجابايت.' });
+                                return;
+                              }
+                              try {
+                                const compressed = await compressImageToDataUrl(file, 512, 512, 0.88);
+                                setEditingComplex(prev => ({ ...prev, logoUrl: compressed }));
+                              } catch {
+                                const reader = new FileReader();
+                                reader.onload = () => {
+                                  setEditingComplex(prev => ({ ...prev, logoUrl: reader.result as string }));
+                                };
+                                reader.readAsDataURL(file);
+                              }
+                            }}
+                          />
+                        </label>
+                        {editingComplex.logoUrl && (
+                          <button
+                            type="button"
+                            onClick={() => setEditingComplex(prev => ({ ...prev, logoUrl: undefined }))}
+                            className="block text-[10px] text-red-300 hover:text-red-100 underline cursor-pointer"
+                          >
+                            حذف الشعار
+                          </button>
+                        )}
+                        <p className="text-[9px] text-[#86efac]/70">
+                          يظهر في شريط التنقل وأعلى التقارير (حتى 5MB)
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 2. Complex Official Seal / Stamp */}
+                  <div className="p-3 rounded-xl bg-[#064e3b]/30 border border-[#065f46] space-y-2">
+                    <label className="block text-[11px] font-bold text-emerald-200">
+                      ختم المجمع المعتمد (Seal / Stamp):
+                    </label>
+                    <div className="flex items-center gap-3">
+                      <div className="w-14 h-14 rounded-full border-2 border-dashed border-amber-400/60 bg-[#022c22] flex items-center justify-center overflow-hidden shrink-0 shadow-inner">
+                        {editingComplex.stampUrl ? (
+                          <img
+                            src={editingComplex.stampUrl}
+                            alt="ختم المجمع"
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <ShieldCheck className="w-6 h-6 text-emerald-400/60" />
+                        )}
+                      </div>
+                      <div className="flex-1 space-y-1.5">
+                        <label className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#064e3b] hover:bg-emerald-700 text-amber-300 text-xs font-bold border border-amber-400/40 cursor-pointer transition-colors shadow-sm">
+                          <Upload className="w-3.5 h-3.5" />
+                          <span>رفع ختم دائري</span>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            onChange={async e => {
+                              const file = e.target.files?.[0];
+                              if (!file) return;
+                              if (file.size > 5 * 1024 * 1024) {
+                                setStatusMsg({ type: 'error', text: 'حجم صورة الختم يجب ألا يتجاوز 5 ميجابايت.' });
+                                return;
+                              }
+                              try {
+                                const compressed = await compressImageToDataUrl(file, 512, 512, 0.88);
+                                setEditingComplex(prev => ({ ...prev, stampUrl: compressed }));
+                              } catch {
+                                const reader = new FileReader();
+                                reader.onload = () => {
+                                  setEditingComplex(prev => ({ ...prev, stampUrl: reader.result as string }));
+                                };
+                                reader.readAsDataURL(file);
+                              }
+                            }}
+                          />
+                        </label>
+                        {editingComplex.stampUrl && (
+                          <button
+                            type="button"
+                            onClick={() => setEditingComplex(prev => ({ ...prev, stampUrl: undefined }))}
+                            className="block text-[10px] text-red-300 hover:text-red-100 underline cursor-pointer"
+                          >
+                            حذف الختم
+                          </button>
+                        )}
+                        <p className="text-[9px] text-[#86efac]/70">
+                          يظهر في الشهادات المعتمدة وأسفل التقارير (حتى 5MB)
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
 
               {/* Theme & Visual Identity Selection */}
