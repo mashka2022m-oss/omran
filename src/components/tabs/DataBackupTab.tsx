@@ -652,16 +652,22 @@ export const DataBackupTab: React.FC<DataBackupTabProps> = ({
           <div>
             <div className="flex items-center gap-2.5 flex-wrap">
               <h3 className="text-base sm:text-lg font-black text-white font-heading">
-                قاعدة البيانات السحابية (Firebase Firestore)
+                {isDeveloper ? 'قاعدة البيانات السحابية (Firebase Firestore)' : 'قاعدة البيانات السحابية المركزية الموحدة'}
               </h3>
               <span className="text-[11px] px-3 py-1 rounded-full bg-emerald-900/80 border border-emerald-400 text-emerald-200 font-bold flex items-center gap-1.5 shadow-sm">
                 <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
                 متصلة ومفعلة سحابياً 100%
               </span>
             </div>
-            <p className="text-xs text-[#86efac] mt-1 leading-relaxed">
-              مشروع المنصة: <span className="font-mono text-amber-300 font-bold">{firebaseConfig.projectId || 'omran-ffbad'}</span> • قاعدة البيانات: <span className="font-mono text-emerald-200">{TARGET_FIRESTORE_DATABASE_ID}</span>
-            </p>
+            {isDeveloper ? (
+              <p className="text-xs text-[#86efac] mt-1 leading-relaxed">
+                مشروع المنصة: <span className="font-mono text-amber-300 font-bold">{firebaseConfig.projectId || 'omran-ffbad'}</span> • قاعدة البيانات: <span className="font-mono text-emerald-200">{TARGET_FIRESTORE_DATABASE_ID}</span>
+              </p>
+            ) : (
+              <p className="text-xs text-[#86efac] mt-1 leading-relaxed">
+                نظام المزامنة والتخزين السحابي المباشر لحفظ سجلات الحلقات والطلاب بأعلى معايير الأمان والتشفير.
+              </p>
+            )}
           </div>
         </div>
 
@@ -679,6 +685,7 @@ export const DataBackupTab: React.FC<DataBackupTabProps> = ({
       {/* ========================================================================= */}
       {/* SECTION: DEVELOPER CONSOLE & NETLIFY HOSTING (قسم المبرمج: سياسة الخصوصية واستضافة Netlify) */}
       {/* ========================================================================= */}
+      {isDeveloper && (
       <div className="bg-gradient-to-br from-[#022c22] via-[#064e3b]/90 to-[#022c22] border-2 border-amber-400/60 rounded-[32px] p-6 sm:p-8 space-y-6 shadow-2xl relative overflow-hidden">
         {/* Glowing badge */}
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-5 border-b border-[#065f46]">
@@ -1050,10 +1057,12 @@ export const DataBackupTab: React.FC<DataBackupTabProps> = ({
           </div>
         </div>
       </div>
+      )}
 
       {/* ========================================================================= */}
       {/* SECTION 1: COMPLEX DATABASE SEPARATION & MANAGEMENT (المجمعات وقواعد البيانات) */}
       {/* ========================================================================= */}
+      {isDeveloper && (
       <div className="bg-[#022c22]/95 border-2 border-amber-500/40 rounded-[32px] p-6 sm:p-8 space-y-6 shadow-2xl">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-[#065f46]">
           <div className="flex items-center gap-3.5">
@@ -1367,6 +1376,7 @@ export const DataBackupTab: React.FC<DataBackupTabProps> = ({
           </div>
         )}
       </div>
+      )}
 
       {/* ========================================================================= */}
       {/* SECTION 2: GENERAL PLATFORM FULL BACKUPS (Google Drive & JSON) */}
@@ -1583,8 +1593,8 @@ export const DataBackupTab: React.FC<DataBackupTabProps> = ({
             <Server className="w-4 h-4" />
           </div>
           <div>
-            <span className="font-bold text-white block">مشروع فايربيس السحابي المتصل:</span>
-            <span className="font-mono text-[#fbbf24]">omran-ffbad (Firestore Realtime)</span>
+            <span className="font-bold text-white block">{isDeveloper ? 'مشروع فايربيس السحابي المتصل:' : 'الخادم السحابي المتصل:'}</span>
+            <span className="font-mono text-[#fbbf24]">{isDeveloper ? 'omran-ffbad (Firestore Realtime)' : 'قاعدة البيانات المركزية المشفرة'}</span>
           </div>
         </div>
         <div className="flex items-center gap-1.5 text-[#fbbf24] font-bold">

@@ -39,7 +39,7 @@ export class UnauthorizedDomainError extends Error {
   constructor(domain: string, projectId: string) {
     const consoleUrl = `https://console.firebase.google.com/project/${projectId}/authentication/settings`;
     super(
-      `نطاق المنصة الحالي (${domain}) يحتاج إلى إضافة في النطاقات المصرح بها في Firebase Authentication، أو يمكنك استخدام رابط Google Form مباشرة دون الحاجة للربط.`
+      `نطاق المنصة الحالي (${domain}) يحتاج إلى إضافة في قائمة النطاقات المصرح بها (Authorized Domains)، أو يمكنك استخدام رابط Google Form مباشرة دون الحاجة للربط.`
     );
     this.name = 'UnauthorizedDomainError';
     this.domain = domain;

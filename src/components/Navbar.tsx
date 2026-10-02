@@ -116,7 +116,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                     value={activeComplexId || availableComplexes[0]?.id || ''}
                     onChange={e => onSwitchComplex(e.target.value)}
                     className="text-xs text-amber-300 font-black bg-transparent border-none focus:outline-none cursor-pointer pr-1"
-                    title={isDeveloper ? "التبديل بين كافة المجمعات القرآنية (صلاحية المبرمج)" : "التبديل بين المجمعات المرتبط بها"}
+                    title={isDeveloper ? "التبديل بين كافة المجمعات القرآنية (إشراف شامل)" : "التبديل بين المجمعات المرتبط بها"}
                   >
                     {availableComplexes.map(c => (
                       <option key={c.id} value={c.id} className="bg-[#064e3b] text-white">

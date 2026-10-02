@@ -56,11 +56,7 @@ export const PublicLandingPage: React.FC<PublicLandingPageProps> = ({
   const [activeFeatureTab, setActiveFeatureTab] = useState<number>(0);
   const [openFaqIndex, setOpenFaqIndex] = useState<number | null>(null);
 
-  // Interactive Live Demo States for Landing Page Visitors
-  const [demoRepetitions, setDemoRepetitions] = useState<number>(3);
-  const [demoCurrentRep, setDemoCurrentRep] = useState<number>(1);
-  const [demoIsPlaying, setDemoIsPlaying] = useState<boolean>(false);
-
+  // Interactive Feature Tabs Navigator
   const featureTabs = [
     {
       id: 'complexes',
@@ -73,16 +69,10 @@ export const PublicLandingPage: React.FC<PublicLandingPageProps> = ({
       description: 'توفر المنظومة بيئة تشغيل سحابية مرنة تعزل قواعد بيانات كل مجمع قرآني وتتيح إدارة الحلقات، توزيع الطلاب، وتعيين المعلمين والمشرفين بمرونة كاملة.',
       highlights: [
         'عزل أو دمج بيانات المجمعات القرآنية مع التبديل الفوري بنقرة واحدة.',
-        'مستويات صلاحيات دقيقة: المشرف العام/المبرمج، مشرف المجمع، معلم الحلقة، المعلم المساعد، ولي الأمر، والطالب.',
+        'مستويات صلاحيات دقيقة: المشرف العام، مشرف المجمع، معلم الحلقة، المعلم المساعد، ولي الأمر، والطالب.',
         'إدارة الحلقات القرآنية ونقل الطلاب وتوزيعهم حسب المستويات ومتابعة الشواغر.',
         'سجل شامل للمشرفين والمعلمين مع إمكانية ربط كل معلم بعدة مجمعات وحلقات.'
-      ],
-      previewSnippet: {
-        badgeText: 'مجمع الفرقان النموذجي',
-        subText: '٥ حلقات نشطة • ٨٢ طالباً مسجلاً • ٦ معلمين مجازين',
-        stat1: { label: 'نسبة الحضور اليوم', val: '٩٤٪' },
-        stat2: { label: 'أوراد التسميع المنجزة', val: '٧٨ ورد' }
-      }
+      ]
     },
     {
       id: 'recitation',
@@ -221,7 +211,7 @@ export const PublicLandingPage: React.FC<PublicLandingPageProps> = ({
   const faqs = [
     {
       q: 'هل تدعم المنظومة تشغيل عدة مجمعات وحلقات قرآنية مستقلة؟',
-      a: 'نعم، المنظومة مصممة بهيكل متعدد المجمعات (Multi-Complex) يتيح إنشاء وإدارة مجمعات مستقلة تماماً، وتوزيع الحلقات والمعلمين، مع إمكانية التبديل السلس أو مشاركة قواعد البيانات بإشراف المشرف العام والمبرمج.'
+      a: 'نعم، المنظومة مصممة بهيكل متعدد المجمعات (Multi-Complex) يتيح إنشاء وإدارة مجمعات مستقلة تماماً، وتوزيع الحلقات والمعلمين، مع إمكانية التبديل السلس أو مشاركة قواعد البيانات بإشراف المشرف العام وإدارة المجمعات.'
     },
     {
       q: 'كيف يعمل نظام الاستماع وتكرار الآيات الجديد؟ وهل يمنع التلاعب؟',
@@ -551,142 +541,57 @@ export const PublicLandingPage: React.FC<PublicLandingPageProps> = ({
               transition={{ duration: 0.4 }}
               className="bg-gradient-to-br from-[#022c22] via-[#064e3b]/90 to-[#022c22] border-2 border-amber-400/60 rounded-[36px] p-6 sm:p-10 shadow-2xl relative overflow-hidden"
             >
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
-                {/* Left Side: Text and Detailed Highlights */}
-                <div className="lg:col-span-7 space-y-6 text-right">
-                  <div className="flex items-center gap-3 flex-wrap">
-                    <span className="text-[11px] px-3 py-1 rounded-full bg-amber-400 text-[#064e3b] font-black">
-                      {featureTabs[activeFeatureTab].badge}
-                    </span>
-                    <span className="text-xs text-amber-300/90 font-bold">
-                      {featureTabs[activeFeatureTab].tag}
-                    </span>
-                  </div>
+              <div className="space-y-6 text-right">
+                <div className="flex items-center gap-3 flex-wrap">
+                  <span className="text-[11px] px-3 py-1 rounded-full bg-amber-400 text-[#064e3b] font-black">
+                    {featureTabs[activeFeatureTab].badge}
+                  </span>
+                  <span className="text-xs text-amber-300/90 font-bold">
+                    {featureTabs[activeFeatureTab].tag}
+                  </span>
+                </div>
 
-                  <h4 className="text-xl sm:text-3xl font-black font-heading text-white leading-tight">
-                    {featureTabs[activeFeatureTab].headline}
-                  </h4>
+                <h4 className="text-xl sm:text-3xl font-black font-heading text-white leading-tight">
+                  {featureTabs[activeFeatureTab].headline}
+                </h4>
 
-                  <p className="text-xs sm:text-sm text-slate-200 leading-relaxed">
-                    {featureTabs[activeFeatureTab].description}
-                  </p>
+                <p className="text-xs sm:text-base text-slate-200 leading-relaxed max-w-4xl">
+                  {featureTabs[activeFeatureTab].description}
+                </p>
 
-                  <div className="space-y-3 pt-2">
-                    <span className="text-xs font-bold text-amber-300 block">
-                      أبرز الخصائص والقدرات الفنية:
-                    </span>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                      {featureTabs[activeFeatureTab].highlights.map((h, hIdx) => (
-                        <div
-                          key={hIdx}
-                          className="flex items-start gap-2.5 p-3 rounded-2xl bg-[#022c22]/80 border border-[#065f46] text-xs text-slate-200"
-                        >
-                          <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
-                          <span className="leading-relaxed">{h}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="pt-4 flex flex-wrap items-center gap-3">
-                    <button
-                      type="button"
-                      onClick={onOpenLogin}
-                      className="px-6 py-3 rounded-xl bg-amber-400 hover:bg-amber-300 text-[#064e3b] text-xs font-black shadow-md flex items-center gap-2 cursor-pointer transition-all hover:scale-[1.02]"
-                    >
-                      <Lock className="w-4 h-4" />
-                      <span>تجربة الميزة في المنظومة الآن</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={onOpenPrivacyPolicy}
-                      className="px-5 py-3 rounded-xl bg-white/5 hover:bg-white/10 text-slate-200 text-xs font-bold border border-white/10 cursor-pointer transition-colors"
-                    >
-                      الاطلاع على سياسة الأمان والخصوصية
-                    </button>
+                <div className="space-y-3 pt-2">
+                  <span className="text-xs sm:text-sm font-bold text-amber-300 block">
+                    أبرز الخصائص والقدرات الفنية:
+                  </span>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {featureTabs[activeFeatureTab].highlights.map((h, hIdx) => (
+                      <div
+                        key={hIdx}
+                        className="flex items-start gap-3 p-3.5 rounded-2xl bg-[#022c22]/80 border border-[#065f46] text-xs sm:text-sm text-slate-200"
+                      >
+                        <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                        <span className="leading-relaxed">{h}</span>
+                      </div>
+                    ))}
                   </div>
                 </div>
 
-                {/* Right Side: Interactive Live Simulation Box */}
-                <div className="lg:col-span-5">
-                  <div className="p-6 rounded-3xl bg-[#022c22] border-2 border-amber-400/40 shadow-2xl space-y-5 text-right relative overflow-hidden">
-                    <div className="flex items-center justify-between border-b border-[#065f46] pb-3">
-                      <div className="flex items-center gap-2.5">
-                        <div className="w-9 h-9 rounded-xl bg-amber-400/20 text-amber-400 flex items-center justify-center font-bold">
-                          <Star className="w-4 h-4 fill-current" />
-                        </div>
-                        <div>
-                          <div className="text-xs font-bold text-white">معاينة تفاعلية حية</div>
-                          <div className="text-[10px] text-[#86efac]/80">{featureTabs[activeFeatureTab].title}</div>
-                        </div>
-                      </div>
-                      <span className="text-[10px] px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-bold border border-emerald-500/30">
-                        مباشر
-                      </span>
-                    </div>
-
-                    {/* Preview Box Content */}
-                    <div className="p-4 rounded-2xl bg-[#064e3b]/50 border border-[#065f46] space-y-3">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-bold text-white font-heading">
-                          {featureTabs[activeFeatureTab].previewSnippet.badgeText}
-                        </span>
-                        <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-                      </div>
-                      <p className="text-[11px] text-emerald-200/90 leading-relaxed">
-                        {featureTabs[activeFeatureTab].previewSnippet.subText}
-                      </p>
-
-                      <div className="grid grid-cols-2 gap-2 pt-2 border-t border-[#065f46]/80 text-center">
-                        <div className="p-2.5 rounded-xl bg-[#022c22]/80 border border-[#065f46]">
-                          <span className="text-[10px] text-slate-400 block">{featureTabs[activeFeatureTab].previewSnippet.stat1.label}</span>
-                          <strong className="text-sm font-black text-amber-300 font-mono">
-                            {featureTabs[activeFeatureTab].previewSnippet.stat1.val}
-                          </strong>
-                        </div>
-                        <div className="p-2.5 rounded-xl bg-[#022c22]/80 border border-[#065f46]">
-                          <span className="text-[10px] text-slate-400 block">{featureTabs[activeFeatureTab].previewSnippet.stat2.label}</span>
-                          <strong className="text-sm font-black text-emerald-300 font-mono">
-                            {featureTabs[activeFeatureTab].previewSnippet.stat2.val}
-                          </strong>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Mini Interactive Control Demo */}
-                    <div className="p-3.5 rounded-2xl bg-[#011c16] border border-amber-400/20 space-y-2.5 text-xs">
-                      <div className="flex items-center justify-between text-[11px] text-amber-300 font-bold">
-                        <span>تجربة محاكاة سريعة للتحكم:</span>
-                        <span className="text-emerald-400 font-mono">تكرار {demoCurrentRep} / {demoRepetitions}</span>
-                      </div>
-                      <div className="flex items-center justify-between gap-2">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setDemoIsPlaying(!demoIsPlaying);
-                            if (!demoIsPlaying && demoCurrentRep < demoRepetitions) {
-                              setDemoCurrentRep(demoCurrentRep + 1);
-                            }
-                          }}
-                          className="flex-1 py-2 px-3 rounded-xl bg-amber-400 hover:bg-amber-300 text-[#064e3b] font-black text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
-                        >
-                          {demoIsPlaying ? <RotateCcw className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5 fill-current" />}
-                          <span>{demoIsPlaying ? 'إعادة تشغيل المقطع' : 'تشغيل محاكاة الاستماع'}</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setDemoRepetitions(demoRepetitions >= 5 ? 2 : demoRepetitions + 1);
-                            setDemoCurrentRep(1);
-                          }}
-                          className="py-2 px-3 rounded-xl bg-[#064e3b] text-emerald-200 hover:text-white border border-[#065f46] text-xs font-bold cursor-pointer"
-                          title="تغيير مرات التكرار"
-                        >
-                          تكرار {demoRepetitions}x
-                        </button>
-                      </div>
-                    </div>
-                  </div>
+                <div className="pt-4 flex flex-wrap items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={onOpenLogin}
+                    className="px-6 py-3 rounded-xl bg-amber-400 hover:bg-amber-300 text-[#064e3b] text-xs sm:text-sm font-black shadow-md flex items-center gap-2 cursor-pointer transition-all hover:scale-[1.02]"
+                  >
+                    <Lock className="w-4 h-4" />
+                    <span>الدخول إلى المنظومة الآن</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={onOpenPrivacyPolicy}
+                    className="px-5 py-3 rounded-xl bg-white/5 hover:bg-white/10 text-slate-200 text-xs sm:text-sm font-bold border border-white/10 cursor-pointer transition-colors"
+                  >
+                    الاطلاع على سياسة الأمان والخصوصية
+                  </button>
                 </div>
               </div>
             </motion.div>
@@ -859,7 +764,7 @@ export const PublicLandingPage: React.FC<PublicLandingPageProps> = ({
                   icon: Users,
                   color: 'text-amber-300',
                   border: 'border-amber-400/30',
-                  title: 'المشرف العام والمبرمج',
+                  title: 'المشرف العام وإدارة المجمعات',
                   desc: 'إدارة المجمعات والحلقات، تعيين المعلمين، ضبط إعدادات الربط السحابي ومراقبة الجودة الشاملة.'
                 },
                 {

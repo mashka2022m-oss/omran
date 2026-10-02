@@ -254,7 +254,7 @@ export const ExamsTab: React.FC<ExamsTabProps> = ({
       setShowDomainHelpModal(true);
       setStatusMessage({
         type: 'error',
-        text: `يحتاج نطاق المنصة الحالي (${currentHostDomain}) إلى إضافة في النطاقات المصرح بها في Firebase Console (أو لصق رابط نموذج Google Form جاهز مباشرة).`
+        text: `يحتاج نطاق المنصة الحالي (${currentHostDomain}) إلى إضافة في قائمة النطاقات المصرح بها (Authorized Domains) أو يمكنك لصق رابط نموذج Google Form جاهز مباشرة.`
       });
       return;
     }
@@ -1692,10 +1692,10 @@ export const ExamsTab: React.FC<ExamsTabProps> = ({
             <div className="p-5 rounded-2xl bg-[#064e3b]/30 border border-emerald-800/80 space-y-3">
               <h4 className="text-sm font-bold text-white flex items-center gap-2">
                 <ShieldCheck className="w-4 h-4 text-[#fbbf24]" />
-                <span>الحفظ السحابي التلقائي (Firebase)</span>
+                <span>الحفظ السحابي التلقائي المشفر</span>
               </h4>
               <p className="text-xs text-emerald-300/80">
-                كافة الاختبارات والأسئلة والتسليمات ودرجات الطلاب محفوظة سحابياً في Firestore ويتم مزامنتها لحظياً دون الحاجة لأي حفظ يدوي.
+                كافة الاختبارات والأسئلة والتسليمات ودرجات الطلاب محفوظة سحابياً في قاعدة البيانات المركزية ويتم مزامنتها لحظياً دون الحاجة لأي حفظ يدوي.
               </p>
               <div className="pt-2 text-xs font-bold text-emerald-400 flex items-center gap-1.5">
                 <CheckCircle2 className="w-4 h-4" />
@@ -2763,7 +2763,7 @@ export const ExamsTab: React.FC<ExamsTabProps> = ({
                 </div>
                 <div>
                   <h3 className="text-lg sm:text-xl font-black text-white">
-                    تأكيد تفويض نطاق المنصة (Google & Firebase)
+                    تأكيد تفويض نطاق المنصة (Google Cloud)
                   </h3>
                   <p className="text-xs text-emerald-300/80">
                     خطوة واحدة سريعة لتفعيل ربط وتوليد نماذج Google Forms وجداول Sheets سحابياً
@@ -2782,10 +2782,10 @@ export const ExamsTab: React.FC<ExamsTabProps> = ({
             <div className="p-4 rounded-2xl bg-amber-950/40 border border-amber-500/40 text-xs sm:text-sm text-amber-200/90 leading-relaxed space-y-2">
               <div className="flex items-center gap-2 font-bold text-amber-300">
                 <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
-                <span>سبب ظهور هذا التنبيه (أمان Firebase Auth):</span>
+                <span>سبب ظهور هذا التنبيه (أمان Google Auth):</span>
               </div>
               <p>
-                حماية أمان Google وFirebase تتطلب إضافة اسم نطاق الموقع الحالي إلى قائمة{' '}
+                حماية أمان Google تتطلب إضافة اسم نطاق الموقع الحالي إلى قائمة{' '}
                 <strong className="text-white font-mono">Authorized domains</strong> لمرة واحدة فقط في وحدة تحكم مشروعك.
               </p>
             </div>
@@ -2826,10 +2826,10 @@ export const ExamsTab: React.FC<ExamsTabProps> = ({
               <ol className="text-xs text-emerald-100 space-y-2 list-decimal list-inside pr-1">
                 <li>
                   انسخ النطاق أعلاه ثم اضغط على زر{' '}
-                  <strong className="text-white">"فتح إعدادات Firebase Console"</strong> بالأسفل.
+                  <strong className="text-white">"فتح إعدادات تفويض النطاق"</strong> بالأسفل.
                 </li>
                 <li>
-                  في صفحة إعدادات Authentication، انزل إلى قسم <strong className="text-white font-mono">Authorized domains</strong>.
+                  في صفحة إعدادات الهوية والأمان، انزل إلى قسم <strong className="text-white font-mono">Authorized domains</strong>.
                 </li>
                 <li>
                   اضغط على <strong className="text-white">"Add domain"</strong> والصق النطاق، ثم احفظ.
@@ -2844,7 +2844,7 @@ export const ExamsTab: React.FC<ExamsTabProps> = ({
                   className="inline-flex items-center justify-center gap-2 w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-[#fbbf24] to-amber-500 text-[#064e3b] font-black text-xs sm:text-sm hover:brightness-110 shadow-lg cursor-pointer transition-all"
                 >
                   <ExternalLink className="w-4 h-4" />
-                  <span>فتح إعدادات Firebase Console (Authorized Domains) ↗</span>
+                  <span>فتح إعدادات تفويض النطاقات (Authorized Domains) ↗</span>
                 </a>
               </div>
             </div>

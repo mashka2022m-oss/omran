@@ -380,7 +380,7 @@ export const PrivacyPolicyPage: React.FC<PrivacyPolicyPageProps> = ({
                   {activeLang === 'ar' ? 'التشفير أثناء التخزين (At Rest)' : 'At-Rest Encryption'}
                 </strong>
                 <span className="text-slate-300 text-xs">
-                  {activeLang === 'ar' ? 'تُخزن السجلات في خوادم Google Cloud و Firebase Firestore المحمية بتشفير AES-256 القياسي.' : 'Database records are hosted on Google Cloud / Firebase Firestore with AES-256 encryption at rest.'}
+                  {activeLang === 'ar' ? 'تُخزن السجلات في خوادم Google Cloud السحابية المعتمدة والمحمية بتشفير AES-256 القياسي.' : 'Database records are hosted on secure Google Cloud servers with AES-256 encryption at rest.'}
                 </span>
               </div>
 

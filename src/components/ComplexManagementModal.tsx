@@ -505,7 +505,7 @@ export const ComplexManagementModal: React.FC<ComplexManagementModalProps> = ({
                       <option value="">-- اختر المعلم المشرف من القائمة --</option>
                       {teachers.map(t => (
                         <option key={t.id} value={t.id}>
-                          {t.name} ({t.title || (t.role === 'developer' ? 'مبرمج ومشرف' : t.role === 'supervisor' ? 'مشرف' : 'معلم')})
+                          {t.name} ({t.title || (t.role === 'developer' ? 'مشرف عام' : t.role === 'supervisor' ? 'مشرف' : 'معلم')})
                         </option>
                       ))}
                     </select>
@@ -660,7 +660,7 @@ export const ComplexManagementModal: React.FC<ComplexManagementModalProps> = ({
                   <option value="">-- اختر معلم الحلقة --</option>
                   {teachers.map(t => (
                     <option key={t.id} value={t.name}>
-                      {t.name} ({t.title || (t.role === 'developer' ? 'مبرمج' : t.role === 'supervisor' ? 'مشرف' : 'معلم')})
+                      {t.name} ({t.title || (t.role === 'developer' ? 'مشرف عام' : t.role === 'supervisor' ? 'مشرف' : 'معلم')})
                     </option>
                   ))}
                 </select>

@@ -177,7 +177,7 @@ export const CloudLoadingScreen: React.FC<CloudLoadingScreenProps> = ({
           </div>
           <p className="text-[11px] text-[#86efac]/80 flex items-center justify-center gap-1.5">
             <Sparkles className="w-3.5 h-3.5 text-[#fbbf24] animate-spin" />
-            <span>نظام تخزين سحابي مباشر ومشفّر عبر Firebase Firestore</span>
+            <span>نظام تخزين سحابي مباشر ومشفّر فائق السرعة والأمان</span>
           </p>
         </div>
 
