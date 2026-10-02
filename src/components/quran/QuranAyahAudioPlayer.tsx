@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Play,
   Pause,
@@ -75,7 +75,7 @@ interface QuranAyahAudioPlayerProps {
   toSurahName?: string;
   toAyah: number;
   selectedSheikhName?: string;
-  requiredRepetitions?: number; // 1 to 20 set by teacher
+  requiredRepetitions?: number; // 0 to 20 set by teacher
   listeningPointsReward?: number; // points awarded on completion
   onRepetitionComplete?: (newCompletedCount: number, isFullyDone: boolean) => void;
   onListeningPointsAwarded?: (points: number) => void;
@@ -95,6 +95,11 @@ export const QuranAyahAudioPlayer: React.FC<QuranAyahAudioPlayerProps> = ({
   onRepetitionComplete,
   onListeningPointsAwarded
 }) => {
+  const isNoneSheikh =
+    selectedSheikhName === 'بدون' ||
+    selectedSheikhName === 'لا يوجد' ||
+    requiredRepetitions === 0;
+
   // Safe bounds
   const curSurahInfo = getSurahInfo(surahNumber || 78);
   const startAyah = Math.max(1, Math.min(fromAyah || 1, curSurahInfo.numberOfAyahs));
@@ -117,6 +122,7 @@ export const QuranAyahAudioPlayer: React.FC<QuranAyahAudioPlayerProps> = ({
   });
 
   const [isCompletedAll, setIsCompletedAll] = useState<boolean>(() => {
+    if (isNoneSheikh) return true;
     try {
       const saved = localStorage.getItem(storageProgressKey);
       return saved ? Number(saved) >= requiredRepetitions : false;
@@ -134,13 +140,28 @@ export const QuranAyahAudioPlayer: React.FC<QuranAyahAudioPlayerProps> = ({
   const [audioError, setAudioError] = useState<string | null>(null);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const isPlayingRef = useRef<boolean>(false);
+  const currentAyahRef = useRef<number>(startAyah);
+  const completedRepsRef = useRef<number>(completedRepetitions);
+  const loopTimeoutRef = useRef<any>(null);
+
+  // Keep refs synced
+  useEffect(() => {
+    currentAyahRef.current = currentAyahIndex;
+  }, [currentAyahIndex]);
+
+  useEffect(() => {
+    completedRepsRef.current = completedRepetitions;
+  }, [completedRepetitions]);
 
   // Sync completion status when required repetitions change
   useEffect(() => {
-    if (completedRepetitions >= requiredRepetitions) {
+    if (isNoneSheikh) {
+      setIsCompletedAll(true);
+    } else if (completedRepetitions >= requiredRepetitions) {
       setIsCompletedAll(true);
     }
-  }, [completedRepetitions, requiredRepetitions]);
+  }, [completedRepetitions, requiredRepetitions, isNoneSheikh]);
 
   // Fetch Ayah Text from local cache / public JSON
   useEffect(() => {
@@ -187,135 +208,227 @@ export const QuranAyahAudioPlayer: React.FC<QuranAyahAudioPlayerProps> = ({
     };
   }, [surahNumber, currentAyahIndex, surahName]);
 
-  // Setup HTML Audio element
+  // Cleanup audio on unmount or target change
   useEffect(() => {
-    const audio = new Audio();
-    audioRef.current = audio;
-
-    const handleEnded = () => {
-      // Current ayah finished: advance to next ayah in portion
-      if (currentAyahIndex < endAyah) {
-        setCurrentAyahIndex(prev => prev + 1);
-      } else {
-        // Entire portion finished! ONE REPETITION COMPLETED!
-        handleOneRepetitionFinished();
-      }
-    };
-
-    const handleError = () => {
-      console.warn(`[QuranAudioPlayer] Audio playback notice for Ayah ${currentAyahIndex}`);
-      // If single ayah fails, smoothly move to next to not freeze the student
-      if (currentAyahIndex < endAyah) {
-        setCurrentAyahIndex(prev => prev + 1);
-      } else {
-        handleOneRepetitionFinished();
-      }
-    };
-
-    audio.addEventListener('ended', handleEnded);
-    audio.addEventListener('error', handleError);
-
     return () => {
-      audio.removeEventListener('ended', handleEnded);
-      audio.removeEventListener('error', handleError);
-      audio.pause();
-      audio.src = '';
+      isPlayingRef.current = false;
+      if (loopTimeoutRef.current) {
+        clearTimeout(loopTimeoutRef.current);
+        loopTimeoutRef.current = null;
+      }
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.src = '';
+        audioRef.current = null;
+      }
     };
-  }, [currentAyahIndex, endAyah]);
+  }, [surahNumber, startAyah, endAyah, reciterConfig.folder]);
 
-  // Handle playing when currentAyahIndex changes or isPlaying changes
-  useEffect(() => {
-    if (!audioRef.current) return;
-    const audio = audioRef.current;
-
-    if (isPlaying) {
-      const audioUrl = getAyahAudioUrl(reciterConfig.folder, surahNumber, currentAyahIndex);
-      audio.src = audioUrl;
-      audio.muted = isMuted;
-      audio.play().catch(err => {
-        console.warn('[QuranAudioPlayer] play notice:', err);
-      });
-    } else {
-      audio.pause();
-    }
-  }, [isPlaying, currentAyahIndex, reciterConfig.folder, surahNumber, isMuted]);
-
-  // Action: Called strictly when student listens from start to finish
-  const handleOneRepetitionFinished = async () => {
-    const newCount = completedRepetitions + 1;
-    setCompletedRepetitions(newCount);
+  // Handle entire passage completion: increments repetitions and seamlessly loops again
+  const handlePassageCompleted = useCallback(async () => {
+    const nextCount = completedRepsRef.current + 1;
+    completedRepsRef.current = nextCount;
+    setCompletedRepetitions(nextCount);
     try {
-      localStorage.setItem(storageProgressKey, String(newCount));
+      localStorage.setItem(storageProgressKey, String(nextCount));
     } catch {}
 
-    const isFullyDone = newCount >= requiredRepetitions;
+    const isFullyDone = requiredRepetitions > 0 && nextCount >= requiredRepetitions;
 
-    if (isFullyDone) {
+    if (isFullyDone && !isCompletedAll) {
       setIsCompletedAll(true);
-      setIsPlaying(false);
-      setCurrentAyahIndex(startAyah);
-
-      // Celebrate!
-      confetti({
-        particleCount: 80,
-        spread: 80,
-        origin: { y: 0.6 }
-      });
-
-      // Award points & record log
-      const logEntry: StudentListeningLog = {
-        id: `listen_${Date.now()}_${student.id}`,
-        studentId: student.id,
-        studentName: student.name,
-        halaqahId: student.halaqahId,
-        surahNumber,
-        surahName,
-        fromAyah: startAyah,
-        toAyah: endAyah,
-        targetCount: requiredRepetitions,
-        completedCount: newCount,
-        isFullyCompleted: true,
-        date: todayKey,
-        timestamp: new Date().toISOString()
-      };
-
       try {
-        await OmranDataService.saveListeningLog(logEntry);
-      } catch (err) {
-        console.warn('Save listening log notice:', err);
-      }
-
-      if (onRepetitionComplete) {
-        onRepetitionComplete(newCount, true);
-      }
+        confetti({
+          particleCount: 80,
+          spread: 80,
+          origin: { y: 0.6 }
+        });
+      } catch {}
       if (onListeningPointsAwarded) {
         onListeningPointsAwarded(listeningPointsReward);
       }
-    } else {
-      // Loop to next repetition!
-      setCurrentAyahIndex(startAyah);
-      if (onRepetitionComplete) {
-        onRepetitionComplete(newCount, false);
-      }
     }
-  };
+
+    if (onRepetitionComplete) {
+      onRepetitionComplete(nextCount, isFullyDone);
+    }
+
+    // Record listening log in Firestore
+    const logEntry: StudentListeningLog = {
+      id: `listen_${Date.now()}_${student.id}`,
+      studentId: student.id,
+      studentName: student.name,
+      halaqahId: student.halaqahId,
+      surahNumber,
+      surahName,
+      fromAyah: startAyah,
+      toAyah: endAyah,
+      targetCount: requiredRepetitions,
+      completedCount: nextCount,
+      isFullyCompleted: isFullyDone,
+      date: todayKey,
+      timestamp: new Date().toISOString()
+    };
+    OmranDataService.saveListeningLog(logEntry).catch(() => {});
+
+    // USER REQUIREMENT:
+    // "خليه لما يخلص المقطع يبدأ من جديد من نفسه ويحسب مرات السماع"
+    // Automatically restarts from startAyah on its own without user intervention!
+    if (isPlayingRef.current) {
+      if (loopTimeoutRef.current) clearTimeout(loopTimeoutRef.current);
+      loopTimeoutRef.current = setTimeout(() => {
+        if (isPlayingRef.current) {
+          playAyahAudio(startAyah);
+        }
+      }, 450);
+    }
+  }, [
+    requiredRepetitions,
+    isCompletedAll,
+    onListeningPointsAwarded,
+    listeningPointsReward,
+    onRepetitionComplete,
+    student,
+    surahNumber,
+    surahName,
+    startAyah,
+    endAyah,
+    todayKey,
+    storageProgressKey
+  ]);
+
+  // Main Ayah Audio Player callback
+  const playAyahAudio = useCallback((ayahNum: number) => {
+    if (!isPlayingRef.current) return;
+    setAudioError(null);
+    currentAyahRef.current = ayahNum;
+    setCurrentAyahIndex(ayahNum);
+
+    if (loopTimeoutRef.current) {
+      clearTimeout(loopTimeoutRef.current);
+      loopTimeoutRef.current = null;
+    }
+
+    if (!audioRef.current) {
+      audioRef.current = new Audio();
+    }
+    const audio = audioRef.current;
+    audio.pause();
+
+    const audioUrl = getAyahAudioUrl(reciterConfig.folder, surahNumber, ayahNum);
+    audio.src = audioUrl;
+    audio.muted = isMuted;
+
+    audio.onended = () => {
+      if (!isPlayingRef.current) return;
+      if (ayahNum < endAyah) {
+        // Advance to next Ayah in assigned passage
+        playAyahAudio(ayahNum + 1);
+      } else {
+        // Entire passage finished!
+        handlePassageCompleted();
+      }
+    };
+
+    audio.onerror = () => {
+      console.warn(`[QuranAudioPlayer] Audio playback notice for Ayah ${ayahNum}`);
+      if (!isPlayingRef.current) return;
+      if (ayahNum < endAyah) {
+        playAyahAudio(ayahNum + 1);
+      } else {
+        handlePassageCompleted();
+      }
+    };
+
+    audio.play().catch(err => {
+      console.warn('[QuranAudioPlayer] play notice:', err);
+    });
+  }, [reciterConfig.folder, surahNumber, endAyah, isMuted, handlePassageCompleted]);
 
   const handleTogglePlay = () => {
     setAudioError(null);
-    setIsPlaying(prev => !prev);
+    if (isPlaying) {
+      // Pause
+      isPlayingRef.current = false;
+      setIsPlaying(false);
+      if (loopTimeoutRef.current) {
+        clearTimeout(loopTimeoutRef.current);
+        loopTimeoutRef.current = null;
+      }
+      if (audioRef.current) {
+        audioRef.current.pause();
+      }
+    } else {
+      // Play
+      isPlayingRef.current = true;
+      setIsPlaying(true);
+      playAyahAudio(currentAyahRef.current || startAyah);
+    }
   };
 
   const handleResetRepetitions = () => {
+    isPlayingRef.current = false;
     setIsPlaying(false);
+    if (loopTimeoutRef.current) {
+      clearTimeout(loopTimeoutRef.current);
+      loopTimeoutRef.current = null;
+    }
+    if (audioRef.current) {
+      audioRef.current.pause();
+    }
+    currentAyahRef.current = startAyah;
     setCurrentAyahIndex(startAyah);
+    completedRepsRef.current = 0;
     setCompletedRepetitions(0);
     setIsCompletedAll(false);
     try {
       localStorage.removeItem(storageProgressKey);
     } catch {}
+    if (onRepetitionComplete) {
+      onRepetitionComplete(0, false);
+    }
   };
 
-  const progressPercent = Math.min(100, Math.round((completedRepetitions / Math.max(1, requiredRepetitions)) * 100));
+  // If teacher selected "بدون", student is exempt and does NOT need to listen!
+  if (isNoneSheikh) {
+    return (
+      <div className="bg-gradient-to-br from-[#022c22] via-[#064e3b] to-[#022c22] border-2 border-emerald-500/40 rounded-[32px] p-6 sm:p-7 shadow-2xl text-white relative overflow-hidden select-none">
+        <div className="absolute inset-0 opacity-5 pointer-events-none artistic-pattern" />
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 relative z-10">
+          <div className="flex items-center gap-3.5">
+            <div className="w-14 h-14 rounded-2xl bg-emerald-500/20 border border-emerald-400/40 text-emerald-300 flex items-center justify-center shadow-inner shrink-0">
+              <CheckCircle2 className="w-8 h-8 text-emerald-400" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] font-black px-2.5 py-0.5 rounded-full bg-emerald-500/30 text-emerald-300 border border-emerald-400/30">
+                  معفى من الاستماع
+                </span>
+                <span className="text-xs text-[#86efac] font-medium">
+                  القارئ: بدون (٠ مرات مطلوبة)
+                </span>
+              </div>
+              <h3 className="text-lg sm:text-xl font-bold font-heading text-white mt-1">
+                سورة {surahName} : الآيات ({startAyah} - {endAyah})
+              </h3>
+              <p className="text-xs text-[#86efac]/90 mt-1 leading-relaxed">
+                حدد المعلم لهذه الجلسة خيار (بدون استماع) • لا يتطلب منك الاستماع لمقرر اليوم. ركّز على التكرار وتثبيت الحفظ والمراجعة!
+              </p>
+            </div>
+          </div>
+          <div className="px-4 py-2 rounded-2xl bg-emerald-500/20 border border-emerald-400/40 text-emerald-300 font-bold text-xs flex items-center gap-2 shrink-0">
+            <Sparkles className="w-4 h-4 text-emerald-300" />
+            <span>معفى من السماع ومكتمل بنجاح (٠ / ٠)</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const progressPercent = Math.min(
+    100,
+    Math.round((completedRepetitions / Math.max(1, requiredRepetitions)) * 100)
+  );
 
   return (
     <div className="bg-gradient-to-br from-[#022c22] via-[#064e3b] to-[#022c22] border-2 border-[#fbbf24]/50 rounded-[32px] p-5 sm:p-7 shadow-2xl shadow-emerald-950/60 text-white relative overflow-hidden select-none">

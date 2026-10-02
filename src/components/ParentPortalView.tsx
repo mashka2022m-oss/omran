@@ -537,9 +537,17 @@ export const ParentPortalView: React.FC<ParentPortalViewProps> = ({
   // Student's exact assigned passage (dictated by teacher)
   const currentAssignedPassage = useMemo(() => {
     if (currentStudent.activeListeningAssignment) {
-      return currentStudent.activeListeningAssignment;
+      const isNone =
+        currentStudent.activeListeningAssignment.sheikhName === 'بدون' ||
+        currentStudent.activeListeningAssignment.requiredRepetitions === 0;
+      return {
+        ...currentStudent.activeListeningAssignment,
+        requiredRepetitions: isNone ? 0 : (currentStudent.activeListeningAssignment.requiredRepetitions ?? 3),
+        isCompleted: isNone ? true : currentStudent.activeListeningAssignment.isCompleted
+      };
     }
     const newItem = currentStudent.aiPlan?.currentDailyAssignment?.newItem;
+    const isPlanNone = currentStudent.aiPlan?.currentDailyAssignment?.suggestedSheikh === 'بدون';
     if (newItem && newItem.surahNumber) {
       return {
         surahNumber: newItem.surahNumber,
@@ -547,10 +555,10 @@ export const ParentPortalView: React.FC<ParentPortalViewProps> = ({
         fromAyah: newItem.fromAyah || 1,
         toAyah: newItem.toAyah || newItem.fromAyah || 7,
         sheikhName: currentStudent.aiPlan?.currentDailyAssignment?.suggestedSheikh || 'الشيخ محمد صديق المنشاوي (المصحف المعلم)',
-        requiredRepetitions: currentStudent.aiPlan?.currentDailyAssignment?.targetRepetitions || 3,
+        requiredRepetitions: isPlanNone ? 0 : (currentStudent.aiPlan?.currentDailyAssignment?.targetRepetitions ?? 3),
         assignedDate: new Date().toISOString().split('T')[0],
         completedRepetitions: 0,
-        isCompleted: false
+        isCompleted: isPlanNone
       };
     }
     const sNum = currentStudent.currentSurah || 78;
@@ -941,7 +949,7 @@ export const ParentPortalView: React.FC<ParentPortalViewProps> = ({
             fromAyah={currentAssignedPassage.fromAyah}
             toAyah={currentAssignedPassage.toAyah}
             selectedSheikhName={currentAssignedPassage.sheikhName}
-            requiredRepetitions={currentAssignedPassage.requiredRepetitions || 3}
+            requiredRepetitions={currentAssignedPassage.requiredRepetitions ?? 3}
             listeningPointsReward={10}
             onRepetitionComplete={async (newCount, isFullyDone) => {
               const updated: Student = {

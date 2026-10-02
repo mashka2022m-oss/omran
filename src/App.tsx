@@ -1562,7 +1562,12 @@ export function App() {
           (s.parentPhones && s.parentPhones.some(p => p.replace(/\D/g, '') === portalStudentId.replace(/\D/g, '')))
       )
     : currentUser?.role === 'student'
-    ? students.find(s => s.id === currentUser.studentId || s.name === currentUser.username)
+    ? students.find(s =>
+        (currentUser.studentId && s.id === currentUser.studentId) ||
+        (currentUser.studentId && s.id.toLowerCase() === currentUser.studentId.toLowerCase()) ||
+        s.name.trim() === currentUser.username.trim() ||
+        normalizeArabicText(s.name) === normalizeArabicText(currentUser.username)
+      )
     : null;
 
   // Scoped settings for students / parent portal
@@ -1587,7 +1592,97 @@ export function App() {
     );
   }
 
-  // 2. Direct Student / Parent Portal View
+  // 2. Strict Student Portal Handling: If user is authenticated as STUDENT, MUST NEVER leak to admin dashboard
+  if (currentUser?.role === 'student') {
+    if (activePortalStudent) {
+      if (!isStudentAssigned(activePortalStudent)) {
+        return (
+          <div className="min-h-screen bg-[#022c22] text-[#f0f9f6] font-sans selection:bg-[#fbbf24] selection:text-[#064e3b]" dir="rtl">
+            <AnimatedBackground />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.97, y: 15 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
+            >
+              <UnassignedStudentView
+                studentName={activePortalStudent.name}
+                studentPhone={activePortalStudent.phone}
+                onRefresh={loadAllData}
+                onLogout={handleLogout}
+                settings={portalSettings}
+              />
+            </motion.div>
+          </div>
+        );
+      }
+
+      return (
+        <div className="min-h-screen bg-[#022c22] text-[#f0f9f6] font-sans selection:bg-[#fbbf24] selection:text-[#064e3b]" dir="rtl">
+          <AnimatedBackground />
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
+          >
+            <ParentPortalView
+              student={activePortalStudent}
+              attendance={attendance}
+              evaluations={evaluations}
+              settings={portalSettings}
+              violations={violations}
+              exams={exams}
+              submissions={submissions}
+              students={students}
+              halaqahs={halaqahs}
+              leaderboardSettings={leaderboardSettings || undefined}
+              recordings={recordings}
+              recordingsConfig={recordingsConfig}
+              certificates={certificates}
+              listeningLogs={listeningLogs}
+              isLoggedInStudent={true}
+              onLogout={handleLogout}
+              onSaveSubmission={handleSaveSubmission}
+              onUpdateStudent={handleUpdateStudent}
+            />
+          </motion.div>
+        </div>
+      );
+    }
+
+    // If logged in as student but activePortalStudent could not be found in memory:
+    return (
+      <div className="min-h-screen bg-[#022c22] text-[#f0f9f6] font-sans flex flex-col items-center justify-center p-6" dir="rtl">
+        <AnimatedBackground />
+        <div className="relative z-10 text-center space-y-5 max-w-md bg-[#064e3b]/90 border border-amber-500/40 p-8 rounded-[32px] backdrop-blur-md shadow-2xl">
+          <div className="w-16 h-16 rounded-2xl bg-amber-500/20 text-[#fbbf24] flex items-center justify-center mx-auto border border-amber-500/30">
+            <BookOpen className="w-8 h-8" />
+          </div>
+          <div>
+            <h2 className="text-lg font-bold font-heading text-white">لم يتم العثور على سجل الطالب</h2>
+            <p className="text-xs text-[#86efac]/90 mt-2 leading-relaxed">
+              تعذر العثور على سجل الطالب ({currentUser.username}). قد يكون تم تعديل الاسم أو نقله لحلقة أخرى.
+            </p>
+          </div>
+          <div className="flex flex-col sm:flex-row gap-3 pt-2">
+            <button
+              onClick={handleLogout}
+              className="flex-1 py-3 px-4 rounded-2xl bg-[#fbbf24] text-[#064e3b] font-black text-xs hover:bg-[#f59e0b] shadow-lg cursor-pointer transition-all"
+            >
+              تسجيل الخروج والعودة
+            </button>
+            <button
+              onClick={() => loadAllData()}
+              className="py-3 px-4 rounded-2xl bg-[#022c22] text-[#86efac] font-bold text-xs border border-[#065f46] hover:text-white cursor-pointer"
+            >
+              إعادة التحميل
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // 3. Direct Portal URL link view (when not logged in as student, e.g. via parent WhatsApp link ?portal=std-1)
   if (activePortalStudent) {
     if (!isStudentAssigned(activePortalStudent)) {
       return (

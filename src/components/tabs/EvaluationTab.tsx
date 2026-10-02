@@ -383,7 +383,7 @@ export const EvaluationTab: React.FC<EvaluationTabProps> = ({
       if (existing.recitationDetails?.tomorrowSuggestedSheikh) {
         setSelectedSheikh(existing.recitationDetails.tomorrowSuggestedSheikh);
       }
-      if (existing.recitationDetails?.tomorrowTargetRepetitions) {
+      if (existing.recitationDetails?.tomorrowTargetRepetitions !== undefined) {
         setTargetRepetitions(existing.recitationDetails.tomorrowTargetRepetitions);
       }
       if (existing.recitationDetails?.tomorrowDailyNote) {
@@ -391,9 +391,9 @@ export const EvaluationTab: React.FC<EvaluationTabProps> = ({
       }
     } else {
       // 2. No evaluation exists for this date yet!
-      if (activeStudent.activeListeningAssignment?.requiredRepetitions) {
+      if (activeStudent.activeListeningAssignment?.requiredRepetitions !== undefined) {
         setTargetRepetitions(activeStudent.activeListeningAssignment.requiredRepetitions);
-      } else if (activeStudent.aiPlan?.currentDailyAssignment?.targetRepetitions) {
+      } else if (activeStudent.aiPlan?.currentDailyAssignment?.targetRepetitions !== undefined) {
         setTargetRepetitions(activeStudent.aiPlan.currentDailyAssignment.targetRepetitions);
       }
       if (activeStudent.activeListeningAssignment?.sheikhName) {
@@ -1065,6 +1065,13 @@ export const EvaluationTab: React.FC<EvaluationTabProps> = ({
       const pagesPts = 0;
       const totalPtsToday = calculatedCriteriaPoints;
 
+      const isNoneSheikh = selectedSheikh === 'بدون' || selectedSheikh === 'لا يوجد' || targetRepetitions === 0;
+      const finalSuggestedSheikh = isNoneSheikh ? 'بدون' : (selectedSheikh || FAMOUS_RECITERS[0].name);
+      const finalTargetReps = isNoneSheikh ? 0 : (targetRepetitions || 3);
+      const finalDailyNote = isNoneSheikh
+        ? 'معفى من الاستماع لهذه الجلسة (بدون استماع)'
+        : (dailyHomeNote || `تكرار الاستماع والمراجعة ${finalTargetReps} مرات`);
+
       const fullEvaluation: StudentEvaluation = {
         id: `eval_${selectedDate}_${activeStudent.id}`,
         date: selectedDate,
@@ -1081,9 +1088,9 @@ export const EvaluationTab: React.FC<EvaluationTabProps> = ({
           tomorrowNewItem,
           tomorrowReviewItem: tomReviews[0] || null,
           tomorrowReviewItems: tomReviews || [],
-          tomorrowSuggestedSheikh: selectedSheikh || '',
-          tomorrowTargetRepetitions: targetRepetitions || 3,
-          tomorrowDailyNote: `تكرار الاستماع والمراجعة ${targetRepetitions || 3} مرات`,
+          tomorrowSuggestedSheikh: finalSuggestedSheikh,
+          tomorrowTargetRepetitions: finalTargetReps,
+          tomorrowDailyNote: finalDailyNote,
           criteriaPointsEarnedToday: calculatedCriteriaPoints,
           pagesPointsEarnedToday: 0,
           pointsEarnedToday: totalPtsToday,
@@ -1107,9 +1114,9 @@ export const EvaluationTab: React.FC<EvaluationTabProps> = ({
       const newDailyAssignment = {
         newMemorization: tomNewFormatted,
         review: tomRevFormatted,
-        suggestedSheikh: selectedSheikh || '',
-        dailyNote: `تكرار الاستماع والمراجعة ${targetRepetitions || 3} مرات`,
-        targetRepetitions: targetRepetitions || 3,
+        suggestedSheikh: finalSuggestedSheikh,
+        dailyNote: finalDailyNote,
+        targetRepetitions: finalTargetReps,
         newItem: tomorrowNewItem,
         reviewItem: tomReviews[0] || null,
         reviewItems: tomReviews || []
@@ -1120,11 +1127,11 @@ export const EvaluationTab: React.FC<EvaluationTabProps> = ({
         surahName: startTomNewSurahInfo.name,
         fromAyah: tomNewFromAyah,
         toAyah: tomNewToAyah,
-        sheikhName: selectedSheikh || FAMOUS_RECITERS[0].name,
-        requiredRepetitions: targetRepetitions || 3,
+        sheikhName: finalSuggestedSheikh,
+        requiredRepetitions: finalTargetReps,
         assignedDate: selectedDate,
         completedRepetitions: 0,
-        isCompleted: false
+        isCompleted: isNoneSheikh
       };
 
       // 1. Save evaluation and atomically update student's points, position, and assignments
@@ -2664,9 +2671,18 @@ export const EvaluationTab: React.FC<EvaluationTabProps> = ({
                     </label>
                     <select
                       value={selectedSheikh}
-                      onChange={e => setSelectedSheikh(e.target.value)}
+                      onChange={e => {
+                        const val = e.target.value;
+                        setSelectedSheikh(val);
+                        if (val === 'بدون') {
+                          setTargetRepetitions(0);
+                        } else if (targetRepetitions === 0) {
+                          setTargetRepetitions(3);
+                        }
+                      }}
                       className="w-full bg-[#064e3b] border border-[#065f46] focus:border-[#fbbf24] rounded-2xl py-2 px-3 text-xs text-white outline-none cursor-pointer"
                     >
+                      <option value="بدون">بدون (لا يتطلب استماع - ٠ مرات)</option>
                       {FAMOUS_RECITERS.filter(r => (r as any).hasAudio).map(r => (
                         <option key={r.id} value={r.name}>
                           {r.name}
@@ -2678,13 +2694,22 @@ export const EvaluationTab: React.FC<EvaluationTabProps> = ({
                   <div>
                     <label className="text-xs font-semibold text-[#86efac] block mb-1 flex items-center gap-1.5">
                       <RotateCcw className="w-4 h-4 text-[#fbbf24]" />
-                      <span>مرات التكرار المقررة للطالب (1 - 20):</span>
+                      <span>مرات التكرار المقررة للطالب (0 - 20):</span>
                     </label>
                     <select
                       value={targetRepetitions}
-                      onChange={e => setTargetRepetitions(Number(e.target.value))}
+                      onChange={e => {
+                        const count = Number(e.target.value);
+                        setTargetRepetitions(count);
+                        if (count === 0) {
+                          setSelectedSheikh('بدون');
+                        } else if (selectedSheikh === 'بدون') {
+                          setSelectedSheikh(FAMOUS_RECITERS[0].name);
+                        }
+                      }}
                       className="w-full bg-[#064e3b] border border-[#065f46] focus:border-[#fbbf24] rounded-2xl py-2 px-3 text-xs text-white outline-none font-bold cursor-pointer"
                     >
+                      <option value={0}>0 (معفى - لا يحتاج استماع)</option>
                       {Array.from({ length: 20 }, (_, i) => i + 1).map(num => (
                         <option key={num} value={num}>
                           {num === 1 ? 'مرة واحدة' : num === 2 ? 'مرتان' : `${num} مرات`}

@@ -180,6 +180,9 @@ export const ParentsWhatsAppTab: React.FC<ParentsWhatsAppTabProps> = ({
       student.aiPlan?.currentDailyAssignment?.suggestedSheikh ||
       realisticAssignment.suggestedSheikh;
 
+    const isNoneSheikh = sheikh === 'بدون' || sheikh === 'لا يوجد' || evalData?.recitationDetails?.tomorrowTargetRepetitions === 0;
+    const formattedSheikh = isNoneSheikh ? 'بدون (لا يتطلب استماع لهذه الجلسة)' : sheikh;
+
     const homeNote =
       evalData?.recitationDetails?.tomorrowDailyNote ||
       student.aiPlan?.currentDailyAssignment?.dailyNote ||
@@ -206,7 +209,7 @@ export const ParentsWhatsAppTab: React.FC<ParentsWhatsAppTabProps> = ({
     msg += `[ المقرر المطلوب لليوم التالي بإذن الله ]\n`;
     msg += `• *ورد الحفظ الجديد القادم:* ${tomNewText}\n`;
     msg += `• *ورد المراجعة والتثبيت:* ${tomReviewText}\n`;
-    msg += `• *القارئ المقترح للاستماع له بالمنزل:* ${sheikh}\n`;
+    msg += `• *القارئ المقترح للاستماع له بالمنزل:* ${formattedSheikh}\n`;
     msg += `• *توجيه المتابعة المنزلية:* ${homeNote}\n\n`;
 
     msg += `• *لمتابعة ملف الطالب وخطة حفظه وسجل درجاته مباشرة عبر البوابة الحية، اضغط على الرابط:* \n`;
