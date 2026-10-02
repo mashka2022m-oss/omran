@@ -82,6 +82,7 @@ export const TeacherAttendanceTab: React.FC<TeacherAttendanceTabProps> = ({
   const [editingMosqueId, setEditingMosqueId] = useState<string | null>(null);
   const [mosqueNameInput, setMosqueNameInput] = useState('');
   const [mosqueNeighborhoodInput, setMosqueNeighborhoodInput] = useState('');
+  const [mosqueRadiusInput, setMosqueRadiusInput] = useState<string>('100');
   const [capturedMosqueLocation, setCapturedMosqueLocation] = useState<{ lat?: number; lng?: number } | null>(null);
   const [isCapturingGPS, setIsCapturingGPS] = useState(false);
   const [gpsCaptureMsg, setGpsCaptureMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
@@ -97,24 +98,26 @@ export const TeacherAttendanceTab: React.FC<TeacherAttendanceTabProps> = ({
     setIsMapModalOpen(true);
   };
 
-  const handleSaveMosqueLocationFromMap = async (mosqueId: string, lat: number, lng: number) => {
+  const handleSaveMosqueLocationFromMap = async (mosqueId: string, lat: number, lng: number, radiusMeters?: number) => {
     const target = mosques.find(m => m.id === mosqueId);
     if (!target) return;
+    const finalRadius = radiusMeters ?? target.allowedRadiusMeters ?? 100;
     const updated: MosqueItem = {
       ...target,
       latitude: lat,
       longitude: lng,
-      allowedRadiusMeters: 1000,
+      allowedRadiusMeters: finalRadius,
       isLocationSet: true
     };
     setMosques(prev => prev.map(m => (m.id === mosqueId ? updated : m)));
     setCapturedMosqueLocation({ lat, lng });
+    setMosqueRadiusInput(String(finalRadius));
     try {
       await OmranDataService.saveMosque(updated);
     } catch (e) {
       console.warn('Error saving mosque location:', e);
     }
-    showToast(`تم تثبيت موقع (${updated.name}) على الخريطة بنجاح!`);
+    showToast(`تم تثبيت موقع (${updated.name}) بنطاق ${finalRadius} متر على الخريطة بنجاح!`);
   };
 
   // 2. Shifts State (فترات ومناوبات الدوام)
@@ -155,7 +158,7 @@ export const TeacherAttendanceTab: React.FC<TeacherAttendanceTabProps> = ({
   const [actionTeacherModal, setActionTeacherModal] = useState<{
     teacher: TeacherAccount;
     shift: TeacherShift;
-    actionType: 'check_in' | 'check_out' | 'excuse' | 'absent';
+    actionType: 'check_in' | 'check_out' | 'excuse' | 'absent' | 'late';
   } | null>(null);
   const [actionNote, setActionNote] = useState('');
   const [customTime, setCustomTime] = useState('');
@@ -178,6 +181,15 @@ export const TeacherAttendanceTab: React.FC<TeacherAttendanceTabProps> = ({
     return `${pad(hours)}:${pad(minutes)} ${isPM ? 'م' : 'ص'}`;
   };
 
+  // Helper for parsing time string "HH:mm" to minutes from midnight
+  const parseTimeToMinutes = (timeStr?: string): number => {
+    if (!timeStr) return 0;
+    const parts = timeStr.trim().split(':');
+    const h = parseInt(parts[0], 10) || 0;
+    const m = parseInt(parts[1], 10) || 0;
+    return h * 60 + m;
+  };
+
   // Initial Data Load
   useEffect(() => {
     let isMounted = true;
@@ -196,7 +208,7 @@ export const TeacherAttendanceTab: React.FC<TeacherAttendanceTabProps> = ({
 
         if (!isMounted) return;
 
-        // Initialize default mosque if none exist
+        // Initialize default mosque if none exist (100 meters default radius)
         let finalMosques = loadedMosques;
         if (loadedMosques.length === 0) {
           const defaultMosque: MosqueItem = {
@@ -206,7 +218,7 @@ export const TeacherAttendanceTab: React.FC<TeacherAttendanceTabProps> = ({
             complexId: activeComplex?.id,
             latitude: 24.7136,
             longitude: 46.6753,
-            allowedRadiusMeters: 1000,
+            allowedRadiusMeters: 100,
             isLocationSet: false,
             createdAt: new Date().toISOString()
           };
@@ -261,6 +273,7 @@ export const TeacherAttendanceTab: React.FC<TeacherAttendanceTabProps> = ({
     setEditingMosqueId(null);
     setMosqueNameInput('');
     setMosqueNeighborhoodInput('');
+    setMosqueRadiusInput('100');
     setCapturedMosqueLocation(null);
     setGpsCaptureMsg(null);
     setIsMosqueModalOpen(true);
@@ -270,6 +283,7 @@ export const TeacherAttendanceTab: React.FC<TeacherAttendanceTabProps> = ({
     setEditingMosqueId(mosque.id);
     setMosqueNameInput(mosque.name);
     setMosqueNeighborhoodInput(mosque.neighborhood || '');
+    setMosqueRadiusInput(String(mosque.allowedRadiusMeters || 100));
     setCapturedMosqueLocation(
       mosque.isLocationSet && mosque.latitude && mosque.longitude
         ? { lat: mosque.latitude, lng: mosque.longitude }
@@ -338,6 +352,9 @@ export const TeacherAttendanceTab: React.FC<TeacherAttendanceTabProps> = ({
     const existing = mosques.find(m => m.id === mosqueId);
     const complexId = activeComplex?.id || 'default_complex';
 
+    const parsedRadius = parseInt(mosqueRadiusInput, 10);
+    const finalRadius = !isNaN(parsedRadius) && parsedRadius > 0 ? parsedRadius : 100;
+
     const newMosque: MosqueItem = {
       id: mosqueId,
       name: trimmed,
@@ -345,7 +362,7 @@ export const TeacherAttendanceTab: React.FC<TeacherAttendanceTabProps> = ({
       complexId,
       latitude: capturedMosqueLocation?.lat ?? existing?.latitude,
       longitude: capturedMosqueLocation?.lng ?? existing?.longitude,
-      allowedRadiusMeters: 1000, // 1 km radius
+      allowedRadiusMeters: finalRadius,
       isLocationSet: Boolean(capturedMosqueLocation?.lat || (existing?.isLocationSet && existing?.latitude)),
       createdAt: existing?.createdAt || new Date().toISOString()
     };
@@ -460,7 +477,7 @@ export const TeacherAttendanceTab: React.FC<TeacherAttendanceTabProps> = ({
         name: newMName,
         complexId,
         neighborhood: 'مسجد الدوام',
-        allowedRadiusMeters: 1000,
+        allowedRadiusMeters: 100,
         isLocationSet: false,
         createdAt: new Date().toISOString()
       };
@@ -534,6 +551,25 @@ export const TeacherAttendanceTab: React.FC<TeacherAttendanceTabProps> = ({
     setIsPerformingCheckIn(true);
     setCheckInFeedback(null);
 
+    // Rule 1: Timing validation - Cannot check in before start of check-in time
+    const now = new Date();
+    const currentMinutes = now.getHours() * 60 + now.getMinutes();
+    const checkInStartMin = parseTimeToMinutes(targetShift.checkInStart);
+    const checkInEndMin = parseTimeToMinutes(targetShift.checkInEnd || targetShift.checkInStart);
+
+    if (checkInStartMin > 0 && currentMinutes < checkInStartMin) {
+      setCheckInFeedback({
+        type: 'error',
+        text: `عذراً، لا يمكنك تسجيل الحضور قبل موعد بداية التحضير (${targetShift.checkInStart})! يبدأ التحضير في الوقت المحدد، يرجى الانتظار.`
+      });
+      setIsPerformingCheckIn(false);
+      return;
+    }
+
+    // Determine status: "حاضر" if on-time (<= checkInEnd), or "متأخر" if late (> checkInEnd)
+    const isLate = checkInEndMin > 0 && currentMinutes > checkInEndMin;
+    const determinedStatus: TeacherAttendanceStatus = isLate ? 'متأخر' : 'حاضر';
+
     // Identify target mosque for this shift
     const targetMosque = mosques.find(m => m.id === targetShift.mosqueId) || mosques[0];
 
@@ -556,26 +592,27 @@ export const TeacherAttendanceTab: React.FC<TeacherAttendanceTabProps> = ({
           if (!targetMosque || !targetMosque.isLocationSet || !targetMosque.latitude || !targetMosque.longitude) {
             setCheckInFeedback({
               type: 'error',
-              text: `عذراً، لم يتم ضبط الموقع الجغرافي لجامع (${targetMosque?.name || targetShift.name}) بعد على الخريطة من قِبل المشرف. يلزم ضبط موقع الجامع أولاً للتحقق من نطاق الـ 1 كم.`
+              text: `عذراً، لم يتم ضبط الموقع الجغرافي لجامع (${targetMosque?.name || targetShift.name}) بعد على الخريطة من قِبل المشرف. يلزم ضبط موقع الجامع أولاً للتحقق من النطاق المسموح.`
             });
             setIsPerformingCheckIn(false);
             return;
           }
 
-          // Check 1km radius strictly
+          // Check mosque radius (default 100 meters, or supervisor configured)
           const distance = calculateHaversineDistanceMeters(
             userLat,
             userLng,
             targetMosque.latitude,
             targetMosque.longitude
           );
-          const allowedRadius = targetMosque.allowedRadiusMeters || 1000;
+          const allowedRadius = targetMosque.allowedRadiusMeters || 100;
 
           if (distance > allowedRadius) {
-            const km = (distance / 1000).toFixed(2);
+            const distDisplay = distance >= 1000 ? `${(distance / 1000).toFixed(2)} كم (${Math.round(distance)} متر)` : `${Math.round(distance)} متر`;
+            const allowedDisplay = allowedRadius >= 1000 ? `${(allowedRadius / 1000).toFixed(2)} كم (${allowedRadius} متر)` : `${allowedRadius} متر`;
             setCheckInFeedback({
               type: 'error',
-              text: `عذراً، أنت خارج نطاق (${targetMosque.name})! المسافة الحالية تقريباً ${km} كم، والحد الأقصى المسموح للتحضير هو 1 كم فقط.`
+              text: `عذراً، أنت خارج نطاق (${targetMosque.name})! المسافة الحالية تقريباً ${distDisplay}، والمدى المسموح للتحضير هو ${allowedDisplay} فقط.`
             });
             setIsPerformingCheckIn(false);
             return;
@@ -596,11 +633,12 @@ export const TeacherAttendanceTab: React.FC<TeacherAttendanceTabProps> = ({
             complexId: activeComplex?.id,
             mosqueId: targetMosque?.id,
             mosqueName: targetMosque?.name,
-            status: 'حاضر',
+            status: determinedStatus,
             checkInTime: timeStr,
             checkInTimestamp: new Date().toISOString(),
             checkInLatitude: userLat,
             checkInLongitude: userLng,
+            checkInDistanceMeters: Math.round(distance),
             checkOutTime: existing?.checkOutTime,
             checkOutTimestamp: existing?.checkOutTimestamp,
             recordedBy: 'self',
@@ -618,7 +656,9 @@ export const TeacherAttendanceTab: React.FC<TeacherAttendanceTabProps> = ({
 
           setCheckInFeedback({
             type: 'success',
-            text: `تم تسجيل حضورك بنجاح في (${targetMosque?.name || targetShift.name}) في تمام الساعة ${timeStr}!`
+            text: isLate
+              ? `تم تسجيل حضورك (متأخر) في (${targetMosque?.name || targetShift.name}) في تمام الساعة ${timeStr}!`
+              : `تم تسجيل حضورك بنجاح في (${targetMosque?.name || targetShift.name}) في تمام الساعة ${timeStr}!`
           });
         } catch (e) {
           setCheckInFeedback({
@@ -650,6 +690,33 @@ export const TeacherAttendanceTab: React.FC<TeacherAttendanceTabProps> = ({
     setIsPerformingCheckOut(true);
     setCheckInFeedback(null);
 
+    // Rule 1: Teacher must have recorded check-in first
+    const recId = `tatt_${selectedDate}_${targetShift.id}_${teacherId}`;
+    const existing = attendanceRecords.find(r => r.id === recId);
+    if (!existing || !existing.checkInTime) {
+      setCheckInFeedback({
+        type: 'error',
+        text: 'يرجى تسجيل الحضور أولاً قبل تسجيل الانصراف.'
+      });
+      setIsPerformingCheckOut(false);
+      return;
+    }
+
+    // Rule 2: Timing validation - Cannot check out before check-out start!
+    // "واي انصراف بعد الوقت عادي لكن قبل الوقت لا يمكنه الانصراف"
+    const now = new Date();
+    const currentMinutes = now.getHours() * 60 + now.getMinutes();
+    const checkOutStartMin = parseTimeToMinutes(targetShift.checkOutStart);
+
+    if (checkOutStartMin > 0 && currentMinutes < checkOutStartMin) {
+      setCheckInFeedback({
+        type: 'error',
+        text: `عذراً، لا يمكنك تسجيل الانصراف قبل وقت الانصراف المحدد (${targetShift.checkOutStart})! يرجى إكمال فترة الدوام حتى حلول موعد الانصراف.`
+      });
+      setIsPerformingCheckOut(false);
+      return;
+    }
+
     const targetMosque = mosques.find(m => m.id === targetShift.mosqueId) || mosques[0];
 
     navigator.geolocation.getCurrentPosition(
@@ -668,28 +735,28 @@ export const TeacherAttendanceTab: React.FC<TeacherAttendanceTabProps> = ({
             return;
           }
 
-          // Check 1km radius strictly
+          // Check mosque radius (default 100 meters, or supervisor configured)
           const distance = calculateHaversineDistanceMeters(
             userLat,
             userLng,
             targetMosque.latitude,
             targetMosque.longitude
           );
-          const allowedRadius = targetMosque.allowedRadiusMeters || 1000;
+          const allowedRadius = targetMosque.allowedRadiusMeters || 100;
 
           if (distance > allowedRadius) {
-            const km = (distance / 1000).toFixed(2);
+            const distDisplay = distance >= 1000 ? `${(distance / 1000).toFixed(2)} كم (${Math.round(distance)} متر)` : `${Math.round(distance)} متر`;
+            const allowedDisplay = allowedRadius >= 1000 ? `${(allowedRadius / 1000).toFixed(2)} كم (${allowedRadius} متر)` : `${allowedRadius} متر`;
             setCheckInFeedback({
               type: 'error',
-              text: `عذراً، أنت خارج نطاق (${targetMosque.name}) لتسجيل الانصراف! المسافة تقريباً ${km} كم، والحد الأقصى المسموح هو 1 كم فقط.`
+              text: `عذراً، أنت خارج نطاق (${targetMosque.name}) لتسجيل الانصراف! المسافة تقريباً ${distDisplay}، والمدى المسموح هو ${allowedDisplay} فقط.`
             });
             setIsPerformingCheckOut(false);
             return;
           }
 
+          // Any check-out after checkOutStart is completely allowed and normal!
           const timeStr = formatCurrentArabicTime();
-          const recId = `tatt_${selectedDate}_${targetShift.id}_${teacherId}`;
-          const existing = attendanceRecords.find(r => r.id === recId);
 
           const record: TeacherAttendanceRecord = {
             id: recId,
@@ -706,6 +773,7 @@ export const TeacherAttendanceTab: React.FC<TeacherAttendanceTabProps> = ({
             checkInTimestamp: existing?.checkInTimestamp || new Date().toISOString(),
             checkOutTime: timeStr,
             checkOutTimestamp: new Date().toISOString(),
+            checkOutDistanceMeters: Math.round(distance),
             recordedBy: 'self',
             createdAt: existing?.createdAt || new Date().toISOString()
           };
@@ -761,6 +829,9 @@ export const TeacherAttendanceTab: React.FC<TeacherAttendanceTabProps> = ({
 
     if (actionType === 'check_in') {
       newStatus = 'حاضر';
+      newCheckIn = chosenTime;
+    } else if (actionType === 'late') {
+      newStatus = 'متأخر';
       newCheckIn = chosenTime;
     } else if (actionType === 'check_out') {
       newStatus = existing?.status || 'حاضر';
@@ -1004,6 +1075,16 @@ export const TeacherAttendanceTab: React.FC<TeacherAttendanceTabProps> = ({
                 const hasCheckedIn = Boolean(record?.checkInTime);
                 const hasCheckedOut = Boolean(record?.checkOutTime);
 
+                const now = new Date();
+                const currentMinutes = now.getHours() * 60 + now.getMinutes();
+                const checkInStartMin = parseTimeToMinutes(shift.checkInStart);
+                const checkInEndMin = parseTimeToMinutes(shift.checkInEnd || shift.checkInStart);
+                const checkOutStartMin = parseTimeToMinutes(shift.checkOutStart);
+
+                const isBeforeCheckIn = checkInStartMin > 0 && currentMinutes < checkInStartMin;
+                const isLateCheckIn = checkInEndMin > 0 && currentMinutes > checkInEndMin;
+                const isBeforeCheckOut = checkOutStartMin > 0 && currentMinutes < checkOutStartMin;
+
                 return (
                   <div
                     key={shift.id}
@@ -1019,14 +1100,26 @@ export const TeacherAttendanceTab: React.FC<TeacherAttendanceTabProps> = ({
                             hasCheckedOut
                               ? 'bg-blue-500/20 text-blue-300 border border-blue-500/40'
                               : hasCheckedIn
-                              ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
-                              : 'bg-amber-400/20 text-amber-300 border border-amber-400/30'
+                              ? record?.status === 'متأخر'
+                                ? 'bg-orange-500/20 text-orange-300 border border-orange-500/40'
+                                : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                              : isBeforeCheckIn
+                              ? 'bg-amber-400/10 text-amber-300 border border-amber-400/30'
+                              : isLateCheckIn
+                              ? 'bg-orange-500/20 text-orange-300 border border-orange-500/40'
+                              : 'bg-emerald-400/20 text-emerald-300 border border-emerald-400/30'
                           }`}
                         >
                           {hasCheckedOut
                             ? 'تم الانصراف'
                             : hasCheckedIn
-                            ? 'تم الحضور'
+                            ? record?.status === 'متأخر'
+                              ? 'حاضر (متأخر)'
+                              : 'تم الحضور'
+                            : isBeforeCheckIn
+                            ? `التحضير يبدأ (${shift.checkInStart})`
+                            : isLateCheckIn
+                            ? 'التحضير متأخر'
                             : 'في انتظار التحضير'}
                         </span>
                       </div>
@@ -1034,16 +1127,19 @@ export const TeacherAttendanceTab: React.FC<TeacherAttendanceTabProps> = ({
                       {/* Linked Mosque Badge */}
                       <div className="p-3 rounded-2xl bg-[#064e3b]/50 border border-[#065f46] space-y-1.5">
                         <div className="flex items-center justify-between gap-1.5">
-                          <div className="flex items-center gap-1.5 text-xs text-amber-300 font-bold">
+                          <div className="flex items-center gap-1.5 text-xs text-amber-300 font-bold flex-wrap">
                             <Building2 className="w-4 h-4 text-amber-400" />
                             <span>الجامع: {shiftMosque?.name || shift.mosqueName || 'جامع الحلقات'}</span>
+                            <span className="text-[10px] text-emerald-200 bg-[#022c22] px-1.5 py-0.5 rounded-md border border-[#065f46]">
+                              النطاق: {shiftMosque?.allowedRadiusMeters || 100} متر
+                            </span>
                           </div>
                           {shiftMosque && (
                             <button
                               type="button"
                               onClick={() => handleOpenMosqueMap(shiftMosque, 'view')}
                               className="px-2 py-1 rounded-lg bg-emerald-800/80 hover:bg-emerald-700 text-emerald-200 text-[11px] font-bold flex items-center gap-1 cursor-pointer transition-colors border border-emerald-600/40"
-                              title="اطلاع على موقع الجامع وحدود الـ 1 كم على الخريطة"
+                              title={`اطلاع على موقع الجامع وحدود الـ ${shiftMosque.allowedRadiusMeters || 100} متر على الخريطة`}
                             >
                               <Eye className="w-3.5 h-3.5 text-amber-300" />
                               <span>خريطة الجامع</span>
@@ -1075,13 +1171,58 @@ export const TeacherAttendanceTab: React.FC<TeacherAttendanceTabProps> = ({
                         </div>
                       </div>
 
+                      {/* Real-time Attendance Timing Notice */}
+                      {!hasCheckedIn && (
+                        <div className="pt-1">
+                          {isBeforeCheckIn ? (
+                            <div className="p-2 rounded-xl bg-amber-400/10 border border-amber-400/30 text-amber-300 text-center text-xs font-bold flex items-center justify-center gap-1.5">
+                              <Clock className="w-3.5 h-3.5 shrink-0" />
+                              <span>لا يمكن التحضير قبل الموعد • يبدأ التحضير في تمام الساعة {shift.checkInStart}</span>
+                            </div>
+                          ) : isLateCheckIn ? (
+                            <div className="p-2 rounded-xl bg-orange-500/15 border border-orange-500/30 text-orange-300 text-center text-xs font-bold flex items-center justify-center gap-1.5">
+                              <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                              <span>تنبيه: انتهى وقت التحضير في الموعد • سيُسجَّل حضورك (متأخر)</span>
+                            </div>
+                          ) : (
+                            <div className="p-2 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-center text-xs font-bold flex items-center justify-center gap-1.5">
+                              <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+                              <span>وقت التحضير متاح الآن حتى الساعة {shift.checkInEnd}</span>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {hasCheckedIn && !hasCheckedOut && (
+                        <div className="pt-1">
+                          {isBeforeCheckOut ? (
+                            <div className="p-2 rounded-xl bg-blue-500/15 border border-blue-500/30 text-blue-300 text-center text-xs font-bold flex items-center justify-center gap-1.5">
+                              <Clock className="w-3.5 h-3.5 shrink-0" />
+                              <span>لا يمكن الانصراف قبل حلول الموعد ({shift.checkOutStart})</span>
+                            </div>
+                          ) : (
+                            <div className="p-2 rounded-xl bg-blue-500/20 border border-blue-500/40 text-blue-200 text-center text-xs font-bold flex items-center justify-center gap-1.5">
+                              <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+                              <span>موعد الانصراف متاح الآن (تسجيل الانصراف مسموح)</span>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
                       {/* Recorded Times */}
                       {record && (
                         <div className="p-3 rounded-2xl bg-[#011a14] border border-[#065f46] space-y-1 text-xs">
                           {record.checkInTime && (
                             <div className="flex items-center justify-between text-emerald-300">
                               <span>ساعة الحضور المسجلة:</span>
-                              <strong className="font-mono text-white font-bold">{record.checkInTime}</strong>
+                              <div className="flex items-center gap-2">
+                                <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
+                                  record.status === 'متأخر' ? 'bg-orange-500/20 text-orange-300' : 'bg-emerald-500/20 text-emerald-300'
+                                }`}>
+                                  {record.status}
+                                </span>
+                                <strong className="font-mono text-white font-bold">{record.checkInTime}</strong>
+                              </div>
                             </div>
                           )}
                           {record.checkOutTime && (
@@ -1105,14 +1246,32 @@ export const TeacherAttendanceTab: React.FC<TeacherAttendanceTabProps> = ({
                         type="button"
                         disabled={hasCheckedIn || isPerformingCheckIn}
                         onClick={() => handleTeacherCheckIn(shift)}
-                        className="py-3 px-3 rounded-2xl bg-gradient-to-r from-emerald-500 to-emerald-600 hover:brightness-110 text-white font-black text-xs flex items-center justify-center gap-1.5 shadow-md transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                        className={`py-3 px-3 rounded-2xl font-black text-xs flex items-center justify-center gap-1.5 shadow-md transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
+                          hasCheckedIn
+                            ? 'bg-emerald-900/60 text-emerald-200'
+                            : isBeforeCheckIn
+                            ? 'bg-amber-400/20 hover:bg-amber-400/30 text-amber-300 border border-amber-400/40'
+                            : isLateCheckIn
+                            ? 'bg-gradient-to-r from-orange-500 to-amber-600 hover:brightness-110 text-white'
+                            : 'bg-gradient-to-r from-emerald-500 to-emerald-600 hover:brightness-110 text-white'
+                        }`}
                       >
                         {isPerformingCheckIn ? (
                           <span>جارٍ التحقق...</span>
                         ) : hasCheckedIn ? (
                           <>
                             <Check className="w-4 h-4 text-emerald-200" />
-                            <span>تم الحضور</span>
+                            <span>{record?.status === 'متأخر' ? 'حاضر (متأخر)' : 'تم الحضور'}</span>
+                          </>
+                        ) : isBeforeCheckIn ? (
+                          <>
+                            <Clock className="w-4 h-4" />
+                            <span>التحضير يبدأ ({shift.checkInStart})</span>
+                          </>
+                        ) : isLateCheckIn ? (
+                          <>
+                            <AlertCircle className="w-4 h-4" />
+                            <span>تسجيل الحضور (متأخر)</span>
                           </>
                         ) : (
                           <>
@@ -1126,7 +1285,15 @@ export const TeacherAttendanceTab: React.FC<TeacherAttendanceTabProps> = ({
                         type="button"
                         disabled={!hasCheckedIn || hasCheckedOut || isPerformingCheckOut}
                         onClick={() => handleTeacherCheckOut(shift)}
-                        className="py-3 px-3 rounded-2xl bg-gradient-to-r from-blue-600 to-blue-700 hover:brightness-110 text-white font-black text-xs flex items-center justify-center gap-1.5 shadow-md transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                        className={`py-3 px-3 rounded-2xl font-black text-xs flex items-center justify-center gap-1.5 shadow-md transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
+                          hasCheckedOut
+                            ? 'bg-blue-900/60 text-blue-200'
+                            : !hasCheckedIn
+                            ? 'bg-gray-800 text-gray-400'
+                            : isBeforeCheckOut
+                            ? 'bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 border border-blue-500/40'
+                            : 'bg-gradient-to-r from-blue-600 to-blue-700 hover:brightness-110 text-white'
+                        }`}
                       >
                         {isPerformingCheckOut ? (
                           <span>جارٍ التحقق...</span>
@@ -1134,6 +1301,11 @@ export const TeacherAttendanceTab: React.FC<TeacherAttendanceTabProps> = ({
                           <>
                             <Check className="w-4 h-4 text-blue-200" />
                             <span>تم الانصراف</span>
+                          </>
+                        ) : isBeforeCheckOut ? (
+                          <>
+                            <Clock className="w-4 h-4" />
+                            <span>الانصراف متاح ({shift.checkOutStart})</span>
                           </>
                         ) : (
                           <>
@@ -1280,6 +1452,8 @@ export const TeacherAttendanceTab: React.FC<TeacherAttendanceTabProps> = ({
                                       className={`px-2.5 py-0.5 rounded-full font-bold text-[10px] ${
                                         status === 'حاضر'
                                           ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                                          : status === 'متأخر'
+                                          ? 'bg-orange-500/20 text-orange-300 border border-orange-500/40'
                                           : status === 'معتذر'
                                           ? 'bg-amber-400/20 text-amber-300 border border-amber-400/40'
                                           : status === 'غائب'
@@ -1317,6 +1491,24 @@ export const TeacherAttendanceTab: React.FC<TeacherAttendanceTabProps> = ({
                                         className="px-2 py-1 rounded-lg bg-emerald-700/60 hover:bg-emerald-700 text-white text-[10px] font-bold cursor-pointer"
                                       >
                                         تحضير
+                                      </button>
+
+                                      {/* Quick Late */}
+                                      <button
+                                        type="button"
+                                        title="تسجيل متأخر"
+                                        onClick={() => {
+                                          setActionTeacherModal({
+                                            teacher,
+                                            shift,
+                                            actionType: 'late'
+                                          });
+                                          setCustomTime(formatCurrentArabicTime());
+                                          setActionNote('حضور متأخر');
+                                        }}
+                                        className="px-2 py-1 rounded-lg bg-orange-700/60 hover:bg-orange-700 text-white text-[10px] font-bold cursor-pointer"
+                                      >
+                                        متأخر
                                       </button>
 
                                       {/* Quick Check-out */}
@@ -1465,6 +1657,16 @@ export const TeacherAttendanceTab: React.FC<TeacherAttendanceTabProps> = ({
                       <span>الفترات المربوطة بهذا الجامع:</span>
                       <strong className="text-amber-300 font-bold">{linkedShiftsCount} فترات</strong>
                     </div>
+
+                    <div className="p-2.5 rounded-xl bg-[#011a14] border border-[#065f46] text-xs text-emerald-200/90 flex items-center justify-between">
+                      <span className="flex items-center gap-1 text-amber-300 font-bold">
+                        <MapPin className="w-3.5 h-3.5" />
+                        <span>مدى التحضير المسموح:</span>
+                      </span>
+                      <strong className="text-white font-mono font-bold">
+                        {mosque.allowedRadiusMeters || 100} متر {((mosque.allowedRadiusMeters || 100) >= 1000) ? `(${((mosque.allowedRadiusMeters || 100) / 1000).toFixed(1)} كم)` : ''}
+                      </strong>
+                    </div>
                   </div>
 
                   <div className="flex items-center justify-between gap-2 pt-2 border-t border-[#065f46] flex-wrap">
@@ -1474,7 +1676,7 @@ export const TeacherAttendanceTab: React.FC<TeacherAttendanceTabProps> = ({
                           type="button"
                           onClick={() => handleOpenMosqueMap(mosque, 'view')}
                           className="px-2.5 py-1.5 rounded-xl bg-emerald-900/60 hover:bg-emerald-800 text-emerald-200 border border-emerald-700/60 text-xs font-bold flex items-center gap-1 cursor-pointer transition-colors"
-                          title="اطلاع على موقع الجامع وحدود الـ 1 كم على الخريطة"
+                          title={`اطلاع على موقع الجامع وحدود الـ ${mosque.allowedRadiusMeters || 100} متر على الخريطة`}
                         >
                           <Eye className="w-3.5 h-3.5 text-amber-300" />
                           <span>اطلاع</span>
@@ -1710,6 +1912,57 @@ export const TeacherAttendanceTab: React.FC<TeacherAttendanceTabProps> = ({
                 />
               </div>
 
+              {/* Mosque Range Setting (مدى المسجد للتحضير بالأمتار) */}
+              <div className="space-y-2 p-3.5 rounded-2xl bg-[#011a14] border border-[#065f46]">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-emerald-200">
+                    مدى المسجد المسموح للتحضير (بالمتر):
+                  </label>
+                  <span className="text-[11px] font-mono font-bold text-amber-300 bg-amber-400/10 px-2 py-0.5 rounded-lg border border-amber-400/20">
+                    {mosqueRadiusInput || 100} متر {Number(mosqueRadiusInput) >= 1000 ? `(${(Number(mosqueRadiusInput) / 1000).toFixed(1)} كم)` : ''}
+                  </span>
+                </div>
+                <p className="text-[11px] text-emerald-300/80 leading-relaxed">
+                  المسافة المحيطة بالمسجد التي يُسمح للمعلم بالتحضير والانصراف داخلها (الافتراضي 100 متر، ويمكنك كتابة أي رقم تريده كـ 100 أو 500 أو 1000 متر أو غيرها).
+                </p>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    min="10"
+                    max="50000"
+                    step="10"
+                    value={mosqueRadiusInput}
+                    onChange={e => setMosqueRadiusInput(e.target.value)}
+                    placeholder="100"
+                    className="w-full py-2 px-3 bg-[#064e3b] border border-[#065f46] focus:border-[#fbbf24] rounded-xl text-xs sm:text-sm text-white font-mono font-bold outline-none"
+                  />
+                  <span className="text-xs text-emerald-300 font-bold shrink-0">متر</span>
+                </div>
+                {/* Quick preset chips */}
+                <div className="flex items-center gap-1.5 flex-wrap pt-1">
+                  {[
+                    { label: '100 م (الافتراضي)', val: 100 },
+                    { label: '200 م', val: 200 },
+                    { label: '500 م', val: 500 },
+                    { label: '1000 م (1 كم)', val: 1000 },
+                    { label: '2000 م (2 كم)', val: 2000 }
+                  ].map(preset => (
+                    <button
+                      key={preset.val}
+                      type="button"
+                      onClick={() => setMosqueRadiusInput(String(preset.val))}
+                      className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
+                        Number(mosqueRadiusInput) === preset.val
+                          ? 'bg-amber-400 text-[#064e3b]'
+                          : 'bg-[#064e3b] text-emerald-200 hover:text-white border border-[#065f46]'
+                      }`}
+                    >
+                      {preset.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               {/* Simple One-Click GPS Capture (بدون خطوط طول وعرض) */}
               <div className="p-4 rounded-2xl bg-[#011a14] border border-[#065f46] space-y-2.5">
                 <span className="text-xs font-bold text-amber-300 block">
@@ -1730,7 +1983,7 @@ export const TeacherAttendanceTab: React.FC<TeacherAttendanceTabProps> = ({
                         latitude: capturedMosqueLocation?.lat,
                         longitude: capturedMosqueLocation?.lng,
                         isLocationSet: Boolean(capturedMosqueLocation?.lat),
-                        allowedRadiusMeters: 1000,
+                        allowedRadiusMeters: parseInt(mosqueRadiusInput, 10) || 100,
                         createdAt: new Date().toISOString()
                       };
                       handleOpenMosqueMap(tempMosque, 'picker');
@@ -1997,7 +2250,8 @@ export const TeacherAttendanceTab: React.FC<TeacherAttendanceTabProps> = ({
 
             <div className="border-b border-emerald-800 pb-3">
               <h3 className="text-base font-black text-white font-heading">
-                {actionTeacherModal.actionType === 'check_in' && 'تسجيل حضور يدوي'}
+                {actionTeacherModal.actionType === 'check_in' && 'تسجيل حضور يدوي (في الوقت)'}
+                {actionTeacherModal.actionType === 'late' && 'تسجيل حضور متأخر'}
                 {actionTeacherModal.actionType === 'check_out' && 'تسجيل انصراف يدوي'}
                 {actionTeacherModal.actionType === 'excuse' && 'تسجيل عذر للمعلم'}
                 {actionTeacherModal.actionType === 'absent' && 'تسجيل غياب للمعلم'}
@@ -2008,7 +2262,7 @@ export const TeacherAttendanceTab: React.FC<TeacherAttendanceTabProps> = ({
             </div>
 
             <div className="space-y-3">
-              {(actionTeacherModal.actionType === 'check_in' || actionTeacherModal.actionType === 'check_out') && (
+              {(actionTeacherModal.actionType === 'check_in' || actionTeacherModal.actionType === 'late' || actionTeacherModal.actionType === 'check_out') && (
                 <div className="space-y-1">
                   <label className="text-xs font-bold text-emerald-200 block">
                     الوقت المسجل:

@@ -27,13 +27,13 @@ interface MosqueLocationMapModalProps {
   onClose: () => void;
   mosque: MosqueItem;
   mode: 'view' | 'picker'; // 'view' for inspection by teacher/supervisor, 'picker' for setting/editing
-  onSaveLocation?: (mosqueId: string, lat: number, lng: number) => Promise<void> | void;
+  onSaveLocation?: (mosqueId: string, lat: number, lng: number, radiusMeters?: number) => Promise<void> | void;
 }
 
-// Sub-component to manage 1km radius circle around the mosque
+// Sub-component to manage geofence radius circle around the mosque
 function MosqueRadiusCircle({
   center,
-  radiusMeters = 1000,
+  radiusMeters = 100,
   isUserInside = true
 }: {
   center: google.maps.LatLngLiteral;
@@ -120,6 +120,9 @@ export const MosqueLocationMapModal: React.FC<MosqueLocationMapModalProps> = ({
   const [cameraTarget, setCameraTarget] = useState<google.maps.LatLngLiteral | null>(initialCoord);
   const [cameraZoom, setCameraZoom] = useState<number>(mosque.isLocationSet ? 16 : 14);
 
+  // Mosque attendance radius (مدى المسجد للتحضير - default 100 meters)
+  const [radiusMeters, setRadiusMeters] = useState<number>(mosque.allowedRadiusMeters || 100);
+
   // User's live GPS position (for comparison and distance calculation)
   const [userLocation, setUserLocation] = useState<google.maps.LatLngLiteral | null>(null);
   const [userDistance, setUserDistance] = useState<number | null>(null);
@@ -134,7 +137,7 @@ export const MosqueLocationMapModal: React.FC<MosqueLocationMapModalProps> = ({
   // Saving state
   const [isSaving, setIsSaving] = useState(false);
 
-  // On open or mosque change, initialize coordinates
+  // On open or mosque change, initialize coordinates and radius
   useEffect(() => {
     if (isOpen) {
       const coord = {
@@ -144,13 +147,14 @@ export const MosqueLocationMapModal: React.FC<MosqueLocationMapModalProps> = ({
       setSelectedCoord(coord);
       setCameraTarget(coord);
       setCameraZoom(mosque.isLocationSet ? 16 : 14);
+      setRadiusMeters(mosque.allowedRadiusMeters || 100);
       setGpsError(null);
       setSearchError(null);
 
       // Auto-detect user's GPS for live distance display
       detectUserLocation(false);
     }
-  }, [isOpen, mosque.id, mosque.latitude, mosque.longitude]);
+  }, [isOpen, mosque.id, mosque.latitude, mosque.longitude, mosque.allowedRadiusMeters]);
 
   // Recalculate distance whenever userLocation or selectedCoord changes
   useEffect(() => {
@@ -246,7 +250,7 @@ export const MosqueLocationMapModal: React.FC<MosqueLocationMapModalProps> = ({
     if (!onSaveLocation) return;
     setIsSaving(true);
     try {
-      await onSaveLocation(mosque.id, selectedCoord.lat, selectedCoord.lng);
+      await onSaveLocation(mosque.id, selectedCoord.lat, selectedCoord.lng, radiusMeters);
       onClose();
     } catch (err) {
       console.error('Error saving mosque location:', err);
@@ -257,7 +261,7 @@ export const MosqueLocationMapModal: React.FC<MosqueLocationMapModalProps> = ({
 
   if (!isOpen) return null;
 
-  const isWithin1Km = userDistance !== null && userDistance <= (mosque.allowedRadiusMeters || 1000);
+  const isWithinRadius = userDistance !== null && userDistance <= radiusMeters;
 
   return (
     <div className="fixed inset-0 z-[10000] bg-black/85 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 text-right">
@@ -285,8 +289,8 @@ export const MosqueLocationMapModal: React.FC<MosqueLocationMapModalProps> = ({
               </div>
               <p className="text-xs text-emerald-300/80">
                 {mode === 'view'
-                  ? 'عرض حدود الجامع والنطاق الجغرافي المسموح للتحضير (1 كم)'
-                  : 'يمكنك تحريك الخريطة، سحب الدبوس، أو الضغط على أي موقع، ثم الضغط على (تم)'}
+                  ? `عرض حدود الجامع والنطاق الجغرافي المسموح للتحضير (${radiusMeters} متر)`
+                  : 'يمكنك تحريك الخريطة، سحب الدبوس، أو كتابة مدى المسجد بالأمتار، ثم الضغط على (تم)'}
               </p>
             </div>
           </div>
@@ -302,7 +306,7 @@ export const MosqueLocationMapModal: React.FC<MosqueLocationMapModalProps> = ({
 
         {/* Search & Actions Bar (in picker mode, or search bar) */}
         <div className="p-3 bg-[#064e3b]/40 border-b border-[#065f46] flex flex-wrap items-center justify-between gap-2 shrink-0 text-xs">
-          <form onSubmit={handleSearchLocation} className="flex items-center gap-1.5 flex-1 min-w-[240px]">
+          <form onSubmit={handleSearchLocation} className="flex items-center gap-1.5 flex-1 min-w-[220px]">
             <div className="relative flex-1">
               <input
                 type="text"
@@ -322,6 +326,51 @@ export const MosqueLocationMapModal: React.FC<MosqueLocationMapModalProps> = ({
             </button>
           </form>
 
+          {/* Mosque Range Setting (مدى المسجد للتحضير) */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex items-center gap-1.5 bg-[#022c22] border border-[#065f46] px-2.5 py-1.5 rounded-xl">
+              <span className="text-[11px] font-bold text-amber-300 whitespace-nowrap">مدى التحضير:</span>
+              {mode === 'picker' ? (
+                <div className="flex items-center gap-1">
+                  <input
+                    type="number"
+                    min="10"
+                    max="50000"
+                    step="10"
+                    value={radiusMeters}
+                    onChange={e => setRadiusMeters(Math.max(10, parseInt(e.target.value, 10) || 10))}
+                    className="w-16 py-0.5 px-1.5 rounded-lg bg-[#064e3b] text-white font-mono font-bold text-xs text-center border border-[#065f46] focus:border-[#fbbf24] outline-none"
+                    title="اكتب أي رقم تريده بالأمتار (مثال: 100، 500، 1000)"
+                  />
+                  <span className="text-[11px] text-emerald-300 font-bold">متر</span>
+                </div>
+              ) : (
+                <span className="text-xs font-mono font-bold text-white">
+                  {radiusMeters} متر {radiusMeters >= 1000 ? `(${(radiusMeters / 1000).toFixed(1)} كم)` : ''}
+                </span>
+              )}
+            </div>
+
+            {mode === 'picker' && (
+              <div className="flex items-center gap-1">
+                {[100, 200, 500, 1000].map(val => (
+                  <button
+                    key={val}
+                    type="button"
+                    onClick={() => setRadiusMeters(val)}
+                    className={`px-2 py-1 rounded-lg text-[10px] font-bold transition-all cursor-pointer ${
+                      radiusMeters === val
+                        ? 'bg-amber-400 text-[#064e3b]'
+                        : 'bg-[#064e3b]/80 text-emerald-200 hover:text-white border border-[#065f46]'
+                    }`}
+                  >
+                    {val >= 1000 ? `${val / 1000} كم` : `${val} م`}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
           <div className="flex items-center gap-2">
             <button
               type="button"
@@ -331,7 +380,7 @@ export const MosqueLocationMapModal: React.FC<MosqueLocationMapModalProps> = ({
               title="تحديد موقعي الحالي على الخريطة"
             >
               <Crosshair className={`w-4 h-4 ${isLocatingUser ? 'animate-spin' : ''}`} />
-              <span>{isLocatingUser ? 'جارٍ تحديد موقعي...' : 'التقاط موقعي الحالي (GPS)'}</span>
+              <span>{isLocatingUser ? 'جارٍ تحديد موقعي...' : 'التقاط موقعي (GPS)'}</span>
             </button>
 
             {mosque.isLocationSet && (
@@ -359,15 +408,15 @@ export const MosqueLocationMapModal: React.FC<MosqueLocationMapModalProps> = ({
           <div className="flex items-center gap-2">
             {userDistance !== null ? (
               <div className={`px-2.5 py-1 rounded-lg font-bold flex items-center gap-1.5 ${
-                isWithin1Km
+                isWithinRadius
                   ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
                   : 'bg-rose-500/20 text-rose-300 border border-rose-500/40'
               }`}>
-                {isWithin1Km ? <CheckCircle2 className="w-4 h-4" /> : <AlertCircle className="w-4 h-4" />}
+                {isWithinRadius ? <CheckCircle2 className="w-4 h-4" /> : <AlertCircle className="w-4 h-4" />}
                 <span>
-                  {isWithin1Km
-                    ? `أنت داخل نطاق الجامع ✅ (المسافة التقريبية: ${userDistance < 1000 ? `${userDistance} متراً` : `${(userDistance / 1000).toFixed(2)} كم`})`
-                    : `أنت خارج نطاق الجامع ❌ (المسافة: ${(userDistance / 1000).toFixed(2)} كم - الحد المسموح: 1 كم)`}
+                  {isWithinRadius
+                    ? `أنت داخل نطاق المسجد ✅ (المسافة: ${userDistance < 1000 ? `${userDistance} متراً` : `${(userDistance / 1000).toFixed(2)} كم`} من أصل ${radiusMeters < 1000 ? `${radiusMeters} متراً` : `${(radiusMeters / 1000).toFixed(1)} كم`})`
+                    : `أنت خارج نطاق المسجد ❌ (المسافة: ${userDistance < 1000 ? `${userDistance} متراً` : `${(userDistance / 1000).toFixed(2)} كم`} — الحد المسموح: ${radiusMeters < 1000 ? `${radiusMeters} متراً` : `${(radiusMeters / 1000).toFixed(1)} كم`})`}
                 </span>
               </div>
             ) : (
@@ -412,11 +461,11 @@ export const MosqueLocationMapModal: React.FC<MosqueLocationMapModalProps> = ({
               {/* Dynamic Camera Control */}
               <MapCameraHandler target={cameraTarget} zoom={cameraZoom} />
 
-              {/* 1km Green Radius Boundary around Mosque */}
+              {/* Green Radius Boundary around Mosque */}
               <MosqueRadiusCircle
                 center={selectedCoord}
-                radiusMeters={mosque.allowedRadiusMeters || 1000}
-                isUserInside={isWithin1Km}
+                radiusMeters={radiusMeters}
+                isUserInside={isWithinRadius}
               />
 
               {/* Mosque Marker */}
@@ -485,11 +534,11 @@ export const MosqueLocationMapModal: React.FC<MosqueLocationMapModalProps> = ({
           <div className="text-xs text-emerald-300">
             {mode === 'picker' ? (
               <span className="font-bold text-amber-300">
-                الدائرة الملونة توضح نطاق الـ 1 كم المسموح للمعلمين بالتحضير والانصراف داخله.
+                الدائرة الملونة توضح نطاق المسجد المحدد ({radiusMeters} متر) المسموح للمعلمين بالتحضير والانصراف داخله.
               </span>
             ) : (
               <span>
-                نطاق التحضير المسموح: <strong className="text-white">1000 متر (1 كم)</strong> حول الجامع.
+                نطاق التحضير المسموح: <strong className="text-white font-mono">{radiusMeters} متر {radiusMeters >= 1000 ? `(${(radiusMeters / 1000).toFixed(1)} كم)` : ''}</strong> حول الجامع.
               </span>
             )}
           </div>

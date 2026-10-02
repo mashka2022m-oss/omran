@@ -872,7 +872,7 @@ export interface MosqueItem {
   complexId?: string;
   latitude?: number;
   longitude?: number;
-  allowedRadiusMeters?: number; // default: 1000 (1 km)
+  allowedRadiusMeters?: number; // default: 100 (100 meters, configurable by supervisor)
   isLocationSet: boolean;
   createdAt: string;
 }
@@ -896,7 +896,7 @@ export interface MosqueLocationConfig {
   mosqueName: string;
   latitude: number;
   longitude: number;
-  allowedRadiusMeters: number; // default: 1000 (1 km)
+  allowedRadiusMeters: number; // default: 100 (100 meters, configurable by supervisor)
   updatedAt?: string;
 }
 
