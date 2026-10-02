@@ -71,7 +71,7 @@ export const UnassignedTeacherView: React.FC<UnassignedTeacherViewProps> = ({
             لم يتم تعيينك في حلقة بعد
           </h2>
           <p className="text-sm sm:text-base text-amber-200/90 max-w-lg mx-auto leading-relaxed">
-            أهلاً وسهلاً بك فضيلة الشيخ <span className="text-[#fbbf24] font-bold">{teacherName}</span> في مَنَصَّة عمران القرآنية.
+            أهلاً وسهلاً بك فضيلة الشيخ <span className="text-[#fbbf24] font-bold">{teacherName}</span> في مجمع الحلقات القرآنية المباركة.
           </p>
         </div>
 
@@ -122,6 +122,13 @@ export const UnassignedTeacherView: React.FC<UnassignedTeacherViewProps> = ({
             <span>تم التحقق من قاعدة البيانات، لم يتم تعيينك بحلقة بعد. يرجى مراجعة المشرف.</span>
           </div>
         )}
+
+        {/* Global Footer Indicator */}
+        <div className="pt-3 border-t border-[#065f46]/40 flex items-center justify-center">
+          <span className="text-[11px] text-[#fbbf24] bg-[#064e3b]/60 px-3.5 py-1 rounded-full border border-amber-400/30 font-bold">
+            مشغل بواسطة منصة عمران
+          </span>
+        </div>
       </div>
     </div>
   );

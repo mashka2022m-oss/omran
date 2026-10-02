@@ -52,7 +52,8 @@ import {
   SurahRecordingSegment,
   IssuedCertificate,
   StudentListeningLog,
-  QuranRecitationItem
+  QuranRecitationItem,
+  QuranComplex
 } from '../types';
 import { StudentExamTaker } from './StudentExamTaker';
 import { QuranAyahAudioPlayer } from './quran/QuranAyahAudioPlayer';
@@ -75,6 +76,8 @@ interface ParentPortalViewProps {
   recordingsConfig?: RecordingsConfig;
   certificates?: IssuedCertificate[];
   listeningLogs?: StudentListeningLog[];
+  activeComplex?: QuranComplex | null;
+  complexes?: QuranComplex[];
   isLoggedInStudent?: boolean;
   onLogout?: () => void;
   onSaveSubmission?: (submission: ExamSubmission) => Promise<void>;
@@ -96,6 +99,8 @@ export const ParentPortalView: React.FC<ParentPortalViewProps> = ({
   recordingsConfig,
   certificates = [],
   listeningLogs = [],
+  activeComplex,
+  complexes = [],
   isLoggedInStudent,
   onLogout,
   onSaveSubmission,
@@ -128,6 +133,17 @@ export const ParentPortalView: React.FC<ParentPortalViewProps> = ({
   React.useEffect(() => {
     setCurrentStudent(student);
   }, [student]);
+
+  // Resolved Complex Identity for Student Portal
+  const resolvedComplex = useMemo(() => {
+    if (activeComplex) return activeComplex;
+    if (complexes && currentStudent.complexId) {
+      return complexes.find(c => c.id === currentStudent.complexId) || complexes[0] || null;
+    }
+    return complexes?.[0] || null;
+  }, [activeComplex, complexes, currentStudent.complexId]);
+
+  const displayComplexName = currentStudent.complexName || resolvedComplex?.name || settings.complexName || 'مجمع تحفيظ القرآن الكريم';
 
   const handleLinkGoogleAccount = async (targetExamAfterLink?: Exam | null) => {
     setIsLinkingGoogle(true);
@@ -674,12 +690,16 @@ export const ParentPortalView: React.FC<ParentPortalViewProps> = ({
         {/* Top Portal Header */}
         <div className="bg-[#064e3b]/60 border border-[#065f46] rounded-[32px] p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-xl backdrop-blur-md">
           <div className="flex items-center gap-3.5">
-            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-[#fbbf24] to-[#f59e0b] text-[#064e3b] flex items-center justify-center border border-[#fbbf24]/40 shadow-lg font-black shrink-0">
-              <BookOpen className="w-6 h-6" />
+            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-[#fbbf24] to-[#f59e0b] text-[#064e3b] flex items-center justify-center border border-[#fbbf24]/40 shadow-lg font-black shrink-0 overflow-hidden">
+              {resolvedComplex?.logoUrl ? (
+                <img src={resolvedComplex.logoUrl} alt={displayComplexName} className="w-full h-full object-cover" />
+              ) : (
+                <BookOpen className="w-6 h-6" />
+              )}
             </div>
             <div>
               <h1 className="text-lg sm:text-xl font-bold font-heading text-white flex items-center gap-2">
-                بوابة المتابعة الحية لطلاب القرآن الكريم
+                {displayComplexName}
               </h1>
               <p className="text-xs text-[#fbbf24] font-bold">
                 {currentStudent.halaqahName || settings.halaqahName || 'الحلقة القرآنية'} • إشراف المعلم: {settings.teacherName || 'معلم ومحفظ الحلقة'}
@@ -1770,6 +1790,20 @@ export const ParentPortalView: React.FC<ParentPortalViewProps> = ({
           </div>
         )}
 
+        {/* Portal Global Footer */}
+        <footer className="mt-12 pt-6 border-t border-[#065f46]/60 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-[#86efac]/70">
+          <div className="flex items-center gap-2">
+            <BookOpen className="w-4 h-4 text-[#fbbf24]" />
+            <span className="font-bold text-white">{displayComplexName}</span>
+          </div>
+          <div className="flex items-center gap-2 text-center text-xs text-[#fbbf24] font-bold bg-[#064e3b]/80 px-3.5 py-1.5 rounded-full border border-amber-400/30 shadow-sm">
+            <span>مشغل بواسطة منصة عمران</span>
+          </div>
+          <p className="text-[11px] text-[#86efac]/60">
+            بوابة الطالب وولي الأمر • متابعة الحفظ والتسميع والاختبارات
+          </p>
+        </footer>
+
         {/* SMART GOOGLE FORM LAUNCH & PRE-FILL MODAL */}
         {googleFormModalData && (
           <div className="fixed inset-0 z-[9999] bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
@@ -2147,7 +2181,7 @@ export const ParentPortalView: React.FC<ParentPortalViewProps> = ({
                       </p>
                       <div className="text-[11px] text-[#86efac]">
                         {selectedCertificateForView.halaqahName && <span>الحلقة: <strong>{selectedCertificateForView.halaqahName}</strong> • </span>}
-                        <span>المجمع: <strong>{selectedCertificateForView.complexName || settings.complexName || 'منظومة عُمران'}</strong></span>
+                        <span>المجمع: <strong>{selectedCertificateForView.complexName || displayComplexName}</strong></span>
                       </div>
                     </div>
 
@@ -2158,8 +2192,17 @@ export const ParentPortalView: React.FC<ParentPortalViewProps> = ({
                       </div>
 
                       <div className="flex items-center gap-1.5 text-[#fbbf24] font-bold">
-                        <Award className="w-4 h-4" />
-                        <span>معتمد إلكترونياً</span>
+                        {resolvedComplex?.stampUrl ? (
+                          <div className="flex items-center gap-2">
+                            <img src={resolvedComplex.stampUrl} alt="ختم المجمع" className="w-10 h-10 object-contain rounded-full shadow-md" />
+                            <span>ختم معتمد • {displayComplexName}</span>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-1.5">
+                            <Award className="w-4 h-4" />
+                            <span>معتمد رسمياً • {displayComplexName}</span>
+                          </div>
+                        )}
                       </div>
 
                       <div className="text-left">

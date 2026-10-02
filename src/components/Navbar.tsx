@@ -34,6 +34,7 @@ interface NavbarProps {
   teachersCount?: number;
   complexesCount?: number;
   complexName?: string;
+  activeComplex?: QuranComplex | null;
   availableComplexes?: QuranComplex[];
   activeComplexId?: string;
   onSwitchComplex?: (complexId: string) => void;
@@ -64,6 +65,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   teachersCount = 1,
   complexesCount = 1,
   complexName,
+  activeComplex,
   availableComplexes = [],
   activeComplexId,
   onSwitchComplex,
@@ -92,20 +94,49 @@ export const Navbar: React.FC<NavbarProps> = ({
   const selectableHalaqahs = isSupervisor ? halaqahs : assignedHalaqahs;
   const currentHalaqah = halaqahs.find(h => h.id === activeHalaqahId) || selectableHalaqahs[0] || halaqahs[0];
   const displayHalaqahName = currentHalaqah ? currentHalaqah.name : settings.halaqahName;
+  const displayComplexName = activeComplex?.name || complexName || 'مجمع تحفيظ القرآن الكريم';
 
   return (
-    <header className="sticky top-0 z-30 bg-[#064e3b]/95 backdrop-blur-xl border-b border-[#065f46] px-4 lg:px-8 py-3.5 shadow-2xl transition-all">
+    <header
+      className="sticky top-0 z-30 bg-[#064e3b]/95 backdrop-blur-xl border-b border-[#065f46] px-4 lg:px-8 py-3.5 shadow-2xl transition-all"
+      style={activeComplex?.theme ? {
+        backgroundColor: activeComplex.theme.secondaryColor ? `${activeComplex.theme.secondaryColor}f2` : undefined,
+        borderColor: activeComplex.theme.primaryColor || undefined
+      } : undefined}
+    >
       <div className="max-w-7xl mx-auto flex items-center justify-between gap-2 sm:gap-4">
-        {/* Brand & Logo */}
+        {/* Brand & Logo: Complex Name and Logo */}
         <div className="flex items-center gap-3.5">
-          <div className="relative flex items-center justify-center w-11 h-11 rounded-xl bg-[#fbbf24] text-[#064e3b] shadow-[0_0_20px_rgba(251,191,36,0.35)] border border-[#fbbf24]">
-            <span className="font-heading font-black text-2xl">ع</span>
-            <div className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-white rounded-full border-2 border-[#064e3b]" />
+          <div
+            className="relative flex items-center justify-center w-11 h-11 rounded-xl bg-[#fbbf24] text-[#064e3b] shadow-[0_0_20px_rgba(251,191,36,0.35)] border border-[#fbbf24] overflow-hidden shrink-0"
+            style={activeComplex?.theme?.accentColor ? {
+              backgroundColor: activeComplex.theme.accentColor,
+              borderColor: activeComplex.theme.accentColor
+            } : undefined}
+          >
+            {activeComplex?.logoUrl ? (
+              <img
+                src={activeComplex.logoUrl}
+                alt={displayComplexName}
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <>
+                <span className="font-heading font-black text-2xl">
+                  {displayComplexName.replace(/^(مجمع|مراكز|حلقات)\s+/i, '').charAt(0) || 'ق'}
+                </span>
+                <div className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-white rounded-full border-2 border-[#064e3b]" />
+              </>
+            )}
           </div>
           <div>
             <div className="flex items-center gap-2 flex-wrap">
-              <h1 className="text-lg sm:text-xl font-bold font-heading tracking-tight text-[#fbbf24] flex items-center gap-1.5">
-                مَنَصَّةُ عُمْرَان
+              <h1
+                className="text-base sm:text-lg lg:text-xl font-extrabold font-heading tracking-tight text-[#fbbf24] flex items-center gap-1.5 line-clamp-1 max-w-[240px] sm:max-w-md"
+                title={displayComplexName}
+                style={activeComplex?.theme?.accentColor ? { color: activeComplex.theme.accentColor } : undefined}
+              >
+                {displayComplexName}
               </h1>
 
               {/* Complex Switcher / Badge: Restricted strictly: Programmer switches all, teacher/supervisor switches ONLY if linked to multiple complexes */}
@@ -135,11 +166,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                     </button>
                   )}
                 </div>
-              ) : (
-                <span className="text-[10px] px-2.5 py-1 rounded-full bg-[#022c22] text-[#86efac] border border-[#065f46] font-sans font-bold line-clamp-1 max-w-[220px]" title={complexName || 'المنظومة القرآنية'}>
-                  {complexName || 'القرآنية'}
-                </span>
-              )}
+              ) : null}
             </div>
 
             {/* Halaqah selector / label with smooth motion.div switching */}

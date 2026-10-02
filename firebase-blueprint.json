@@ -132,6 +132,9 @@
         "description": { "type": "string", "maxLength": 500 },
         "supervisorTeacherId": { "type": "string", "maxLength": 128 },
         "supervisorTeacherName": { "type": "string", "maxLength": 150 },
+        "logoUrl": { "type": "string" },
+        "stampUrl": { "type": "string" },
+        "theme": { "type": "object" },
         "customFirebaseConfig": { "type": "object" },
         "createdAt": { "type": "string", "maxLength": 50 }
       },

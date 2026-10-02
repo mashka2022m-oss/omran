@@ -39,7 +39,8 @@ import {
   CertificateOccasion,
   IssuedCertificate,
   ExamSubmission,
-  getStudentParentPhone
+  getStudentParentPhone,
+  QuranComplex
 } from '../../types';
 import { QURAN_SURAHS, getSurahInfo } from '../../data/quranData';
 import { OmranDataService, OMRAN_CACHE_KEYS, getLocalCache, setLocalCache } from '../../lib/firebase';
@@ -60,6 +61,7 @@ interface CertificatesTabProps {
   onDeleteCertificate?: (certId: string) => Promise<void>;
   selectedComplexId?: string;
   activeComplexName?: string;
+  activeComplex?: QuranComplex | null;
   submissions?: ExamSubmission[];
 }
 
@@ -114,7 +116,7 @@ export const READY_MADE_TEMPLATES = [
   {
     id: 'platform_emerald_royal',
     name: 'القالب الملكي الزمردي',
-    subtitle: 'الثيم الرسمي الفاخر لمنظومة عُمران',
+    subtitle: 'الثيم الرسمي الفاخر المعتمد للمجمع',
     bgClass: 'bg-gradient-to-br from-[#022c22] via-[#064e3b] to-[#022c22]',
     borderClass: 'border-[#fbbf24]',
     textColor: '#ffffff',
@@ -168,6 +170,7 @@ export const CertificatesTab: React.FC<CertificatesTabProps> = ({
   onDeleteCertificate,
   selectedComplexId,
   activeComplexName,
+  activeComplex,
   submissions = []
 }) => {
   // Navigation Sub-Tabs ('issue' | 'archive' | 'builder' | 'templates')
@@ -212,8 +215,8 @@ export const CertificatesTab: React.FC<CertificatesTabProps> = ({
           studentName: sub.studentName,
           halaqahId: sub.halaqahId,
           halaqahName: sub.halaqahName,
-          complexId: sub.complexId || selectedComplexId,
-          complexName: sub.complexName || activeComplexName || settings.complexName || 'منظومة عُمران',
+          complexId: sub.complexId || selectedComplexId || activeComplex?.id,
+          complexName: sub.complexName || activeComplex?.name || activeComplexName || settings.complexName || 'مجمع تحفيظ القرآن الكريم',
           occasion: 'اجتياز اختبار قرآني',
           occasionText: `اجتياز اختبار (${sub.examTitle}) بنتيجة ${sub.totalScoreEarned} من ${sub.maxPossibleScore} (${pct}%) • ${gradeLabel}`,
           templateId: 'platform_emerald_royal',
@@ -749,7 +752,7 @@ export const CertificatesTab: React.FC<CertificatesTabProps> = ({
   // Build IssuedCertificate payload
   const createCertificatePayload = (student: Student): IssuedCertificate => {
     const halaqahName = student.halaqahName || settings.halaqahName;
-    const complexName = activeComplexName || settings.complexName || 'منظومة عُمران';
+    const complexName = activeComplex?.name || activeComplexName || settings.complexName || 'مجمع تحفيظ القرآن الكريم';
     const teacherTitle = signatureMode === 'custom'
       ? customTeacherName
       : (student.halaqahName ? `معلم ${student.halaqahName}` : settings.teacherName);
@@ -1020,7 +1023,7 @@ export const CertificatesTab: React.FC<CertificatesTabProps> = ({
 
       // 7. Halaqah & Complex
       const halaqahName = student.halaqahName || settings.halaqahName;
-      const complexName = settings.complexName || 'منظومة عُمران';
+      const complexName = activeComplex?.name || settings.complexName || 'مجمع تحفيظ القرآن الكريم';
       ctx.font = "22px 'Cairo', sans-serif";
       ctx.fillText(`الحلقة: ${halaqahName} • المجمع: ${complexName}`, width / 2, 680);
 
@@ -1036,18 +1039,44 @@ export const CertificatesTab: React.FC<CertificatesTabProps> = ({
         ctx.fillText(`المشرف العام: ${sName}`, 260, 920);
       }
 
-      // 9. Platform Seal in bottom-left corner (never collides with signatures or text)
-      ctx.textAlign = 'center';
-      ctx.fillStyle = activeTemplate.data.accentColor;
-      ctx.beginPath();
-      ctx.arc(180, 1050, 55, 0, Math.PI * 2);
-      ctx.fill();
+      // 9. Complex Official Seal in bottom-left corner
+      let stampDrawn = false;
+      if (activeComplex?.stampUrl) {
+        try {
+          const sImg = new Image();
+          sImg.crossOrigin = 'anonymous';
+          await new Promise<void>((resolve, reject) => {
+            sImg.onload = () => resolve();
+            sImg.onerror = () => reject();
+            sImg.src = activeComplex.stampUrl!;
+          });
+          ctx.save();
+          ctx.beginPath();
+          ctx.arc(180, 1050, 55, 0, Math.PI * 2);
+          ctx.closePath();
+          ctx.clip();
+          ctx.drawImage(sImg, 125, 995, 110, 110);
+          ctx.restore();
+          stampDrawn = true;
+        } catch (e) {
+          stampDrawn = false;
+        }
+      }
 
-      ctx.fillStyle = activeTemplate.data.id === 'platform_imperial_gold' ? '#ffffff' : '#064e3b';
-      ctx.font = "bold 16px 'Cairo', sans-serif";
-      ctx.fillText('منظومة عُمران', 180, 1042);
-      ctx.font = "bold 13px 'Cairo', sans-serif";
-      ctx.fillText('معتمد إلكترونياً', 180, 1065);
+      if (!stampDrawn) {
+        ctx.textAlign = 'center';
+        ctx.fillStyle = activeTemplate.data.accentColor;
+        ctx.beginPath();
+        ctx.arc(180, 1050, 55, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = activeTemplate.data.id === 'platform_imperial_gold' ? '#ffffff' : '#064e3b';
+        ctx.font = "bold 15px 'Cairo', sans-serif";
+        const shortComp = complexName.length > 18 ? complexName.substring(0, 18) + '...' : complexName;
+        ctx.fillText(shortComp, 180, 1042);
+        ctx.font = "bold 13px 'Cairo', sans-serif";
+        ctx.fillText('ختم معتمد', 180, 1065);
+      }
 
       // 10. Dates (Centered cleanly along the bottom)
       ctx.font = "20px 'Cairo', sans-serif";
@@ -1159,7 +1188,7 @@ ${occasionText}
 
 📄 *مرفق مع هذه الرسالة ملف الشهادة المعتمدة (PDF).*
 نسأل الله تعالى أن يجعله من أهل القرآن العظيم وأن ينفع به والديه وأمته.
-مع تحيات إدارة حلقة ${halaqahName} • ${settings.complexName || 'منظومة عُمران'}`;
+مع تحيات إدارة حلقة ${halaqahName} • ${activeComplex?.name || settings.complexName || 'مجمع تحفيظ القرآن الكريم'}`;
 
     try {
       const { pdf, file } = await generateSinglePdfDoc(student, index);
@@ -1562,7 +1591,7 @@ ${occasionText}
               {/* Ready-made Platform Templates */}
               <div>
                 <span className="text-xs font-bold text-amber-300 block mb-2">
-                  القوالب الرسمية الفاخرة المعتمدة (تتضمن الختم الرسمي للمنظومة):
+                  القوالب الرسمية الفاخرة المعتمدة (تتضمن ختم المجمع الرسمي):
                 </span>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {READY_MADE_TEMPLATES.map(tpl => {
@@ -1605,7 +1634,7 @@ ${occasionText}
               {customTemplates.length > 0 && (
                 <div className="pt-2 border-t border-[#065f46]">
                   <span className="text-xs font-bold text-emerald-300 block mb-2">
-                    النماذج الخاصة بالمجمع (بدون ختم المنصة حسب الرغبة):
+                    النماذج الخاصة بالحلقة (بدون ختم رسمي حسب الرغبة):
                   </span>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     {customTemplates.map(tpl => {
@@ -1743,10 +1772,12 @@ ${occasionText}
                 </div>
 
                 <div className="flex items-center justify-between text-[#86efac]">
-                  <span>ختم المنصة:</span>
+                  <span>ختم المجمع المعتمد:</span>
                   <span className="font-bold">
                     {activeTemplate.type === 'ready' ? (
-                      <span className="text-emerald-400">معتمد ومختوم</span>
+                      <span className="text-emerald-400">
+                        {activeComplex?.stampUrl ? 'ختم رسمي معتمد ✓' : 'ختم معتمد'}
+                      </span>
                     ) : (
                       <span className="text-amber-300">بدون ختم (نموذج خاص)</span>
                     )}
@@ -2667,7 +2698,7 @@ ${occasionText}
               {(() => {
                 const curStudent = targetStudents[previewStudentIndex] || targetStudents[0];
                 const halaqahName = curStudent.halaqahName || settings.halaqahName;
-                const complexName = activeComplexName || settings.complexName || 'منظومة عُمران';
+                const complexName = activeComplex?.name || activeComplexName || settings.complexName || 'مجمع تحفيظ القرآن الكريم';
                 const teacherTitle = signatureMode === 'custom'
                   ? customTeacherName
                   : (curStudent.halaqahName ? `معلم ${curStudent.halaqahName}` : settings.teacherName);
@@ -2800,8 +2831,17 @@ ${occasionText}
 
                             {/* Official Seal badge on ready-made */}
                             <div className="flex items-center gap-1.5 font-bold" style={{ color: activeTemplate.data.accentColor }}>
-                              <Award className="w-4 h-4" />
-                              <span>معتمد إلكترونياً • منظومة عُمران</span>
+                              {activeComplex?.stampUrl ? (
+                                <div className="flex items-center gap-2">
+                                  <img src={activeComplex.stampUrl} alt="ختم المجمع" className="w-9 h-9 object-contain rounded-full shadow-sm" />
+                                  <span>ختم معتمد • {complexName}</span>
+                                </div>
+                              ) : (
+                                <div className="flex items-center gap-1.5">
+                                  <Award className="w-4 h-4" />
+                                  <span>معتمد رسمياً • {complexName}</span>
+                                </div>
+                              )}
                             </div>
 
                             <span>الموافق: {todayGregorian}</span>

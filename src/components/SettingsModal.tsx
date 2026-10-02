@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   Settings,
   Users,
@@ -19,9 +19,96 @@ import {
   BookOpen,
   Info,
   CheckSquare,
-  Square
+  Square,
+  Palette,
+  Upload,
+  Image as ImageIcon,
+  RefreshCw,
+  Eye,
+  Check
 } from 'lucide-react';
-import { TeacherAccount, Halaqah, Student, AppSettings, QuranComplex, isTeacherSupervisor, getThreePartNameValidation } from '../types';
+import { TeacherAccount, Halaqah, Student, AppSettings, QuranComplex, ComplexThemeConfig, isTeacherSupervisor, getThreePartNameValidation } from '../types';
+
+export const ISLAMIC_THEME_PRESETS: { name: string; subtitle: string; colors: ComplexThemeConfig }[] = [
+  {
+    name: 'الزمردي النبوي الأصيل',
+    subtitle: 'أخضر زمردي داكن مع لمسات ذهبية مشرقة',
+    colors: {
+      primaryColor: '#022c22',
+      secondaryColor: '#064e3b',
+      accentColor: '#fbbf24',
+      backgroundColor: '#022c22',
+      surfaceColor: 'rgba(6, 78, 59, 0.45)',
+      cardColor: '#064e3b',
+      textColor: '#f0f9f6'
+    }
+  },
+  {
+    name: 'الكحلي القرآني الملكي',
+    subtitle: 'أزرق كحلي عميق مع ذهبي وأزرق سماوي فاخر',
+    colors: {
+      primaryColor: '#090d16',
+      secondaryColor: '#1e293b',
+      accentColor: '#38bdf8',
+      backgroundColor: '#0b1120',
+      surfaceColor: 'rgba(30, 41, 59, 0.5)',
+      cardColor: '#1e293b',
+      textColor: '#f8fafc'
+    }
+  },
+  {
+    name: 'الذهبي الأندلسي الفاخر',
+    subtitle: 'بني شوكولاتي داكن مع ذهب خالص ونقوش تراثية',
+    colors: {
+      primaryColor: '#141210',
+      secondaryColor: '#292524',
+      accentColor: '#f59e0b',
+      backgroundColor: '#1c1917',
+      surfaceColor: 'rgba(41, 37, 36, 0.5)',
+      cardColor: '#292524',
+      textColor: '#fef3c7'
+    }
+  },
+  {
+    name: 'الزيتوني الشامي الوقور',
+    subtitle: 'درجات الأخضر الزيتوني الهادئ المريح للأعين',
+    colors: {
+      primaryColor: '#0d170f',
+      secondaryColor: '#1c3320',
+      accentColor: '#a3e635',
+      backgroundColor: '#142316',
+      surfaceColor: 'rgba(28, 51, 32, 0.5)',
+      cardColor: '#1c3320',
+      textColor: '#f0fdf4'
+    }
+  },
+  {
+    name: 'العنابي التراثي الراقي',
+    subtitle: 'عنابي داكن مع درجات الورد والذهب',
+    colors: {
+      primaryColor: '#1a080d',
+      secondaryColor: '#3e1320',
+      accentColor: '#fb7185',
+      backgroundColor: '#270d14',
+      surfaceColor: 'rgba(62, 19, 32, 0.5)',
+      cardColor: '#3e1320',
+      textColor: '#fff1f2'
+    }
+  },
+  {
+    name: 'الفحمي القرآني العصري',
+    subtitle: 'رمادي فحمي هادئ مع أصفر ذهبي ساطع وتباين نقي',
+    colors: {
+      primaryColor: '#09090b',
+      secondaryColor: '#27272a',
+      accentColor: '#eab308',
+      backgroundColor: '#18181b',
+      surfaceColor: 'rgba(39, 39, 42, 0.5)',
+      cardColor: '#27272a',
+      textColor: '#fafafa'
+    }
+  }
+];
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -29,6 +116,7 @@ interface SettingsModalProps {
   teachers: TeacherAccount[];
   halaqahs: Halaqah[];
   complexes?: QuranComplex[];
+  activeComplex?: QuranComplex | null;
   students: Student[];
   settings: AppSettings;
   activeHalaqahId?: string;
@@ -41,6 +129,7 @@ interface SettingsModalProps {
   onTransferStudent: (studentId: string, targetHalaqahId: string, targetHalaqahName: string) => Promise<void>;
   onBatchTransferStudents?: (studentIds: string[], targetHalaqahId: string, targetHalaqahName: string) => Promise<void>;
   onSwitchActiveHalaqah?: (halaqahId: string) => void;
+  onSaveComplex?: (complex: QuranComplex) => Promise<void>;
 }
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({
@@ -49,6 +138,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   teachers,
   halaqahs,
   complexes = [],
+  activeComplex,
   students,
   settings,
   activeHalaqahId,
@@ -60,9 +150,101 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onDeleteHalaqah,
   onTransferStudent,
   onBatchTransferStudents,
-  onSwitchActiveHalaqah
+  onSwitchActiveHalaqah,
+  onSaveComplex
 }) => {
-  const [activeSubTab, setActiveSubTab] = useState<'halaqahs' | 'teachers' | 'transfer'>('halaqahs');
+  const [activeSubTab, setActiveSubTab] = useState<'theme' | 'halaqahs' | 'teachers' | 'transfer'>('theme');
+
+  // Complex Theme & Branding State
+  const [selectedThemeComplexId, setSelectedThemeComplexId] = useState<string>(() => {
+    return activeComplex?.id || complexes[0]?.id || '';
+  });
+
+  const targetThemeComplex = useMemo(() => {
+    return complexes.find(c => c.id === selectedThemeComplexId) || activeComplex || complexes[0] || null;
+  }, [complexes, selectedThemeComplexId, activeComplex]);
+
+  const [themeLogoUrl, setThemeLogoUrl] = useState<string>(() => targetThemeComplex?.logoUrl || '');
+  const [themeStampUrl, setThemeStampUrl] = useState<string>(() => targetThemeComplex?.stampUrl || '');
+  const [themeColors, setThemeColors] = useState<ComplexThemeConfig>(() => {
+    return targetThemeComplex?.theme || ISLAMIC_THEME_PRESETS[0].colors;
+  });
+
+  const [fileError, setFileError] = useState<string | null>(null);
+  const [isSavingTheme, setIsSavingTheme] = useState(false);
+  const [themeSuccessMsg, setThemeSuccessMsg] = useState<string | null>(null);
+
+  // Sync state whenever targetThemeComplex changes
+  useEffect(() => {
+    if (targetThemeComplex) {
+      setThemeLogoUrl(targetThemeComplex.logoUrl || '');
+      setThemeStampUrl(targetThemeComplex.stampUrl || '');
+      setThemeColors(targetThemeComplex.theme || ISLAMIC_THEME_PRESETS[0].colors);
+      setFileError(null);
+    }
+  }, [targetThemeComplex?.id]);
+
+  const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const maxBytes = 5 * 1024 * 1024; // 5MB strict limit
+    if (file.size > maxBytes) {
+      const sizeMB = (file.size / (1024 * 1024)).toFixed(2);
+      setFileError(`⚠️ حجم صورة الشعار (${sizeMB} ميجابايت) يتجاوز الحد الأقصى الإلزامي (5 ميجابايت). يرجى اختيار ملف أصغر حجماً.`);
+      e.target.value = '';
+      return;
+    }
+    setFileError(null);
+    const reader = new FileReader();
+    reader.onload = () => {
+      setThemeLogoUrl(reader.result as string);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleStampChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const maxBytes = 5 * 1024 * 1024; // 5MB strict limit
+    if (file.size > maxBytes) {
+      const sizeMB = (file.size / (1024 * 1024)).toFixed(2);
+      setFileError(`⚠️ حجم صورة الختم (${sizeMB} ميجابايت) يتجاوز الحد الأقصى الإلزامي (5 ميجابايت). يرجى اختيار ملف أصغر حجماً.`);
+      e.target.value = '';
+      return;
+    }
+    setFileError(null);
+    const reader = new FileReader();
+    reader.onload = () => {
+      setThemeStampUrl(reader.result as string);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleSaveTheme = async () => {
+    if (!targetThemeComplex) return;
+    if (!onSaveComplex) {
+      setStatusMsg({ type: 'error', text: 'خاصية حفظ بيانات المجمع غير متوفرة.' });
+      return;
+    }
+    try {
+      setIsSavingTheme(true);
+      setFileError(null);
+      const updated: QuranComplex = {
+        ...targetThemeComplex,
+        logoUrl: themeLogoUrl || undefined,
+        stampUrl: themeStampUrl || undefined,
+        theme: themeColors,
+        updatedAt: new Date().toISOString()
+      };
+      await onSaveComplex(updated);
+      setThemeSuccessMsg(`تم حفظ وتطبيق هوية وثيم "${targetThemeComplex.name}" بنجاح! تم اعتماد الشعار والختم والألوان بالكامل.`);
+      setTimeout(() => setThemeSuccessMsg(null), 5000);
+    } catch (err: any) {
+      setFileError(err?.message || 'حدث خطأ أثناء حفظ ثيم المجمع');
+    } finally {
+      setIsSavingTheme(false);
+    }
+  };
 
   // Halaqah Management State
   const [editingHalaqah, setEditingHalaqah] = useState<Partial<Halaqah> | null>(null);
@@ -495,6 +677,21 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         <div className="flex flex-wrap items-center gap-2 border-b border-[#065f46] pb-3">
           <button
             onClick={() => {
+              setActiveSubTab('theme');
+              setStatusMsg(null);
+            }}
+            className={`flex items-center gap-2 px-4 py-2 rounded-2xl text-xs sm:text-sm font-bold transition-all cursor-pointer ${
+              activeSubTab === 'theme'
+                ? 'bg-[#fbbf24] text-[#064e3b] shadow-md'
+                : 'bg-[#022c22] text-[#86efac] hover:text-white hover:bg-[#022c22]/80 border border-[#065f46]'
+            }`}
+          >
+            <Palette className="w-4 h-4" />
+            <span>ثيم وهوية المجمع</span>
+          </button>
+
+          <button
+            onClick={() => {
               setActiveSubTab('halaqahs');
               setStatusMsg(null);
             }}
@@ -554,6 +751,500 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               <AlertCircle className="w-4 h-4 shrink-0 text-red-400" />
             )}
             <span>{statusMsg.text}</span>
+          </div>
+        )}
+
+        {/* ========================================================================= */}
+        {/* SUB-TAB 0: COMPLEX THEME & IDENTITY (الشعار، الختم، والألوان)           */}
+        {/* ========================================================================= */}
+        {activeSubTab === 'theme' && (
+          <div className="space-y-6 flex-1 text-right">
+            {/* Header Banner */}
+            <div className="bg-[#022c22]/70 p-4 sm:p-5 rounded-2xl border border-[#065f46] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <h3 className="text-base font-bold text-white flex items-center gap-2 font-heading">
+                  <Palette className="w-5 h-5 text-[#fbbf24]" />
+                  <span>تخصيص ثيم وهوية المجمع القرآني</span>
+                </h3>
+                <p className="text-xs text-[#86efac] mt-1 leading-relaxed">
+                  ارفع شعار المجمع وختمه المعتمد (بحد أقصى 5 ميجابايت)، وخصص ألوان المنصة بالكامل مع معاينة حية ومباشرة.
+                </p>
+              </div>
+
+              {/* Complex selector if developer or multiple complexes exist */}
+              {complexes.length > 1 && (
+                <div className="flex items-center gap-2 shrink-0">
+                  <span className="text-xs text-[#fbbf24] font-bold">المجمع المستهدف:</span>
+                  <select
+                    value={selectedThemeComplexId}
+                    onChange={e => setSelectedThemeComplexId(e.target.value)}
+                    className="bg-[#064e3b] border border-[#fbbf24]/50 rounded-xl px-3 py-1.5 text-xs text-white font-bold cursor-pointer outline-none"
+                  >
+                    {complexes.map(c => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+            </div>
+
+            {/* Error or Success notification */}
+            {fileError && (
+              <div className="p-3.5 rounded-2xl text-xs flex items-center gap-2 bg-red-500/20 text-red-200 border border-red-500/40">
+                <AlertCircle className="w-4 h-4 shrink-0 text-red-400" />
+                <span>{fileError}</span>
+              </div>
+            )}
+            {themeSuccessMsg && (
+              <div className="p-3.5 rounded-2xl text-xs flex items-center gap-2 bg-emerald-500/20 text-emerald-200 border border-emerald-500/40">
+                <CheckCircle className="w-4 h-4 shrink-0 text-emerald-400" />
+                <span>{themeSuccessMsg}</span>
+              </div>
+            )}
+
+            {/* Logo and Stamp Uploads Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* 1. Upload Logo */}
+              <div className="bg-[#022c22]/80 border border-[#065f46] rounded-2xl p-4 sm:p-5 space-y-3.5 flex flex-col justify-between">
+                <div>
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-sm font-bold text-white flex items-center gap-2">
+                      <ImageIcon className="w-4 h-4 text-[#fbbf24]" />
+                      <span>شعار المجمع (Logo)</span>
+                    </h4>
+                    <span className="text-[10px] text-amber-300 bg-amber-400/10 px-2 py-0.5 rounded-full border border-amber-400/20 font-mono">
+                      الحد الأقصى: 5MB
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-[#86efac]/80 mt-1 leading-relaxed">
+                    يُعتمد كأيقونة لتبويب المتصفح (Favicon)، وشعار لشريط العنوان الأعلى والشهادات والتقارير.
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-4 pt-2">
+                  <div className="w-20 h-20 rounded-2xl bg-[#064e3b] border-2 border-dashed border-[#fbbf24]/50 flex items-center justify-center overflow-hidden shrink-0 shadow-inner">
+                    {themeLogoUrl ? (
+                      <img
+                        src={themeLogoUrl}
+                        alt="شعار المجمع"
+                        className="w-full h-full object-contain p-1"
+                      />
+                    ) : (
+                      <div className="text-center p-2 text-[#86efac]/60">
+                        <ImageIcon className="w-6 h-6 mx-auto mb-0.5 opacity-60" />
+                        <span className="text-[9px] block">لا يوجد شعار</span>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex-1 space-y-2">
+                    <label className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-[#fbbf24] hover:bg-amber-400 text-[#064e3b] text-xs font-black cursor-pointer shadow-md transition-all">
+                      <Upload className="w-3.5 h-3.5" />
+                      <span>{themeLogoUrl ? 'تغيير الشعار' : 'رفع شعار المجمع'}</span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={handleLogoChange}
+                        className="hidden"
+                      />
+                    </label>
+
+                    {themeLogoUrl && (
+                      <button
+                        type="button"
+                        onClick={() => setThemeLogoUrl('')}
+                        className="block text-[11px] text-red-300 hover:text-red-100 hover:underline cursor-pointer"
+                      >
+                        إزالة الشعار والعودة للافتراضي
+                      </button>
+                    )}
+                    <span className="text-[10px] text-slate-400 block">
+                      صيغ الصور المدعومة: PNG, JPG, WEBP, SVG
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* 2. Upload Stamp */}
+              <div className="bg-[#022c22]/80 border border-[#065f46] rounded-2xl p-4 sm:p-5 space-y-3.5 flex flex-col justify-between">
+                <div>
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-sm font-bold text-white flex items-center gap-2">
+                      <Shield className="w-4 h-4 text-[#fbbf24]" />
+                      <span>ختم المجمع الرسمي (Official Stamp)</span>
+                    </h4>
+                    <span className="text-[10px] text-amber-300 bg-amber-400/10 px-2 py-0.5 rounded-full border border-amber-400/20 font-mono">
+                      الحد الأقصى: 5MB
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-[#86efac]/80 mt-1 leading-relaxed">
+                    يُعتمد كختم رسمي وحيد للمجمع في الشهادات والتقارير المستخرجة بدلاً من ختم المنظومة القديم.
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-4 pt-2">
+                  <div className="w-20 h-20 rounded-full bg-[#064e3b] border-2 border-dashed border-[#fbbf24]/50 flex items-center justify-center overflow-hidden shrink-0 shadow-inner">
+                    {themeStampUrl ? (
+                      <img
+                        src={themeStampUrl}
+                        alt="ختم المجمع"
+                        className="w-full h-full object-contain p-1 rounded-full"
+                      />
+                    ) : (
+                      <div className="text-center p-2 text-[#86efac]/60">
+                        <Shield className="w-6 h-6 mx-auto mb-0.5 opacity-60" />
+                        <span className="text-[9px] block">لا يوجد ختم</span>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex-1 space-y-2">
+                    <label className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-gradient-to-r from-amber-400 to-amber-500 hover:brightness-110 text-[#064e3b] text-xs font-black cursor-pointer shadow-md transition-all">
+                      <Upload className="w-3.5 h-3.5" />
+                      <span>{themeStampUrl ? 'تغيير الختم' : 'رفع ختم المجمع'}</span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={handleStampChange}
+                        className="hidden"
+                      />
+                    </label>
+
+                    {themeStampUrl && (
+                      <button
+                        type="button"
+                        onClick={() => setThemeStampUrl('')}
+                        className="block text-[11px] text-red-300 hover:text-red-100 hover:underline cursor-pointer"
+                      >
+                        إزالة الختم والاعتماد النصي
+                      </button>
+                    )}
+                    <span className="text-[10px] text-slate-400 block">
+                      صورة شفافة (PNG مفرغة) لأفضل نتيجة رسمية
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Section: Islamic Presets */}
+            <div className="bg-[#022c22]/70 border border-[#065f46] rounded-2xl p-4 sm:p-5 space-y-3">
+              <h4 className="text-xs sm:text-sm font-bold text-white flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-[#fbbf24]" />
+                <span>قوالب ألوان إسلامية فاخرة جاهزة (بنقرة واحدة)</span>
+              </h4>
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
+                {ISLAMIC_THEME_PRESETS.map((preset, idx) => {
+                  const isSelected =
+                    themeColors.primaryColor === preset.colors.primaryColor &&
+                    themeColors.secondaryColor === preset.colors.secondaryColor;
+                  return (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => setThemeColors(preset.colors)}
+                      className={`p-2.5 rounded-xl border text-right transition-all cursor-pointer select-none flex flex-col justify-between gap-2 ${
+                        isSelected
+                          ? 'border-[#fbbf24] bg-[#064e3b] shadow-lg ring-2 ring-[#fbbf24]/50'
+                          : 'border-[#065f46] bg-[#022c22] hover:border-amber-400/50'
+                      }`}
+                    >
+                      <div className="flex items-center gap-1.5">
+                        <div
+                          className="w-4 h-4 rounded-full border border-white/20 shadow-sm shrink-0"
+                          style={{ backgroundColor: preset.colors.secondaryColor }}
+                        />
+                        <div
+                          className="w-4 h-4 rounded-full border border-white/20 shadow-sm shrink-0"
+                          style={{ backgroundColor: preset.colors.accentColor }}
+                        />
+                      </div>
+                      <div>
+                        <span className="font-bold text-xs text-white block truncate">{preset.name}</span>
+                        <span className="text-[9px] text-[#86efac]/70 block truncate mt-0.5">{preset.subtitle}</span>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Section: Custom Color Pickers */}
+            <div className="bg-[#022c22]/70 border border-[#065f46] rounded-2xl p-4 sm:p-5 space-y-3">
+              <h4 className="text-xs sm:text-sm font-bold text-white flex items-center gap-2">
+                <Palette className="w-4 h-4 text-[#fbbf24]" />
+                <span>تعديل درجات الألوان المخصصة للمنصة</span>
+              </h4>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+                {/* 1. Primary */}
+                <div className="bg-[#064e3b]/50 p-2.5 rounded-xl border border-[#065f46] space-y-1.5">
+                  <label className="text-[11px] font-bold text-[#86efac] block">اللون الأساسي (Primary)</label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="color"
+                      value={themeColors.primaryColor}
+                      onChange={e => setThemeColors({ ...themeColors, primaryColor: e.target.value })}
+                      className="w-8 h-8 rounded-lg cursor-pointer bg-transparent border-0"
+                    />
+                    <input
+                      type="text"
+                      value={themeColors.primaryColor}
+                      onChange={e => setThemeColors({ ...themeColors, primaryColor: e.target.value })}
+                      className="flex-1 bg-[#022c22] border border-[#065f46] rounded-lg px-2 py-1 text-xs text-white font-mono"
+                    />
+                  </div>
+                </div>
+
+                {/* 2. Secondary */}
+                <div className="bg-[#064e3b]/50 p-2.5 rounded-xl border border-[#065f46] space-y-1.5">
+                  <label className="text-[11px] font-bold text-[#86efac] block">اللون الثانوي (Secondary)</label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="color"
+                      value={themeColors.secondaryColor}
+                      onChange={e => setThemeColors({ ...themeColors, secondaryColor: e.target.value })}
+                      className="w-8 h-8 rounded-lg cursor-pointer bg-transparent border-0"
+                    />
+                    <input
+                      type="text"
+                      value={themeColors.secondaryColor}
+                      onChange={e => setThemeColors({ ...themeColors, secondaryColor: e.target.value })}
+                      className="flex-1 bg-[#022c22] border border-[#065f46] rounded-lg px-2 py-1 text-xs text-white font-mono"
+                    />
+                  </div>
+                </div>
+
+                {/* 3. Accent / Gold */}
+                <div className="bg-[#064e3b]/50 p-2.5 rounded-xl border border-[#065f46] space-y-1.5">
+                  <label className="text-[11px] font-bold text-[#86efac] block">لون التمييز (Accent / ذهبي)</label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="color"
+                      value={themeColors.accentColor}
+                      onChange={e => setThemeColors({ ...themeColors, accentColor: e.target.value })}
+                      className="w-8 h-8 rounded-lg cursor-pointer bg-transparent border-0"
+                    />
+                    <input
+                      type="text"
+                      value={themeColors.accentColor}
+                      onChange={e => setThemeColors({ ...themeColors, accentColor: e.target.value })}
+                      className="flex-1 bg-[#022c22] border border-[#065f46] rounded-lg px-2 py-1 text-xs text-white font-mono"
+                    />
+                  </div>
+                </div>
+
+                {/* 4. Background */}
+                <div className="bg-[#064e3b]/50 p-2.5 rounded-xl border border-[#065f46] space-y-1.5">
+                  <label className="text-[11px] font-bold text-[#86efac] block">لون الخلفية (Background)</label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="color"
+                      value={themeColors.backgroundColor}
+                      onChange={e => setThemeColors({ ...themeColors, backgroundColor: e.target.value })}
+                      className="w-8 h-8 rounded-lg cursor-pointer bg-transparent border-0"
+                    />
+                    <input
+                      type="text"
+                      value={themeColors.backgroundColor}
+                      onChange={e => setThemeColors({ ...themeColors, backgroundColor: e.target.value })}
+                      className="flex-1 bg-[#022c22] border border-[#065f46] rounded-lg px-2 py-1 text-xs text-white font-mono"
+                    />
+                  </div>
+                </div>
+
+                {/* 5. Text */}
+                <div className="bg-[#064e3b]/50 p-2.5 rounded-xl border border-[#065f46] space-y-1.5">
+                  <label className="text-[11px] font-bold text-[#86efac] block">لون النصوص (Text)</label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="color"
+                      value={themeColors.textColor || '#f0f9f6'}
+                      onChange={e => setThemeColors({ ...themeColors, textColor: e.target.value })}
+                      className="w-8 h-8 rounded-lg cursor-pointer bg-transparent border-0"
+                    />
+                    <input
+                      type="text"
+                      value={themeColors.textColor || '#f0f9f6'}
+                      onChange={e => setThemeColors({ ...themeColors, textColor: e.target.value })}
+                      className="flex-1 bg-[#022c22] border border-[#065f46] rounded-lg px-2 py-1 text-xs text-white font-mono"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Section: Live Realtime Preview (المعاينة الحية الفورية للصفحة الرئيسية للمشرف) */}
+            <div className="bg-[#011a14] border-2 border-amber-400/50 rounded-2xl p-4 sm:p-5 space-y-3 shadow-2xl">
+              <div className="flex items-center justify-between border-b border-[#065f46] pb-2">
+                <div className="flex items-center gap-2">
+                  <Eye className="w-4 h-4 text-[#fbbf24]" />
+                  <span className="text-xs sm:text-sm font-bold text-white">
+                    معاينة حية ومباشرة: هكذا ستبدو لوحة المشرف وشاشات المنصة بالألوان والشعار المختار
+                  </span>
+                </div>
+                <span className="text-[10px] text-amber-300 bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-500/30">
+                  تحديث فوري
+                </span>
+              </div>
+
+              {/* Mockup Frame */}
+              <div
+                className="rounded-2xl p-4 space-y-4 border transition-colors shadow-lg"
+                style={{
+                  backgroundColor: themeColors.backgroundColor,
+                  borderColor: themeColors.primaryColor,
+                  color: themeColors.textColor || '#f0f9f6'
+                }}
+              >
+                {/* Mockup Header */}
+                <div
+                  className="p-3 rounded-xl border flex items-center justify-between gap-3 shadow-md"
+                  style={{
+                    backgroundColor: themeColors.secondaryColor,
+                    borderColor: themeColors.primaryColor
+                  }}
+                >
+                  <div className="flex items-center gap-3">
+                    <div
+                      className="w-10 h-10 rounded-xl flex items-center justify-center font-bold text-lg overflow-hidden shrink-0 shadow-sm border"
+                      style={{
+                        backgroundColor: themeColors.accentColor,
+                        borderColor: themeColors.accentColor,
+                        color: themeColors.primaryColor
+                      }}
+                    >
+                      {themeLogoUrl ? (
+                        <img src={themeLogoUrl} alt="شعار" className="w-full h-full object-cover" />
+                      ) : (
+                        <span>{targetThemeComplex?.name ? targetThemeComplex.name.charAt(0) : 'ق'}</span>
+                      )}
+                    </div>
+                    <div>
+                      <h5
+                        className="text-sm sm:text-base font-extrabold font-heading"
+                        style={{ color: themeColors.accentColor }}
+                      >
+                        {targetThemeComplex?.name || 'مجمع تحفيظ القرآن الكريم'}
+                      </h5>
+                      <span className="text-[10px] opacity-80 block">
+                        لوحة تحكم المشرف • إدارة الحلقات القرآنية
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <span
+                      className="px-2.5 py-1 rounded-lg text-xs font-bold shadow-sm"
+                      style={{
+                        backgroundColor: themeColors.accentColor,
+                        color: themeColors.primaryColor
+                      }}
+                    >
+                      الحلقة النموذجية
+                    </span>
+                  </div>
+                </div>
+
+                {/* Mockup Stats Cards */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div
+                    className="p-3 rounded-xl border space-y-1 shadow-sm"
+                    style={{
+                      backgroundColor: themeColors.surfaceColor || 'rgba(6, 78, 59, 0.4)',
+                      borderColor: themeColors.secondaryColor
+                    }}
+                  >
+                    <span className="text-[10px] opacity-75 block">إجمالي طلاب المجمع</span>
+                    <strong
+                      className="text-lg font-black block font-mono"
+                      style={{ color: themeColors.accentColor }}
+                    >
+                      {students.length || 24} طالباً
+                    </strong>
+                  </div>
+
+                  <div
+                    className="p-3 rounded-xl border space-y-1 shadow-sm"
+                    style={{
+                      backgroundColor: themeColors.surfaceColor || 'rgba(6, 78, 59, 0.4)',
+                      borderColor: themeColors.secondaryColor
+                    }}
+                  >
+                    <span className="text-[10px] opacity-75 block">الحلقات النشطة</span>
+                    <strong
+                      className="text-lg font-black block font-mono"
+                      style={{ color: themeColors.accentColor }}
+                    >
+                      {halaqahs.length || 3} حلقات
+                    </strong>
+                  </div>
+
+                  <div
+                    className="p-3 rounded-xl border space-y-1 shadow-sm flex items-center justify-between"
+                    style={{
+                      backgroundColor: themeColors.surfaceColor || 'rgba(6, 78, 59, 0.4)',
+                      borderColor: themeColors.secondaryColor
+                    }}
+                  >
+                    <div>
+                      <span className="text-[10px] opacity-75 block">ختم المجمع المعتمد</span>
+                      <span className="text-[10px] font-bold text-amber-300 block">
+                        {themeStampUrl ? 'ختم رسمي مرفوع ✓' : 'ختم قياسي'}
+                      </span>
+                    </div>
+                    <div className="w-10 h-10 rounded-full border flex items-center justify-center overflow-hidden shrink-0" style={{ borderColor: themeColors.accentColor }}>
+                      {themeStampUrl ? (
+                        <img src={themeStampUrl} alt="ختم" className="w-full h-full object-contain p-0.5" />
+                      ) : (
+                        <Shield className="w-5 h-5" style={{ color: themeColors.accentColor }} />
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Mockup Button */}
+                <div className="flex items-center justify-between pt-1">
+                  <span className="text-[11px] opacity-75">نموذج أزرار وتفاعلات المنصة:</span>
+                  <button
+                    type="button"
+                    className="px-4 py-1.5 rounded-xl text-xs font-black shadow-md cursor-default pointer-events-none"
+                    style={{
+                      backgroundColor: themeColors.accentColor,
+                      color: themeColors.primaryColor
+                    }}
+                  >
+                    تسجيل التسميع اليومي
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Bottom Actions Bar */}
+            <div className="flex items-center justify-between pt-2 border-t border-[#065f46]">
+              <p className="text-xs text-[#86efac]/80">
+                بالضغط على حفظ، سيتم اعتماد الشعار والختم والألوان في كامل أقسام المنصة، والشهادات، وتبويب المتصفح.
+              </p>
+              <button
+                type="button"
+                onClick={handleSaveTheme}
+                disabled={isSavingTheme}
+                className="px-6 py-3 rounded-2xl bg-gradient-to-r from-amber-400 to-amber-500 hover:brightness-110 text-[#064e3b] font-black text-sm flex items-center gap-2 shadow-[0_0_20px_rgba(251,191,36,0.35)] transition-all cursor-pointer disabled:opacity-50"
+              >
+                {isSavingTheme ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    <span>جاري حفظ الثيم...</span>
+                  </>
+                ) : (
+                  <>
+                    <Check className="w-4 h-4" />
+                    <span>حفظ ثيم وهوية المجمع</span>
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         )}
 

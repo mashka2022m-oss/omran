@@ -30,7 +30,8 @@ import {
   AttendanceStatus,
   AppSettings,
   AbsenceMessageTemplate,
-  getStudentParentPhone
+  getStudentParentPhone,
+  QuranComplex
 } from '../../types';
 import { PrintableQuranicReport } from '../reports/PrintableQuranicReport';
 
@@ -52,6 +53,7 @@ interface AttendanceTabProps {
   isDeveloper?: boolean;
   onUpdateSettings?: (settings: AppSettings) => Promise<void>;
   complexName?: string;
+  activeComplex?: QuranComplex | null;
   halaqahName?: string;
 }
 
@@ -64,6 +66,7 @@ export const AttendanceTab: React.FC<AttendanceTabProps> = ({
   isDeveloper = false,
   onUpdateSettings,
   complexName,
+  activeComplex,
   halaqahName
 }) => {
   const [selectedDate, setSelectedDate] = useState<string>(
@@ -262,7 +265,7 @@ export const AttendanceTab: React.FC<AttendanceTabProps> = ({
 
     text += `\n━━━━━━━━━━━━━━━━━━━━━\n`;
     text += `🌸 نسأل الله التوفيق والبركة لأبنائنا الحفظة الكرام 🌸\n`;
-    text += `منظومة عُمران لإدارة الحلقات والمجمعات القرآنية`;
+    text += activeComplex?.name || complexName || 'إدارة الحلقات والمجمعات القرآنية';
     return text;
   };
 
@@ -1185,6 +1188,7 @@ export const AttendanceTab: React.FC<AttendanceTabProps> = ({
           settings={settings}
           teacherName={teacherName || settings.teacherName}
           selectedDate={selectedDate}
+          complex={activeComplex}
         />
       )}
     </div>

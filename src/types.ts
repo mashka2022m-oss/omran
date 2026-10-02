@@ -1,11 +1,24 @@
 export type UserRole = 'admin' | 'student';
 
+export interface ComplexThemeConfig {
+  primaryColor: string; // اللون الأساسي (e.g. #022c22)
+  secondaryColor: string; // اللون الثانوي (e.g. #064e3b)
+  accentColor: string; // لون التمييز والذهب (e.g. #fbbf24)
+  backgroundColor: string; // لون الخلفية الرئيسي (e.g. #022c22)
+  surfaceColor?: string; // لون بطاقات ولوحات المحتوى
+  cardColor?: string;
+  textColor?: string; // لون النصوص الأساسية
+}
+
 export interface QuranComplex {
   id: string;
   name: string; // e.g. "مجمع النور القرآني"
   description?: string;
   supervisorTeacherId?: string; // ID of the supervisor teacher assigned to this complex
   supervisorTeacherName?: string; // Display name of supervisor teacher
+  logoUrl?: string; // شعار المجمع (صورة لا تتجاوز 5 ميجا) - أيقونة التبويب وشعار المنصة
+  stampUrl?: string; // ختم المجمع (صورة لا تتجاوز 5 ميجا) - ختم الشهادات والتقارير الرسمية
+  theme?: ComplexThemeConfig; // ألوان وهوية وثيم المنصة الخاصة بالمجمع
   createdAt: string;
   updatedAt?: string;
   databaseConfig?: {

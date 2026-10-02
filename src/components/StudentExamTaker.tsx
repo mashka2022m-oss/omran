@@ -734,6 +734,13 @@ export const StudentExamTaker: React.FC<StudentExamTakerProps> = ({
             </button>
           </div>
         </div>
+
+        {/* Global Footer Indicator */}
+        <div className="pt-2 flex items-center justify-center">
+          <span className="text-[11px] text-[#fbbf24] bg-[#064e3b]/50 px-3.5 py-1 rounded-full border border-emerald-800 font-bold">
+            مشغل بواسطة منصة عمران
+          </span>
+        </div>
       </div>
 
       {/* 4. CONFIRM SUBMISSION MODAL */}

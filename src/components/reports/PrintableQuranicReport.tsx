@@ -18,7 +18,7 @@ import {
   Flame,
   Trophy
 } from 'lucide-react';
-import { Student, AttendanceRecord, StudentEvaluation, AppSettings, getStudentParentPhone } from '../../types';
+import { Student, AttendanceRecord, StudentEvaluation, AppSettings, getStudentParentPhone, QuranComplex } from '../../types';
 import { getSurahInfo } from '../../data/quranData';
 import { calculateStudentCompletedPages } from '../../data/quranPagesData';
 
@@ -47,6 +47,7 @@ interface PrintableQuranicReportProps {
   teacherName: string;
   reportType?: 'weekly' | 'monthly' | 'comprehensive';
   selectedDate?: string;
+  complex?: QuranComplex | null;
   getStudentLatestRecitations?: (student: Student) => {
     name: string;
     parentPhone: string;
@@ -78,6 +79,7 @@ export const PrintableQuranicReport: React.FC<PrintableQuranicReportProps> = ({
   teacherName,
   reportType = 'comprehensive',
   selectedDate = new Date().toISOString().split('T')[0],
+  complex,
   getStudentLatestRecitations
 }) => {
   if (!isOpen) return null;
@@ -129,7 +131,7 @@ export const PrintableQuranicReport: React.FC<PrintableQuranicReportProps> = ({
       <html lang="ar" dir="rtl">
       <head>
         <meta charset="utf-8" />
-        <title>وثيقة رسمية - منظومة عُمران القرآنية</title>
+        <title>وثيقة رسمية - ${complex?.name || 'المجمع القرآني'}</title>
         <link rel="preconnect" href="https://fonts.googleapis.com">
         <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
         <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&family=Amiri:wght@400;700&display=swap" rel="stylesheet">
@@ -563,7 +565,7 @@ export const PrintableQuranicReport: React.FC<PrintableQuranicReportProps> = ({
                 معاينة الوثيقة القرآنية الفاخرة (PDF)
               </h3>
               <p className="text-[11px] text-[#86efac]">
-                بالثيم الزمردي والذهبي الفاخر لمنظومة عُمران • جاهز للطباعة بدقة عالية
+                وثيقة قرآنية رسمية معتمدة للمجمع • جاهزة للطباعة بدقة عالية
               </p>
             </div>
           </div>
@@ -617,11 +619,19 @@ export const PrintableQuranicReport: React.FC<PrintableQuranicReportProps> = ({
                 {/* Right: Complex & Halaqah */}
                 <div className="header-org text-right space-y-0.5">
                   <div className="flex items-center gap-1.5">
-                    <span className="w-5 h-5 rounded-md bg-[#064e3b] text-[#fbbf24] flex items-center justify-center font-bold text-xs shadow-sm border border-[#fbbf24]/50">
-                      ع
-                    </span>
+                    {complex?.logoUrl ? (
+                      <img
+                        src={complex.logoUrl}
+                        alt="شعار المجمع"
+                        style={{ width: '28px', height: '28px', objectFit: 'contain', borderRadius: '4px' }}
+                      />
+                    ) : (
+                      <span className="w-5 h-5 rounded-md bg-[#064e3b] text-[#fbbf24] flex items-center justify-center font-bold text-xs shadow-sm border border-[#fbbf24]/50">
+                        {complex?.name ? complex.name.replace(/^(مجمع|مراكز|حلقات)\s+/i, '').charAt(0) || 'ق' : 'ق'}
+                      </span>
+                    )}
                     <strong className="org-title font-heading">
-                      {settings.complexName || 'منظومة عُمران لإدارة المجمعات القرآنية'}
+                      {complex?.name || settings.complexName || 'مجمع تحفيظ القرآن الكريم'}
                     </strong>
                   </div>
                   <p className="org-sub font-bold text-slate-800">
@@ -658,7 +668,7 @@ export const PrintableQuranicReport: React.FC<PrintableQuranicReportProps> = ({
                 <div className="header-meta text-left space-y-0.5">
                   <p className="font-bold text-[#064e3b]">التاريخ: <span className="text-slate-800">{todayFormatted}</span></p>
                   <p className="font-mono text-slate-600">موافق: {todayGregorian}</p>
-                  <p className="font-mono text-[#b45309] font-bold">كود: OMR-{Date.now().toString().slice(-6)}</p>
+                  <p className="font-mono text-[#b45309] font-bold">كود: DOC-{Date.now().toString().slice(-6)}</p>
                 </div>
               </div>
 
@@ -943,16 +953,24 @@ export const PrintableQuranicReport: React.FC<PrintableQuranicReportProps> = ({
                 <div className="seal-info">
                   <div style={{ fontWeight: 'bold', color: '#064e3b', display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '2px' }}>
                     <ShieldCheck style={{ width: '13px', height: '13px' }} className="text-[#b45309]" />
-                    <span>الاعتماد الإلكتروني الرسمي للمنظومة:</span>
+                    <span>الاعتماد الرسمي لإدارة {complex?.name || 'المجمع القرآني'}:</span>
                   </div>
                   <p style={{ fontSize: '7.5pt', color: '#1e293b' }}>
-                    هذه الوثيقة صادرة ومعتمدة إلكترونياً من إدارة المجمع القرآني
+                    هذه الوثيقة صادرة ومعتمدة رسمياً من إدارة {complex?.name || 'المجمع القرآني'}
                   </p>
                 </div>
 
-                {/* Bottom Left: Strictly ONLY 'معتمد إلكترونياً' */}
+                {/* Bottom Left: Official Stamp or Seal Badge */}
                 <div className="seal-badge" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <span style={{ fontSize: '7.5pt', color: '#b45309', fontWeight: '900', lineHeight: 1.2 }}>معتمد إلكترونياً</span>
+                  {complex?.stampUrl ? (
+                    <img
+                      src={complex.stampUrl}
+                      alt="ختم المجمع"
+                      style={{ width: '56px', height: '56px', objectFit: 'contain', borderRadius: '50%' }}
+                    />
+                  ) : (
+                    <span style={{ fontSize: '7.5pt', color: '#b45309', fontWeight: '900', lineHeight: 1.2 }}>معتمد رسمياً</span>
+                  )}
                 </div>
               </div>
 

@@ -540,6 +540,47 @@ export function App() {
   // Complex scope resolution for teacher/supervisor:
   const supervisedComplex = activeComplex;
 
+  // Real-time synchronization of Browser Tab Title, Favicon, and Complex Theme
+  useEffect(() => {
+    // 1. Dynamic Browser Tab Title (عنوان تبويب المتصفح على اسم المجمع)
+    const complexDisplayName = activeComplex?.name || settings.complexName || 'مجمع تحفيظ القرآن الكريم';
+    document.title = complexDisplayName;
+
+    // 2. Dynamic Browser Tab Favicon (شعار المجمع كأيقونة تبويب المتصفح)
+    let faviconLink = document.querySelector("link[rel*='icon']") as HTMLLinkElement | null;
+    if (!faviconLink) {
+      faviconLink = document.createElement('link');
+      faviconLink.rel = 'icon';
+      document.head.appendChild(faviconLink);
+    }
+    if (activeComplex?.logoUrl) {
+      faviconLink.href = activeComplex.logoUrl;
+    } else {
+      faviconLink.href = `data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%23fbbf24"><path d="M12 3L1 9l11 6 9-4.91V17h2V9L12 3z"/></svg>`;
+    }
+
+    // 3. Dynamic Complex Theme Colors on Document Root & Body
+    if (activeComplex?.theme) {
+      const { primaryColor, secondaryColor, accentColor, backgroundColor, textColor } = activeComplex.theme;
+      if (backgroundColor) {
+        document.body.style.backgroundColor = backgroundColor;
+      }
+      if (textColor) {
+        document.body.style.color = textColor;
+      }
+      document.documentElement.style.setProperty('--complex-primary', primaryColor);
+      document.documentElement.style.setProperty('--complex-secondary', secondaryColor);
+      document.documentElement.style.setProperty('--complex-accent', accentColor);
+      document.documentElement.style.setProperty('--complex-bg', backgroundColor);
+      if (textColor) {
+        document.documentElement.style.setProperty('--complex-text', textColor);
+      }
+    } else {
+      document.body.style.backgroundColor = '#022c22';
+      document.body.style.color = '#f0f9f6';
+    }
+  }, [activeComplex, settings.complexName]);
+
   const isSupervisor = useMemo(() => {
     if (!currentUser || currentUser.role !== 'admin') return false;
     if (isDeveloper) return true;
@@ -1639,6 +1680,8 @@ export function App() {
               recordingsConfig={recordingsConfig}
               certificates={certificates}
               listeningLogs={listeningLogs}
+              activeComplex={activeComplex}
+              complexes={complexes}
               isLoggedInStudent={true}
               onLogout={handleLogout}
               onSaveSubmission={handleSaveSubmission}
@@ -1728,6 +1771,8 @@ export function App() {
             recordingsConfig={recordingsConfig}
             certificates={certificates}
             listeningLogs={listeningLogs}
+            activeComplex={activeComplex}
+            complexes={complexes}
             isLoggedInStudent={!!currentUser}
             onLogout={handleLogout}
             onSaveSubmission={handleSaveSubmission}
@@ -1836,6 +1881,7 @@ export function App() {
           complexName={supervisedComplex?.name}
           availableComplexes={scopedComplexes}
           activeComplexId={activeComplex?.id}
+          activeComplex={activeComplex}
           onSwitchComplex={handleSwitchComplex}
           onOpenMultiComplexModal={() => setIsMultiComplexModalOpen(true)}
           halaqahs={scopedHalaqahs}
@@ -1901,6 +1947,7 @@ export function App() {
         complexName={supervisedComplex?.name}
         availableComplexes={scopedComplexes}
         activeComplexId={activeComplex?.id}
+        activeComplex={activeComplex}
         onSwitchComplex={canSwitchComplex ? handleSwitchComplex : undefined}
         onOpenMultiComplexModal={canSwitchComplex ? () => setIsMultiComplexModalOpen(true) : undefined}
         canSwitchComplex={canSwitchComplex}
@@ -2120,6 +2167,7 @@ export function App() {
                 isDeveloper={isDeveloper}
                 onUpdateSettings={handleUpdateSettings}
                 complexName={activeComplex?.name || scopedSettings.complexName}
+                activeComplex={activeComplex}
                 halaqahName={halaqahs.find(h => h.id === activeHalaqahId)?.name || scopedSettings.halaqahName}
               />
             )}
@@ -2153,6 +2201,7 @@ export function App() {
                 isSupervisor={isSupervisor}
                 googleAuthConfig={googleAuthConfig}
                 leaderboardSettings={leaderboardSettings || undefined}
+                activeComplex={activeComplex}
                 onSaveExam={handleSaveExam}
                 onDeleteExam={handleDeleteExam}
                 onSaveSubmission={handleSaveSubmission}
@@ -2179,6 +2228,7 @@ export function App() {
                 onDeleteCertificate={handleDeleteCertificate}
                 selectedComplexId={selectedComplexId}
                 activeComplexName={activeComplex?.name || scopedSettings.complexName}
+                activeComplex={activeComplex}
                 submissions={scopedSubmissions}
               />
             )}
@@ -2256,6 +2306,7 @@ export function App() {
                 onUpdateSettings={handleUpdateSettings}
                 teacherName={currentTeacher?.name || currentUser?.username || scopedSettings.teacherName}
                 certificates={certificates}
+                activeComplex={activeComplex}
               />
             )}
 
@@ -2278,7 +2329,10 @@ export function App() {
       <footer className="max-w-7xl mx-auto px-4 mt-12 pt-6 border-t border-[#065f46]/60 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-[#86efac]/70">
         <div className="flex items-center gap-2">
           <BookOpen className="w-4 h-4 text-[#fbbf24]" />
-          <span className="font-bold text-white">{settings.complexName || 'منظومة عُمْرَان لإدارة الحلقات والمجمعات القرآنية'}</span>
+          <span className="font-bold text-white">{activeComplex?.name || settings.complexName || 'مجمع تحفيظ القرآن الكريم'}</span>
+        </div>
+        <div className="flex items-center gap-2 text-center text-xs text-[#fbbf24] font-bold bg-[#064e3b]/80 px-3.5 py-1.5 rounded-full border border-amber-400/30 shadow-sm">
+          <span>مشغل بواسطة منصة عمران</span>
         </div>
         <div className="flex items-center gap-4">
           <button
@@ -2308,6 +2362,7 @@ export function App() {
         students={scopedStudents}
         settings={scopedSettings}
         complexes={scopedComplexes}
+        activeComplex={activeComplex}
         isDeveloper={isDeveloper}
         complexName={supervisedComplex?.name}
         activeHalaqahId={activeHalaqahId}
@@ -2318,6 +2373,7 @@ export function App() {
         onTransferStudent={handleTransferStudent}
         onBatchTransferStudents={handleBatchTransferStudents}
         onSwitchActiveHalaqah={setActiveHalaqahId}
+        onSaveComplex={handleSaveComplex}
       />
 
       {/* Complex Management Modal (إدارة المجمعات القرآنية) - مقتصر على المطور والمشرف العام */}

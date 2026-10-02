@@ -27,7 +27,7 @@ import {
   Send,
   Copy
 } from 'lucide-react';
-import { Student, AttendanceRecord, StudentEvaluation, AppSettings, getStudentParentPhone } from '../../types';
+import { Student, AttendanceRecord, StudentEvaluation, AppSettings, getStudentParentPhone, QuranComplex } from '../../types';
 import { getSurahInfo } from '../../data/quranData';
 import { calculateStudentCompletedPages } from '../../data/quranPagesData';
 import { ReportsChartsView } from './ReportsChartsView';
@@ -44,6 +44,7 @@ interface ReportsTabProps {
   settings: AppSettings;
   onUpdateSettings?: (settings: AppSettings) => Promise<void>;
   teacherName?: string;
+  activeComplex?: QuranComplex | null;
 }
 
 export const ReportsTab: React.FC<ReportsTabProps> = ({
@@ -52,7 +53,8 @@ export const ReportsTab: React.FC<ReportsTabProps> = ({
   evaluations,
   settings,
   onUpdateSettings,
-  teacherName
+  teacherName,
+  activeComplex
 }) => {
   const [workDays, setWorkDays] = useState<number>(settings.workDaysPerWeek || 5);
 
@@ -1118,6 +1120,7 @@ export const ReportsTab: React.FC<ReportsTabProps> = ({
           settings={settings}
           teacherName={teacherName || settings.teacherName}
           reportType={customReportTimeframe}
+          complex={activeComplex}
           getStudentLatestRecitations={getStudentLatestRecitations}
         />
       )}
