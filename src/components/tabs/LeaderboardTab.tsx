@@ -19,6 +19,7 @@ import {
   Layers,
   ChevronLeft,
   Plus,
+  Minus,
   Check
 } from 'lucide-react';
 import {
@@ -75,12 +76,21 @@ export const LeaderboardTab: React.FC<LeaderboardTabProps> = ({
   );
   const [isSavingSettings, setIsSavingSettings] = useState(false);
 
-  // Bonus Points Award Modal state
+  // Bonus Points Award / Deduction Modal state
   const [awardModalStudent, setAwardModalStudent] = useState<Student | null>(null);
+  const [pointsActionType, setPointsActionType] = useState<'award' | 'deduct'>('award');
   const [bonusPointsAmount, setBonusPointsAmount] = useState<number>(10);
   const [bonusPointsReason, setBonusPointsReason] = useState<string>('تميز وانضباط قرآني');
   const [isSubmittingBonus, setIsSubmittingBonus] = useState<boolean>(false);
   const [bonusSuccessMsg, setBonusSuccessMsg] = useState<string | null>(null);
+
+  const handleOpenPointsModal = (student: Student, action: 'award' | 'deduct' = 'award') => {
+    setAwardModalStudent(student);
+    setPointsActionType(action);
+    setBonusPointsAmount(action === 'award' ? 10 : 5);
+    setBonusPointsReason(action === 'award' ? 'انضباط وتميز قرآني' : 'تقصير متكرر في الحفظ والتسميع');
+    setBonusSuccessMsg(null);
+  };
 
   const handleConfirmAwardBonus = async () => {
     if (!awardModalStudent || !onAwardBonusPoints) return;
@@ -88,13 +98,18 @@ export const LeaderboardTab: React.FC<LeaderboardTabProps> = ({
     setIsSubmittingBonus(true);
     setBonusSuccessMsg(null);
     try {
-      await onAwardBonusPoints(awardModalStudent.id, bonusPointsAmount, bonusPointsReason);
-      confetti({
-        particleCount: 80,
-        spread: 70,
-        origin: { y: 0.6 }
-      });
-      setBonusSuccessMsg(`تمت إضافة (+${bonusPointsAmount}) نقطة بنجاح إلى رصيد الطالب ${awardModalStudent.name}!`);
+      const delta = pointsActionType === 'award' ? bonusPointsAmount : -bonusPointsAmount;
+      await onAwardBonusPoints(awardModalStudent.id, delta, bonusPointsReason);
+      if (pointsActionType === 'award') {
+        confetti({
+          particleCount: 80,
+          spread: 70,
+          origin: { y: 0.6 }
+        });
+        setBonusSuccessMsg(`تمت إضافة (+${bonusPointsAmount}) نقطة بنجاح إلى رصيد الطالب ${awardModalStudent.name}!`);
+      } else {
+        setBonusSuccessMsg(`تم خصم (-${bonusPointsAmount}) نقطة بنجاح من رصيد الطالب ${awardModalStudent.name}!`);
+      }
       setTimeout(() => {
         setAwardModalStudent(null);
         setBonusSuccessMsg(null);
@@ -370,18 +385,32 @@ export const LeaderboardTab: React.FC<LeaderboardTabProps> = ({
                     <span>عرض التفاصيل</span>
                   </button>
                   {onAwardBonusPoints && (
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setAwardModalStudent(item.student);
-                      }}
-                      className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-amber-400 to-amber-500 hover:brightness-110 text-[#064e3b] font-black text-xs flex items-center justify-center gap-1 shadow-md transition-all cursor-pointer"
-                      title="إضافة نقاط تشجيعية"
-                    >
-                      <Plus className="w-3.5 h-3.5" />
-                      <span>منح نقاط</span>
-                    </button>
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleOpenPointsModal(item.student, 'award');
+                        }}
+                        className="px-3 py-2 rounded-xl bg-gradient-to-r from-amber-400 to-amber-500 hover:brightness-110 text-[#064e3b] font-black text-xs flex items-center justify-center gap-1 shadow-md transition-all cursor-pointer"
+                        title="إضافة نقاط تشجيعية"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>منح</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleOpenPointsModal(item.student, 'deduct');
+                        }}
+                        className="px-2.5 py-2 rounded-xl bg-rose-500/20 hover:bg-rose-500 text-rose-300 hover:text-white border border-rose-500/40 font-black text-xs flex items-center justify-center gap-1 transition-all cursor-pointer"
+                        title="خصم نقاط جزائية"
+                      >
+                        <Minus className="w-3.5 h-3.5" />
+                        <span>خصم</span>
+                      </button>
+                    </div>
                   )}
                 </div>
               </div>
@@ -479,18 +508,32 @@ export const LeaderboardTab: React.FC<LeaderboardTabProps> = ({
                       <td className="p-3 text-left">
                         <div className="flex items-center justify-end gap-1.5">
                           {onAwardBonusPoints && (
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setAwardModalStudent(item.student);
-                              }}
-                              className="px-2.5 py-1 rounded-lg bg-amber-400/20 hover:bg-amber-400 text-amber-300 hover:text-[#064e3b] text-[11px] font-black border border-amber-400/40 transition-all flex items-center gap-1 cursor-pointer"
-                              title="إضافة نقاط تشجيعية لهذا الطالب"
-                            >
-                              <Plus className="w-3 h-3" />
-                              <span>منح نقاط</span>
-                            </button>
+                            <div className="flex items-center gap-1">
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleOpenPointsModal(item.student, 'award');
+                                }}
+                                className="px-2.5 py-1 rounded-lg bg-amber-400/20 hover:bg-amber-400 text-amber-300 hover:text-[#064e3b] text-[11px] font-black border border-amber-400/40 transition-all flex items-center gap-1 cursor-pointer"
+                                title="إضافة نقاط تشجيعية لهذا الطالب"
+                              >
+                                <Plus className="w-3 h-3" />
+                                <span>منح</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleOpenPointsModal(item.student, 'deduct');
+                                }}
+                                className="px-2 py-1 rounded-lg bg-rose-500/20 hover:bg-rose-500 text-rose-300 hover:text-white text-[11px] font-black border border-rose-500/40 transition-all flex items-center gap-1 cursor-pointer"
+                                title="خصم نقاط جزائية من هذا الطالب"
+                              >
+                                <Minus className="w-3 h-3" />
+                                <span>خصم</span>
+                              </button>
+                            </div>
                           )}
                           <button
                             type="button"
@@ -698,18 +741,32 @@ export const LeaderboardTab: React.FC<LeaderboardTabProps> = ({
 
             <div className="flex items-center justify-between pt-3 border-t border-emerald-800 gap-2 flex-wrap">
               {onAwardBonusPoints && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    const st = selectedStudentForBreakdown;
-                    setSelectedStudentForBreakdown(null);
-                    setAwardModalStudent(st);
-                  }}
-                  className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-amber-400 to-amber-500 hover:brightness-110 text-[#064e3b] font-black text-xs flex items-center gap-1.5 shadow-md cursor-pointer transition-all"
-                >
-                  <Plus className="w-4 h-4" />
-                  <span>منح نقاط تشجيعية لهذا الطالب</span>
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const st = selectedStudentForBreakdown;
+                      setSelectedStudentForBreakdown(null);
+                      handleOpenPointsModal(st, 'award');
+                    }}
+                    className="px-4 py-2 rounded-xl bg-gradient-to-r from-amber-400 to-amber-500 hover:brightness-110 text-[#064e3b] font-black text-xs flex items-center gap-1.5 shadow-md cursor-pointer transition-all"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>منح نقاط تشجيعية</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const st = selectedStudentForBreakdown;
+                      setSelectedStudentForBreakdown(null);
+                      handleOpenPointsModal(st, 'deduct');
+                    }}
+                    className="px-4 py-2 rounded-xl bg-rose-500/20 hover:bg-rose-500 text-rose-300 hover:text-white border border-rose-500/40 font-black text-xs flex items-center gap-1.5 cursor-pointer transition-all"
+                  >
+                    <Minus className="w-4 h-4" />
+                    <span>خصم نقاط جزائية</span>
+                  </button>
+                </div>
               )}
               <button
                 type="button"
@@ -741,12 +798,16 @@ export const LeaderboardTab: React.FC<LeaderboardTabProps> = ({
 
             {/* Header */}
             <div className="flex items-center gap-3 border-b border-emerald-800 pb-3">
-              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-amber-400 to-amber-500 text-[#064e3b] flex items-center justify-center font-black text-xl shadow-lg">
-                <Sparkles className="w-6 h-6" />
+              <div className={`w-12 h-12 rounded-2xl flex items-center justify-center font-black text-xl shadow-lg ${
+                pointsActionType === 'award'
+                  ? 'bg-gradient-to-br from-amber-400 to-amber-500 text-[#064e3b]'
+                  : 'bg-gradient-to-br from-rose-500 to-rose-600 text-white'
+              }`}>
+                {pointsActionType === 'award' ? <Sparkles className="w-6 h-6" /> : <Minus className="w-6 h-6" />}
               </div>
               <div>
                 <h3 className="text-base sm:text-lg font-black text-white font-heading">
-                  منح نقاط تشجيعية للطالب
+                  {pointsActionType === 'award' ? 'منح نقاط تشجيعية للطالب' : 'خصم نقاط جزائية من الطالب'}
                 </h3>
                 <p className="text-xs text-amber-300 font-bold">
                   {awardModalStudent.name} (رصيده الحالي: {awardModalStudent.points || 0} نقطة)
@@ -754,9 +815,49 @@ export const LeaderboardTab: React.FC<LeaderboardTabProps> = ({
               </div>
             </div>
 
+            {/* Toggle Action Type Segmented Control */}
+            <div className="grid grid-cols-2 gap-2 p-1 rounded-2xl bg-[#011a14] border border-[#065f46]">
+              <button
+                type="button"
+                onClick={() => {
+                  setPointsActionType('award');
+                  setBonusPointsAmount(10);
+                  setBonusPointsReason('انضباط وتميز قرآني');
+                }}
+                className={`py-2 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                  pointsActionType === 'award'
+                    ? 'bg-gradient-to-r from-amber-400 to-amber-500 text-[#064e3b] shadow-md'
+                    : 'text-emerald-300 hover:text-white'
+                }`}
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>منح نقاط (+)</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setPointsActionType('deduct');
+                  setBonusPointsAmount(5);
+                  setBonusPointsReason('تقصير متكرر في الحفظ والتسميع');
+                }}
+                className={`py-2 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                  pointsActionType === 'deduct'
+                    ? 'bg-gradient-to-r from-rose-500 to-rose-600 text-white shadow-md'
+                    : 'text-rose-300 hover:text-white'
+                }`}
+              >
+                <Minus className="w-3.5 h-3.5" />
+                <span>خصم نقاط (-)</span>
+              </button>
+            </div>
+
             {bonusSuccessMsg ? (
-              <div className="p-4 rounded-2xl bg-amber-400/20 border border-amber-400/40 text-amber-300 text-center font-bold text-sm flex items-center justify-center gap-2 animate-fadeIn">
-                <Check className="w-5 h-5 text-amber-400" />
+              <div className={`p-4 rounded-2xl border text-center font-bold text-sm flex items-center justify-center gap-2 animate-fadeIn ${
+                pointsActionType === 'award'
+                  ? 'bg-amber-400/20 border-amber-400/40 text-amber-300'
+                  : 'bg-rose-500/20 border-rose-500/40 text-rose-300'
+              }`}>
+                <Check className="w-5 h-5" />
                 <span>{bonusSuccessMsg}</span>
               </div>
             ) : (
@@ -764,21 +865,28 @@ export const LeaderboardTab: React.FC<LeaderboardTabProps> = ({
                 {/* Presets and Custom Points */}
                 <div className="space-y-2">
                   <label className="text-xs font-bold text-[#86efac] block">
-                    اختر مقدار النقاط المراد إضافتها:
+                    {pointsActionType === 'award' ? 'اختر مقدار النقاط المراد إضافتها:' : 'اختر مقدار النقاط المراد خصمها:'}
                   </label>
                   <div className="grid grid-cols-4 gap-2">
-                    {[5, 10, 15, 20, 25, 50, 100].map(pts => (
+                    {(pointsActionType === 'award'
+                      ? [5, 10, 15, 20, 25, 50, 100]
+                      : [1, 2, 3, 5, 10, 15, 20]
+                    ).map(pts => (
                       <button
                         key={pts}
                         type="button"
                         onClick={() => setBonusPointsAmount(pts)}
                         className={`py-2 px-1 rounded-xl text-xs font-black transition-all cursor-pointer ${
                           bonusPointsAmount === pts
-                            ? 'bg-[#fbbf24] text-[#064e3b] shadow-md scale-105'
-                            : 'bg-[#064e3b] text-emerald-200 hover:text-white border border-[#065f46]'
+                            ? pointsActionType === 'award'
+                              ? 'bg-[#fbbf24] text-[#064e3b] shadow-md scale-105'
+                              : 'bg-rose-500 text-white shadow-md scale-105'
+                            : pointsActionType === 'award'
+                              ? 'bg-[#064e3b] text-emerald-200 hover:text-white border border-[#065f46]'
+                              : 'bg-rose-950/40 text-rose-200 hover:text-white border border-rose-800/40'
                         }`}
                       >
-                        +{pts} نقطة
+                        {pointsActionType === 'award' ? `+${pts}` : `-${pts}`} نقطة
                       </button>
                     ))}
                     <div className="relative">
@@ -788,7 +896,11 @@ export const LeaderboardTab: React.FC<LeaderboardTabProps> = ({
                         max={1000}
                         value={bonusPointsAmount}
                         onChange={e => setBonusPointsAmount(Math.max(1, Number(e.target.value)))}
-                        className="w-full py-2 px-2 bg-[#022c22] border border-[#065f46] focus:border-[#fbbf24] rounded-xl text-center text-xs font-black text-[#fbbf24] outline-none"
+                        className={`w-full py-2 px-2 bg-[#022c22] border rounded-xl text-center text-xs font-black outline-none ${
+                          pointsActionType === 'award'
+                            ? 'border-[#065f46] focus:border-[#fbbf24] text-[#fbbf24]'
+                            : 'border-rose-800/60 focus:border-rose-400 text-rose-300'
+                        }`}
                         placeholder="مخصص"
                       />
                     </div>
@@ -798,24 +910,36 @@ export const LeaderboardTab: React.FC<LeaderboardTabProps> = ({
                 {/* Reason Presets */}
                 <div className="space-y-2">
                   <label className="text-xs font-bold text-[#86efac] block">
-                    سبب منح النقاط التكريمية:
+                    {pointsActionType === 'award' ? 'سبب منح النقاط التكريمية:' : 'سبب خصم النقاط الجزائية:'}
                   </label>
                   <div className="flex flex-wrap gap-1.5">
-                    {[
-                      'انضباط وتميز قرآني',
-                      'إتقان استثنائي في التسميع',
-                      'تفوق في مسابقة الحفظ',
-                      'حفظ متن تجويدي إضافي',
-                      'التزام فائق بالمراجعة اليومية',
-                      'حسن خلق وأدب رفيع'
-                    ].map(r => (
+                    {(pointsActionType === 'award'
+                      ? [
+                          'انضباط وتميز قرآني',
+                          'إتقان استثنائي في التسميع',
+                          'تفوق في مسابقة الحفظ',
+                          'حفظ متن تجويدي إضافي',
+                          'التزام فائق بالمراجعة اليومية',
+                          'حسن خلق وأدب رفيع'
+                        ]
+                      : [
+                          'تقصير متكرر في الحفظ والتسميع',
+                          'عدم الالتزام بالمراجعة اليومية',
+                          'تأخر متكرر عن وقت الحلقة',
+                          'تشويش وسلوك غير لائق بالحلقة',
+                          'عدم إحضار المصحف الشريف',
+                          'إهمال الواجبات المحددة'
+                        ]
+                    ).map(r => (
                       <button
                         key={r}
                         type="button"
                         onClick={() => setBonusPointsReason(r)}
                         className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
                           bonusPointsReason === r
-                            ? 'bg-[#064e3b] text-[#fbbf24] border border-[#fbbf24]'
+                            ? pointsActionType === 'award'
+                              ? 'bg-[#064e3b] text-[#fbbf24] border border-[#fbbf24]'
+                              : 'bg-rose-950 text-rose-300 border border-rose-500'
                             : 'bg-[#022c22] text-emerald-300/80 border border-[#065f46] hover:text-white'
                         }`}
                       >
@@ -834,10 +958,20 @@ export const LeaderboardTab: React.FC<LeaderboardTabProps> = ({
                 </div>
 
                 {/* Preview Banner */}
-                <div className="p-3.5 rounded-2xl bg-[#011a14] border border-[#065f46] flex items-center justify-between text-xs">
-                  <span className="text-[#86efac]">الرصيد بعد الإضافة سيكون:</span>
-                  <span className="font-mono font-black text-[#fbbf24] text-sm">
-                    {(awardModalStudent.points || 0) + (Number(bonusPointsAmount) || 0)} نقطة
+                <div className={`p-3.5 rounded-2xl border flex items-center justify-between text-xs ${
+                  pointsActionType === 'award'
+                    ? 'bg-[#011a14] border-[#065f46]'
+                    : 'bg-rose-950/20 border-rose-800/40'
+                }`}>
+                  <span className={pointsActionType === 'award' ? 'text-[#86efac]' : 'text-rose-300'}>
+                    {pointsActionType === 'award' ? 'الرصيد بعد الإضافة سيكون:' : 'الرصيد بعد الخصم سيكون:'}
+                  </span>
+                  <span className={`font-mono font-black text-sm ${
+                    pointsActionType === 'award' ? 'text-[#fbbf24]' : 'text-rose-400'
+                  }`}>
+                    {pointsActionType === 'award'
+                      ? (awardModalStudent.points || 0) + (Number(bonusPointsAmount) || 0)
+                      : Math.max(0, (awardModalStudent.points || 0) - (Number(bonusPointsAmount) || 0))} نقطة
                   </span>
                 </div>
 
@@ -855,14 +989,23 @@ export const LeaderboardTab: React.FC<LeaderboardTabProps> = ({
                     type="button"
                     disabled={isSubmittingBonus || bonusPointsAmount <= 0}
                     onClick={handleConfirmAwardBonus}
-                    className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-amber-400 to-amber-500 hover:brightness-110 text-[#064e3b] font-black text-xs flex items-center gap-1.5 shadow-lg cursor-pointer transition-all disabled:opacity-50"
+                    className={`px-6 py-2.5 rounded-xl font-black text-xs flex items-center gap-1.5 shadow-lg cursor-pointer transition-all disabled:opacity-50 ${
+                      pointsActionType === 'award'
+                        ? 'bg-gradient-to-r from-amber-400 to-amber-500 hover:brightness-110 text-[#064e3b]'
+                        : 'bg-gradient-to-r from-rose-500 to-rose-600 hover:brightness-110 text-white'
+                    }`}
                   >
                     {isSubmittingBonus ? (
-                      <span>جارٍ اعتماد النقاط...</span>
-                    ) : (
+                      <span>جارٍ اعتماد التغيير...</span>
+                    ) : pointsActionType === 'award' ? (
                       <>
                         <Sparkles className="w-4 h-4" />
                         <span>اعتماد وإضافة (+{bonusPointsAmount}) نقطة</span>
+                      </>
+                    ) : (
+                      <>
+                        <Minus className="w-4 h-4" />
+                        <span>تأكيد وخصم (-{bonusPointsAmount}) نقطة</span>
                       </>
                     )}
                   </button>

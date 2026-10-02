@@ -23,6 +23,32 @@ app.get("/api/health", (req, res) => {
   res.json({ status: "ok" });
 });
 
+// Google Maps Geocoding Proxy Route (prevents CORS and secures key)
+app.get("/api/maps/geocode", async (req, res) => {
+  try {
+    const query = String(req.query.q || "").trim();
+    if (!query) {
+      return res.status(400).json({ error: "Missing query parameter 'q'" });
+    }
+    const key =
+      process.env.VITE_GOOGLE_MAPS_API_KEY ||
+      process.env.GOOGLE_MAPS_API_KEY ||
+      "";
+    if (!key) {
+      return res.status(500).json({ error: "Maps API key not configured" });
+    }
+    const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(
+      query
+    )}&key=${key}&language=ar`;
+    const response = await fetch(url);
+    const data = await response.json();
+    return res.json(data);
+  } catch (err: any) {
+    console.error("Geocode proxy error:", err);
+    return res.status(500).json({ error: err.message || "Geocoding failed" });
+  }
+});
+
 // Initialize Google GenAI
 const ai = new GoogleGenAI({
   apiKey: process.env.GEMINI_API_KEY || "",

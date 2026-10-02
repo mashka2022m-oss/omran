@@ -1132,26 +1132,39 @@ export function App() {
     setAttendance(list);
   };
 
-  // 7. Save Evaluation & dynamically update student's current position and award criteria points
+  // 7. Save Evaluation & dynamically update student's current position and adjust points by delta
   const handleSaveEvaluation = async (
     evaluation: StudentEvaluation,
     newAssignment?: any,
     updatedPosition?: { surahNumber: number; surahName: string; ayah: number },
     listeningAssignment?: any
   ) => {
+    // Check if there was an earlier evaluation for this student on this date to compute exact delta
+    const previousEval = evaluations.find(
+      e => e.id === evaluation.id || (e.studentId === evaluation.studentId && e.date === evaluation.date)
+    );
+    const prevCriteriaPts = previousEval?.recitationDetails?.criteriaPointsEarnedToday || 0;
+    const prevPagePts = previousEval?.recitationDetails?.pagesPointsEarnedToday || 0;
+    const prevTotalEarned = prevCriteriaPts + prevPagePts;
+
+    const newCriteriaPts = evaluation.recitationDetails?.criteriaPointsEarnedToday || 0;
+    const newPagePts = evaluation.recitationDetails?.pagesPointsEarnedToday || 0;
+    const newTotalEarned = newCriteriaPts + newPagePts;
+
+    const deltaCriteria = newCriteriaPts - prevCriteriaPts;
+    const deltaPage = newPagePts - prevPagePts;
+    const deltaTotal = newTotalEarned - prevTotalEarned;
+
     await OmranDataService.saveEvaluation(evaluation);
     const list = await OmranDataService.loadEvaluations();
     setEvaluations(list);
 
-    // Update the student's position, assignment, and award points permanently
+    // Update the student's position, assignment, and adjust points by delta
     setStudents(prev => {
       const targetStudent = prev.find(s => s.id === evaluation.studentId);
       if (!targetStudent) return prev;
 
       const todayNew = evaluation.recitationDetails?.todayNewItem;
-      const criteriaPts = evaluation.recitationDetails?.criteriaPointsEarnedToday || 0;
-      const pagePts = evaluation.recitationDetails?.pagesPointsEarnedToday || 0;
-      const totalEarnedToday = criteriaPts + pagePts;
 
       let finalSurahNum = updatedPosition?.surahNumber ?? targetStudent.currentSurah;
       let finalSurahName = updatedPosition?.surahName ?? targetStudent.currentSurahName;
@@ -1168,9 +1181,9 @@ export function App() {
         currentSurah: finalSurahNum,
         currentSurahName: finalSurahName,
         currentAyah: finalAyah,
-        criteriaPoints: (targetStudent.criteriaPoints || 0) + criteriaPts,
-        totalPagePoints: (targetStudent.totalPagePoints || 0) + pagePts,
-        points: (targetStudent.points || 0) + totalEarnedToday,
+        criteriaPoints: Math.max(0, (targetStudent.criteriaPoints || 0) + deltaCriteria),
+        totalPagePoints: Math.max(0, (targetStudent.totalPagePoints || 0) + deltaPage),
+        points: Math.max(0, (targetStudent.points || 0) + deltaTotal),
         persistentReviewItems: newAssignment?.reviewItems || targetStudent.persistentReviewItems,
         activeListeningAssignment: listeningAssignment || targetStudent.activeListeningAssignment,
         aiPlan: newAssignment ? {
@@ -1269,13 +1282,14 @@ export function App() {
   };
 
   // Award Bonus Points to Student directly from Leaderboard
-  const handleAwardBonusPoints = async (studentId: string, pointsToAdd: number, reason: string) => {
+  // Award / Deduct Bonus Points for Student directly from Leaderboard
+  const handleAwardBonusPoints = async (studentId: string, pointsDelta: number, reason: string) => {
     const targetStudent = students.find(s => s.id === studentId);
     if (!targetStudent) return;
     const updatedStudent: Student = {
       ...targetStudent,
-      points: Math.max(0, (targetStudent.points || 0) + pointsToAdd),
-      criteriaPoints: Math.max(0, (targetStudent.criteriaPoints || 0) + pointsToAdd)
+      points: Math.max(0, (targetStudent.points || 0) + pointsDelta),
+      bonusPoints: Math.max(0, (targetStudent.bonusPoints || 0) + pointsDelta)
     };
     await handleUpdateStudent(updatedStudent);
   };
@@ -1298,8 +1312,13 @@ export function App() {
     setChatHistory([]);
   };
 
-  // 12. Violation Handlers
+  // 12. Violation Handlers (Supports automatic point deduction on students)
   const handleSaveViolation = async (violation: BehaviorViolation) => {
+    const existingViolation = violations.find(v => v.id === violation.id);
+    const prevPointsDeducted = Number(existingViolation?.pointsDeducted) || 0;
+    const newPointsDeducted = Number(violation.pointsDeducted) || 0;
+    const deltaDeduction = newPointsDeducted - prevPointsDeducted;
+
     setViolations(prev => {
       const idx = prev.findIndex(v => v.id === violation.id);
       if (idx >= 0) {
@@ -1310,11 +1329,46 @@ export function App() {
       return [violation, ...prev];
     });
     await OmranDataService.saveViolation(violation);
+
+    // Apply points deduction delta directly to the student's total score
+    if (deltaDeduction !== 0) {
+      setStudents(prev => {
+        const targetStudent = prev.find(s => s.id === violation.studentId);
+        if (!targetStudent) return prev;
+        const updatedStudent: Student = {
+          ...targetStudent,
+          points: Math.max(0, (targetStudent.points || 0) - deltaDeduction)
+        };
+        OmranDataService.saveStudent(updatedStudent).catch(err => {
+          console.warn('Student save warning on violation points deduction:', err);
+        });
+        return prev.map(s => s.id === updatedStudent.id ? updatedStudent : s);
+      });
+    }
   };
 
   const handleDeleteViolation = async (id: string) => {
+    const targetViolation = violations.find(v => v.id === id);
+    const restoredPoints = Number(targetViolation?.pointsDeducted) || 0;
+
     setViolations(prev => prev.filter(v => v.id !== id));
     await OmranDataService.deleteViolation(id);
+
+    // If the violation had deducted points, restore them to the student upon deletion
+    if (restoredPoints > 0 && targetViolation?.studentId) {
+      setStudents(prev => {
+        const targetStudent = prev.find(s => s.id === targetViolation.studentId);
+        if (!targetStudent) return prev;
+        const updatedStudent: Student = {
+          ...targetStudent,
+          points: (targetStudent.points || 0) + restoredPoints
+        };
+        OmranDataService.saveStudent(updatedStudent).catch(err => {
+          console.warn('Student save warning on violation deletion restore:', err);
+        });
+        return prev.map(s => s.id === updatedStudent.id ? updatedStudent : s);
+      });
+    }
   };
 
   // 13. Exam Handlers

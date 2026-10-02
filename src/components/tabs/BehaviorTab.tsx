@@ -906,19 +906,47 @@ export const BehaviorTab: React.FC<BehaviorTabProps> = ({
                 </div>
 
                 <div>
-                  <label className="block text-[#fbbf24] font-bold mb-1.5">
-                    حسم درجات السلوك (اختياري):
+                  <label className="block text-[#fbbf24] font-bold mb-1.5 flex items-center justify-between">
+                    <span>خصم نقاط من رصيد الطالب (اختياري):</span>
+                    {currentFormStudent && (
+                      <span className="text-[11px] text-amber-300 font-bold">
+                        رصيد الطالب الحالي: {currentFormStudent.points || 0} نقطة
+                      </span>
+                    )}
                   </label>
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="number"
-                      min="0"
-                      max="10"
-                      value={formPointsDeducted}
-                      onChange={e => setFormPointsDeducted(Math.max(0, parseInt(e.target.value) || 0))}
-                      className="w-24 p-2.5 rounded-xl bg-[#022c22] border border-[#065f46] text-center text-white font-mono font-bold focus:outline-none focus:border-[#fbbf24]"
-                    />
-                    <span className="text-[11px] text-[#86efac]/80">درجة تخصم من تقييم السلوك بالحلقة</span>
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      {[0, 1, 2, 3, 5, 10].map(pts => (
+                        <button
+                          key={pts}
+                          type="button"
+                          onClick={() => setFormPointsDeducted(pts)}
+                          className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                            formPointsDeducted === pts
+                              ? 'bg-rose-500 text-white shadow-md'
+                              : 'bg-[#022c22] text-rose-200/80 hover:text-white border border-rose-500/40'
+                          }`}
+                        >
+                          {pts === 0 ? 'بدون خصم (0)' : `خصم ${pts} نقاط`}
+                        </button>
+                      ))}
+                      <div className="relative">
+                        <input
+                          type="number"
+                          min="0"
+                          max="100"
+                          value={formPointsDeducted}
+                          onChange={e => setFormPointsDeducted(Math.max(0, parseInt(e.target.value) || 0))}
+                          className="w-20 p-1.5 rounded-lg bg-[#022c22] border border-[#065f46] text-center text-white font-mono text-xs font-bold focus:outline-none focus:border-[#fbbf24]"
+                          placeholder="مخصص"
+                        />
+                      </div>
+                    </div>
+                    {formPointsDeducted > 0 && currentFormStudent && (
+                      <p className="text-[11px] text-rose-300 font-bold">
+                        ⚠️ سيتم خصم ({formPointsDeducted}) نقطة تلقائياً من رصيد الطالب (الرصيد بعد الخصم: {Math.max(0, (currentFormStudent.points || 0) - formPointsDeducted)} نقطة).
+                      </p>
+                    )}
                   </div>
                 </div>
               </div>

@@ -22,8 +22,10 @@ import {
   Users,
   Compass,
   AlertCircle,
-  UserPlus
+  UserPlus,
+  Eye
 } from 'lucide-react';
+import { MosqueLocationMapModal } from '../MosqueLocationMapModal';
 import {
   TeacherAccount,
   TeacherShift,
@@ -83,6 +85,37 @@ export const TeacherAttendanceTab: React.FC<TeacherAttendanceTabProps> = ({
   const [capturedMosqueLocation, setCapturedMosqueLocation] = useState<{ lat?: number; lng?: number } | null>(null);
   const [isCapturingGPS, setIsCapturingGPS] = useState(false);
   const [gpsCaptureMsg, setGpsCaptureMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  // Google Maps Interactive Modal State (اطلاع / تحديد وتعديل)
+  const [mapModalMosque, setMapModalMosque] = useState<MosqueItem | null>(null);
+  const [mapModalMode, setMapModalMode] = useState<'view' | 'picker'>('view');
+  const [isMapModalOpen, setIsMapModalOpen] = useState(false);
+
+  const handleOpenMosqueMap = (mosque: MosqueItem, mode: 'view' | 'picker' = 'view') => {
+    setMapModalMosque(mosque);
+    setMapModalMode(mode);
+    setIsMapModalOpen(true);
+  };
+
+  const handleSaveMosqueLocationFromMap = async (mosqueId: string, lat: number, lng: number) => {
+    const target = mosques.find(m => m.id === mosqueId);
+    if (!target) return;
+    const updated: MosqueItem = {
+      ...target,
+      latitude: lat,
+      longitude: lng,
+      allowedRadiusMeters: 1000,
+      isLocationSet: true
+    };
+    setMosques(prev => prev.map(m => (m.id === mosqueId ? updated : m)));
+    setCapturedMosqueLocation({ lat, lng });
+    try {
+      await OmranDataService.saveMosque(updated);
+    } catch (e) {
+      console.warn('Error saving mosque location:', e);
+    }
+    showToast(`تم تثبيت موقع (${updated.name}) على الخريطة بنجاح!`);
+  };
 
   // 2. Shifts State (فترات ومناوبات الدوام)
   const [shifts, setShifts] = useState<TeacherShift[]>([]);
@@ -519,25 +552,33 @@ export const TeacherAttendanceTab: React.FC<TeacherAttendanceTabProps> = ({
           const userLat = pos.coords.latitude;
           const userLng = pos.coords.longitude;
 
-          // If mosque location has been set, check 1km radius
-          if (targetMosque && targetMosque.isLocationSet && targetMosque.latitude && targetMosque.longitude) {
-            const distance = calculateHaversineDistanceMeters(
-              userLat,
-              userLng,
-              targetMosque.latitude,
-              targetMosque.longitude
-            );
-            const allowedRadius = targetMosque.allowedRadiusMeters || 1000;
+          // Verify mosque has configured location
+          if (!targetMosque || !targetMosque.isLocationSet || !targetMosque.latitude || !targetMosque.longitude) {
+            setCheckInFeedback({
+              type: 'error',
+              text: `عذراً، لم يتم ضبط الموقع الجغرافي لجامع (${targetMosque?.name || targetShift.name}) بعد على الخريطة من قِبل المشرف. يلزم ضبط موقع الجامع أولاً للتحقق من نطاق الـ 1 كم.`
+            });
+            setIsPerformingCheckIn(false);
+            return;
+          }
 
-            if (distance > allowedRadius) {
-              const km = (distance / 1000).toFixed(2);
-              setCheckInFeedback({
-                type: 'error',
-                text: `عذراً، أنت خارج نطاق (${targetMosque.name})! المسافة الحالية تقريباً ${km} كم. الحد الأقصى المسموح للتحضير هو 1 كم.`
-              });
-              setIsPerformingCheckIn(false);
-              return;
-            }
+          // Check 1km radius strictly
+          const distance = calculateHaversineDistanceMeters(
+            userLat,
+            userLng,
+            targetMosque.latitude,
+            targetMosque.longitude
+          );
+          const allowedRadius = targetMosque.allowedRadiusMeters || 1000;
+
+          if (distance > allowedRadius) {
+            const km = (distance / 1000).toFixed(2);
+            setCheckInFeedback({
+              type: 'error',
+              text: `عذراً، أنت خارج نطاق (${targetMosque.name})! المسافة الحالية تقريباً ${km} كم، والحد الأقصى المسموح للتحضير هو 1 كم فقط.`
+            });
+            setIsPerformingCheckIn(false);
+            return;
           }
 
           // Within range! Record check-in
@@ -617,24 +658,33 @@ export const TeacherAttendanceTab: React.FC<TeacherAttendanceTabProps> = ({
           const userLat = pos.coords.latitude;
           const userLng = pos.coords.longitude;
 
-          if (targetMosque && targetMosque.isLocationSet && targetMosque.latitude && targetMosque.longitude) {
-            const distance = calculateHaversineDistanceMeters(
-              userLat,
-              userLng,
-              targetMosque.latitude,
-              targetMosque.longitude
-            );
-            const allowedRadius = targetMosque.allowedRadiusMeters || 1000;
+          // Verify mosque has configured location
+          if (!targetMosque || !targetMosque.isLocationSet || !targetMosque.latitude || !targetMosque.longitude) {
+            setCheckInFeedback({
+              type: 'error',
+              text: `عذراً، لم يتم ضبط الموقع الجغرافي لجامع (${targetMosque?.name || targetShift.name}) بعد على الخريطة من قِبل المشرف. يلزم ضبط موقع الجامع أولاً لتسجيل الانصراف.`
+            });
+            setIsPerformingCheckOut(false);
+            return;
+          }
 
-            if (distance > allowedRadius) {
-              const km = (distance / 1000).toFixed(2);
-              setCheckInFeedback({
-                type: 'error',
-                text: `عذراً، أنت خارج نطاق (${targetMosque.name}) لتسجيل الانصراف! المسافة تقريباً ${km} كم.`
-              });
-              setIsPerformingCheckOut(false);
-              return;
-            }
+          // Check 1km radius strictly
+          const distance = calculateHaversineDistanceMeters(
+            userLat,
+            userLng,
+            targetMosque.latitude,
+            targetMosque.longitude
+          );
+          const allowedRadius = targetMosque.allowedRadiusMeters || 1000;
+
+          if (distance > allowedRadius) {
+            const km = (distance / 1000).toFixed(2);
+            setCheckInFeedback({
+              type: 'error',
+              text: `عذراً، أنت خارج نطاق (${targetMosque.name}) لتسجيل الانصراف! المسافة تقريباً ${km} كم، والحد الأقصى المسموح هو 1 كم فقط.`
+            });
+            setIsPerformingCheckOut(false);
+            return;
           }
 
           const timeStr = formatCurrentArabicTime();
@@ -982,15 +1032,34 @@ export const TeacherAttendanceTab: React.FC<TeacherAttendanceTabProps> = ({
                       </div>
 
                       {/* Linked Mosque Badge */}
-                      <div className="p-3 rounded-2xl bg-[#064e3b]/50 border border-[#065f46] space-y-1">
-                        <div className="flex items-center gap-1.5 text-xs text-amber-300 font-bold">
-                          <Building2 className="w-4 h-4 text-amber-400" />
-                          <span>الجامع: {shiftMosque?.name || shift.mosqueName || 'جامع الحلقات'}</span>
+                      <div className="p-3 rounded-2xl bg-[#064e3b]/50 border border-[#065f46] space-y-1.5">
+                        <div className="flex items-center justify-between gap-1.5">
+                          <div className="flex items-center gap-1.5 text-xs text-amber-300 font-bold">
+                            <Building2 className="w-4 h-4 text-amber-400" />
+                            <span>الجامع: {shiftMosque?.name || shift.mosqueName || 'جامع الحلقات'}</span>
+                          </div>
+                          {shiftMosque && (
+                            <button
+                              type="button"
+                              onClick={() => handleOpenMosqueMap(shiftMosque, 'view')}
+                              className="px-2 py-1 rounded-lg bg-emerald-800/80 hover:bg-emerald-700 text-emerald-200 text-[11px] font-bold flex items-center gap-1 cursor-pointer transition-colors border border-emerald-600/40"
+                              title="اطلاع على موقع الجامع وحدود الـ 1 كم على الخريطة"
+                            >
+                              <Eye className="w-3.5 h-3.5 text-amber-300" />
+                              <span>خريطة الجامع</span>
+                            </button>
+                          )}
                         </div>
                         {shiftMosque?.neighborhood && (
                           <span className="text-[11px] text-emerald-300/80 block pr-5">
                             الموقع: {shiftMosque.neighborhood}
                           </span>
+                        )}
+                        {!shiftMosque?.isLocationSet && (
+                          <div className="p-2 rounded-xl bg-amber-400/10 border border-amber-400/30 text-amber-300 text-[11px] font-bold flex items-center gap-1.5">
+                            <AlertCircle className="w-4 h-4 shrink-0" />
+                            <span>تنبيه: لم يحدد المشرف موقع هذا الجامع على الخريطة بعد.</span>
+                          </div>
                         )}
                       </div>
 
@@ -1398,25 +1467,50 @@ export const TeacherAttendanceTab: React.FC<TeacherAttendanceTabProps> = ({
                     </div>
                   </div>
 
-                  <div className="flex items-center justify-end gap-2 pt-2 border-t border-[#065f46]">
-                    <button
-                      type="button"
-                      onClick={() => handleOpenEditMosqueModal(mosque)}
-                      className="px-3 py-1.5 rounded-xl bg-[#064e3b] hover:bg-[#064e3b]/80 text-emerald-200 text-xs font-bold flex items-center gap-1 cursor-pointer transition-colors"
-                    >
-                      <Edit2 className="w-3.5 h-3.5" />
-                      <span>تعديل</span>
-                    </button>
-                    {mosques.length > 1 && (
+                  <div className="flex items-center justify-between gap-2 pt-2 border-t border-[#065f46] flex-wrap">
+                    <div className="flex items-center gap-1.5">
+                      {mosque.isLocationSet && (
+                        <button
+                          type="button"
+                          onClick={() => handleOpenMosqueMap(mosque, 'view')}
+                          className="px-2.5 py-1.5 rounded-xl bg-emerald-900/60 hover:bg-emerald-800 text-emerald-200 border border-emerald-700/60 text-xs font-bold flex items-center gap-1 cursor-pointer transition-colors"
+                          title="اطلاع على موقع الجامع وحدود الـ 1 كم على الخريطة"
+                        >
+                          <Eye className="w-3.5 h-3.5 text-amber-300" />
+                          <span>اطلاع</span>
+                        </button>
+                      )}
                       <button
                         type="button"
-                        onClick={() => handleDeleteMosque(mosque.id)}
-                        className="p-1.5 rounded-xl bg-red-900/30 hover:bg-red-900/60 text-red-300 cursor-pointer transition-colors"
-                        title="حذف الجامع"
+                        onClick={() => handleOpenMosqueMap(mosque, 'picker')}
+                        className="px-2.5 py-1.5 rounded-xl bg-amber-400/20 hover:bg-amber-400/30 text-amber-300 border border-amber-400/40 text-xs font-bold flex items-center gap-1 cursor-pointer transition-colors"
+                        title="تحديد أو تعديل الموقع على خريطة Google التفاعلية"
                       >
-                        <Trash2 className="w-3.5 h-3.5" />
+                        <MapPin className="w-3.5 h-3.5" />
+                        <span>{mosque.isLocationSet ? 'تعديل على الخريطة' : 'تحديد على الخريطة'}</span>
                       </button>
-                    )}
+                    </div>
+
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => handleOpenEditMosqueModal(mosque)}
+                        className="px-3 py-1.5 rounded-xl bg-[#064e3b] hover:bg-[#064e3b]/80 text-emerald-200 text-xs font-bold flex items-center gap-1 cursor-pointer transition-colors"
+                      >
+                        <Edit2 className="w-3.5 h-3.5" />
+                        <span>تعديل</span>
+                      </button>
+                      {mosques.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteMosque(mosque.id)}
+                          className="p-1.5 rounded-xl bg-red-900/30 hover:bg-red-900/60 text-red-300 cursor-pointer transition-colors"
+                          title="حذف الجامع"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
               );
@@ -1619,21 +1713,44 @@ export const TeacherAttendanceTab: React.FC<TeacherAttendanceTabProps> = ({
               {/* Simple One-Click GPS Capture (بدون خطوط طول وعرض) */}
               <div className="p-4 rounded-2xl bg-[#011a14] border border-[#065f46] space-y-2.5">
                 <span className="text-xs font-bold text-amber-300 block">
-                  📍 تحديد الموقع للتحضير الذكي (بنقرة واحدة):
+                  📍 تحديد الموقع للتحضير الذكي (Google Maps أو بنقرة واحدة):
                 </span>
                 <p className="text-[11px] text-emerald-300/80 leading-relaxed">
-                  إذا كنت متواجداً في هذا الجامع الآن، اضغط الزر أدناه ليتم التقاط موقعه تلقائياً بدون الحاجة لأي إحداثيات أو أرقام معقدة.
+                  يمكنك فتح الخريطة التفاعلية والتحريك وسحب الدبوس حتى تصل للجامع، أو الضغط على التقاط موقعك الحالي مباشرة.
                 </p>
 
-                <button
-                  type="button"
-                  disabled={isCapturingGPS}
-                  onClick={handleCaptureCurrentLocationForMosque}
-                  className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-emerald-600 to-emerald-700 hover:brightness-110 text-white font-bold text-xs flex items-center justify-center gap-2 cursor-pointer transition-all shadow-sm disabled:opacity-50"
-                >
-                  <Navigation className="w-4 h-4" />
-                  <span>{isCapturingGPS ? 'جارٍ التقاط الموقع...' : 'التقاط موقعي الحالي كموقع لهذا الجامع'}</span>
-                </button>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const tempMosque: MosqueItem = {
+                        id: editingMosqueId || `mosque_${Date.now()}`,
+                        name: mosqueNameInput.trim() || 'الجامع',
+                        neighborhood: mosqueNeighborhoodInput.trim(),
+                        latitude: capturedMosqueLocation?.lat,
+                        longitude: capturedMosqueLocation?.lng,
+                        isLocationSet: Boolean(capturedMosqueLocation?.lat),
+                        allowedRadiusMeters: 1000,
+                        createdAt: new Date().toISOString()
+                      };
+                      handleOpenMosqueMap(tempMosque, 'picker');
+                    }}
+                    className="py-2.5 px-3 rounded-xl bg-gradient-to-r from-amber-400 to-amber-500 hover:brightness-110 text-[#064e3b] font-black text-xs flex items-center justify-center gap-1.5 cursor-pointer transition-all shadow-md"
+                  >
+                    <MapPin className="w-4 h-4" />
+                    <span>تحديد بالخريطة التفاعلية</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    disabled={isCapturingGPS}
+                    onClick={handleCaptureCurrentLocationForMosque}
+                    className="py-2.5 px-3 rounded-xl bg-emerald-700 hover:bg-emerald-600 text-white font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer transition-all shadow-sm disabled:opacity-50"
+                  >
+                    <Navigation className="w-4 h-4" />
+                    <span>{isCapturingGPS ? 'جارٍ الالتقاط...' : 'التقاط موقعي الحالي (GPS)'}</span>
+                  </button>
+                </div>
 
                 {gpsCaptureMsg && (
                   <div
@@ -2075,6 +2192,22 @@ export const TeacherAttendanceTab: React.FC<TeacherAttendanceTabProps> = ({
             </div>
           </div>
         </div>
+      )}
+
+      {/* ===================================================================== */}
+      {/* MODAL 5: GOOGLE MAPS MOSQUE LOCATION (اطلاع / تحديد وتعديل بالخريطة)  */}
+      {/* ===================================================================== */}
+      {mapModalMosque && (
+        <MosqueLocationMapModal
+          isOpen={isMapModalOpen}
+          onClose={() => {
+            setIsMapModalOpen(false);
+            setMapModalMosque(null);
+          }}
+          mosque={mapModalMosque}
+          mode={mapModalMode}
+          onSaveLocation={handleSaveMosqueLocationFromMap}
+        />
       )}
     </div>
   );
