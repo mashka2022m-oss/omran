@@ -1281,17 +1281,30 @@ export function App() {
     });
   };
 
-  // Award Bonus Points to Student directly from Leaderboard
   // Award / Deduct Bonus Points for Student directly from Leaderboard
   const handleAwardBonusPoints = async (studentId: string, pointsDelta: number, reason: string) => {
     const targetStudent = students.find(s => s.id === studentId);
     if (!targetStudent) return;
+
+    // Use current recorded points or fallback to existing criteria + page points
+    const currentPoints = typeof targetStudent.points === 'number'
+      ? targetStudent.points
+      : (targetStudent.criteriaPoints || 0) + (targetStudent.totalPagePoints || 0);
+
+    const newPoints = Math.max(0, currentPoints + pointsDelta);
+    const newBonusPoints = (targetStudent.bonusPoints || 0) + pointsDelta;
+
     const updatedStudent: Student = {
       ...targetStudent,
-      points: Math.max(0, (targetStudent.points || 0) + pointsDelta),
-      bonusPoints: Math.max(0, (targetStudent.bonusPoints || 0) + pointsDelta)
+      points: newPoints,
+      bonusPoints: newBonusPoints
     };
-    await handleUpdateStudent(updatedStudent);
+
+    // 1. Immediately update state in memory for snappy, responsive UI
+    setStudents(prev => prev.map(s => (s.id === studentId ? updatedStudent : s)));
+
+    // 2. Persist to Firestore directly
+    await OmranDataService.saveStudent(updatedStudent);
   };
 
   // 10. Update Settings
@@ -1335,9 +1348,13 @@ export function App() {
       setStudents(prev => {
         const targetStudent = prev.find(s => s.id === violation.studentId);
         if (!targetStudent) return prev;
+        const currentPoints = typeof targetStudent.points === 'number'
+          ? targetStudent.points
+          : (targetStudent.criteriaPoints || 0) + (targetStudent.totalPagePoints || 0);
+
         const updatedStudent: Student = {
           ...targetStudent,
-          points: Math.max(0, (targetStudent.points || 0) - deltaDeduction)
+          points: Math.max(0, currentPoints - deltaDeduction)
         };
         OmranDataService.saveStudent(updatedStudent).catch(err => {
           console.warn('Student save warning on violation points deduction:', err);
@@ -1359,9 +1376,13 @@ export function App() {
       setStudents(prev => {
         const targetStudent = prev.find(s => s.id === targetViolation.studentId);
         if (!targetStudent) return prev;
+        const currentPoints = typeof targetStudent.points === 'number'
+          ? targetStudent.points
+          : (targetStudent.criteriaPoints || 0) + (targetStudent.totalPagePoints || 0);
+
         const updatedStudent: Student = {
           ...targetStudent,
-          points: (targetStudent.points || 0) + restoredPoints
+          points: currentPoints + restoredPoints
         };
         OmranDataService.saveStudent(updatedStudent).catch(err => {
           console.warn('Student save warning on violation deletion restore:', err);

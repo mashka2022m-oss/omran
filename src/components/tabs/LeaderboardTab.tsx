@@ -85,7 +85,18 @@ export const LeaderboardTab: React.FC<LeaderboardTabProps> = ({
   const [bonusSuccessMsg, setBonusSuccessMsg] = useState<string | null>(null);
 
   const handleOpenPointsModal = (student: Student, action: 'award' | 'deduct' = 'award') => {
-    setAwardModalStudent(student);
+    const liveStudent = students.find(s => s.id === student.id) || student;
+    const rankItem = studentRankList.find(r => r.student.id === liveStudent.id);
+    const effectivePoints = typeof liveStudent.points === 'number'
+      ? liveStudent.points
+      : (rankItem?.totalPoints || 0);
+
+    const refreshedStudent: Student = {
+      ...liveStudent,
+      points: effectivePoints
+    };
+
+    setAwardModalStudent(refreshedStudent);
     setPointsActionType(action);
     setBonusPointsAmount(action === 'award' ? 10 : 5);
     setBonusPointsReason(action === 'award' ? 'انضباط وتميز قرآني' : 'تقصير متكرر في الحفظ والتسميع');
@@ -169,9 +180,11 @@ export const LeaderboardTab: React.FC<LeaderboardTabProps> = ({
       // 4. Completed pages points
       const totalPagePoints = st.totalPagePoints || 0;
 
-      // 5. Total points: sum of all components (or profile points if higher)
+      // 5. Total points: master student points balance
       const computedTotal = examPoints + finalEvalPoints + finalListeningPoints + totalPagePoints;
-      const totalPoints = Math.max(computedTotal, st.points || 0);
+      const totalPoints = typeof st.points === 'number'
+        ? Math.max(0, st.points)
+        : Math.max(0, computedTotal + (st.bonusPoints || 0));
 
       const halaqahName =
         st.halaqahName || halaqahs.find(h => h.id === st.halaqahId)?.name || 'الحلقة القرآنية';
@@ -589,7 +602,7 @@ export const LeaderboardTab: React.FC<LeaderboardTabProps> = ({
             </div>
 
             {/* Point Sources Summary Grid */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
               <div className="p-3 rounded-2xl bg-[#064e3b]/50 border border-emerald-800 text-center space-y-1">
                 <span className="text-[10px] text-emerald-300 font-bold block">تقييم التسميع</span>
                 <span className="text-lg font-black text-[#fbbf24] font-mono">{breakdownData.evalPoints}</span>
@@ -609,9 +622,17 @@ export const LeaderboardTab: React.FC<LeaderboardTabProps> = ({
               </div>
 
               <div className="p-3 rounded-2xl bg-[#064e3b]/50 border border-emerald-800 text-center space-y-1">
-                <span className="text-[10px] text-emerald-300 font-bold block">الأوجه والصفحات</span>
-                <span className="text-lg font-black text-[#fbbf24] font-mono">{breakdownData.pagePoints}</span>
-                <span className="text-[10px] text-emerald-400/80 block">نقاط الإتمام</span>
+                <span className="text-[10px] text-emerald-300 font-bold block">نقاط تشجيعية / حسم</span>
+                <span className={`text-lg font-black font-mono ${(breakdownData.student.bonusPoints || 0) >= 0 ? 'text-amber-400' : 'text-rose-400'}`}>
+                  {(breakdownData.student.bonusPoints || 0) >= 0 ? `+${breakdownData.student.bonusPoints || 0}` : breakdownData.student.bonusPoints}
+                </span>
+                <span className="text-[10px] text-emerald-400/80 block">تعديلات المعلم</span>
+              </div>
+
+              <div className="p-3 rounded-2xl bg-[#011a14] border border-[#fbbf24]/40 text-center space-y-1">
+                <span className="text-[10px] text-amber-300 font-bold block">إجمالي الرصيد الفعلي</span>
+                <span className="text-lg font-black text-[#fbbf24] font-mono">{breakdownData.totalPoints}</span>
+                <span className="text-[10px] text-emerald-300/80 block">الرصيد المعتمد</span>
               </div>
             </div>
 

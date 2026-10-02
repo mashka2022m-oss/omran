@@ -361,9 +361,11 @@ export const ParentPortalView: React.FC<ParentPortalViewProps> = ({
       // 4. Completed pages points
       const totalPagePoints = st.totalPagePoints || 0;
 
-      // 5. Total points: sum of all components (or profile points if higher)
+      // 5. Total points: master student points balance
       const computedTotal = examPoints + finalEvalPoints + finalListeningPoints + totalPagePoints;
-      const totalPoints = Math.max(computedTotal, st.points || 0);
+      const totalPoints = typeof st.points === 'number'
+        ? Math.max(0, st.points)
+        : Math.max(0, computedTotal + (st.bonusPoints || 0));
 
       const halaqahName =
         st.halaqahName || halaqahs?.find(h => h.id === st.halaqahId)?.name || 'الحلقة القرآنية';
