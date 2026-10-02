@@ -133,11 +133,11 @@ export const HomeTab: React.FC<HomeTabProps> = ({
             {onOpenTeacherManagement && (
               <button
                 onClick={onOpenTeacherManagement}
-                className="px-4 py-2.5 rounded-2xl bg-[#022c22] hover:bg-[#065f46] text-[#86efac] hover:text-[#fbbf24] border border-[#065f46] hover:border-[#fbbf24]/40 font-bold text-xs sm:text-sm flex items-center gap-2 transition-all cursor-pointer"
+                className="px-4 py-2.5 rounded-2xl bg-[#064e3b] hover:bg-[#065f46] text-[#fbbf24] border border-[#fbbf24]/40 hover:border-[#fbbf24] font-bold text-xs sm:text-sm flex items-center gap-2 transition-all cursor-pointer shadow-md"
                 style={activeComplex?.theme ? {
-                  backgroundColor: activeComplex.theme.backgroundColor,
+                  backgroundColor: activeComplex.theme.cardColor || `${activeComplex.theme.secondaryColor}ee`,
                   color: activeComplex.theme.accentColor,
-                  borderColor: activeComplex.theme.secondaryColor
+                  borderColor: activeComplex.theme.accentColor ? `${activeComplex.theme.accentColor}66` : undefined
                 } : undefined}
               >
                 <Users className="w-4 h-4 text-[#fbbf24]" style={activeComplex?.theme ? { color: activeComplex.theme.accentColor } : undefined} />

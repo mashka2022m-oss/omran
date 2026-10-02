@@ -34,11 +34,11 @@
 }
 
 /* ========================================================================= */
-/* DYNAMIC COMPLEX THEME ENGINE (نظام ثيمات المجمعات القرآنية الشامل من الألف للياء) */
+/* DYNAMIC COMPLEX THEME ENGINE (منظومة ثيمات المجمعات القرآنية الشاملة من الألف إلى الياء) */
 /* When [data-complex-themed="true"] is active, ALL UI elements inside the   */
-/* designated complex seamlessly adapt from A to Z to the chosen theme colors! */
-/* Outside the complex (Landing Page, Login, other complexes), natural colors*/
-/* (#022c22 & #fbbf24) remain 100% pristine and unaltered.                   */
+/* active complex seamlessly adapt from A to Z to the chosen theme colors!   */
+/* Outside the complex (Landing Page, Login, other complexes), natural       */
+/* platform colors (#022c22 & #fbbf24) remain 100% pristine and unaltered.   */
 /* ========================================================================= */
 
 [data-complex-themed="true"] {
@@ -55,18 +55,21 @@
 }
 
 [data-complex-themed="true"] [class*="bg-[#022c22]/"] {
-  background-color: rgba(var(--complex-bg-rgb), 0.75) !important;
+  background-color: rgba(var(--complex-bg-rgb), 0.8) !important;
 }
 
 [data-complex-themed="true"] .bg-\[\#064e3b\],
 [data-complex-themed="true"] [class*="bg-[#064e3b]"],
 [data-complex-themed="true"] .bg-emerald-900,
-[data-complex-themed="true"] [class*="bg-emerald-900"] {
+[data-complex-themed="true"] [class*="bg-emerald-900"],
+[data-complex-themed="true"] [class*="bg-[#011a14]"],
+[data-complex-themed="true"] [class*="bg-[#03362a]"],
+[data-complex-themed="true"] [class*="bg-[#044334]"] {
   background-color: var(--complex-card, var(--complex-secondary)) !important;
 }
 
 [data-complex-themed="true"] [class*="bg-[#064e3b]/"] {
-  background-color: rgba(var(--complex-secondary-rgb), 0.55) !important;
+  background-color: rgba(var(--complex-secondary-rgb), 0.6) !important;
 }
 
 [data-complex-themed="true"] [class*="bg-[#064e3b]/90"],
@@ -76,22 +79,24 @@
 
 [data-complex-themed="true"] [class*="bg-[#064e3b]/70"],
 [data-complex-themed="true"] [class*="bg-[#064e3b]/80"] {
-  background-color: rgba(var(--complex-secondary-rgb), 0.8) !important;
+  background-color: rgba(var(--complex-secondary-rgb), 0.82) !important;
 }
 
 [data-complex-themed="true"] [class*="bg-[#064e3b]/40"],
 [data-complex-themed="true"] [class*="bg-[#064e3b]/50"],
 [data-complex-themed="true"] [class*="bg-[#064e3b]/60"] {
-  background-color: rgba(var(--complex-secondary-rgb), 0.55) !important;
+  background-color: rgba(var(--complex-secondary-rgb), 0.58) !important;
 }
 
 [data-complex-themed="true"] [class*="bg-[#064e3b]/20"],
 [data-complex-themed="true"] [class*="bg-[#064e3b]/30"] {
-  background-color: rgba(var(--complex-secondary-rgb), 0.25) !important;
+  background-color: rgba(var(--complex-secondary-rgb), 0.28) !important;
 }
 
-[data-complex-themed="true"] [class*="bg-emerald-800"] {
-  background-color: rgba(var(--complex-secondary-rgb), 0.85) !important;
+[data-complex-themed="true"] [class*="bg-emerald-800"],
+[data-complex-themed="true"] [class*="bg-emerald-700"],
+[data-complex-themed="true"] [class*="bg-[#065f46]"] {
+  background-color: var(--complex-border) !important;
 }
 
 [data-complex-themed="true"] [class*="bg-emerald-500/20"],
@@ -103,11 +108,52 @@
   background-color: rgba(var(--complex-accent-rgb), 0.1) !important;
 }
 
-[data-complex-themed="true"] [class*="bg-[#011a14]"] {
-  background-color: var(--complex-primary) !important;
+/* 2. BUTTON CONTRAST GUARANTEE: Buttons MUST NEVER match the background! */
+/* Dark action buttons (like teacher management, shortcuts, etc.) are elevated cards */
+[data-complex-themed="true"] button[class*="bg-[#022c22]"],
+[data-complex-themed="true"] button[class*="bg-emerald-950"],
+[data-complex-themed="true"] a[class*="bg-[#022c22]"] {
+  background-color: var(--complex-card, var(--complex-secondary)) !important;
+  border-color: rgba(var(--complex-accent-rgb), 0.35) !important;
+  color: var(--complex-accent) !important;
 }
 
-/* 2. Accent Backgrounds (Gold / Highlights) */
+[data-complex-themed="true"] button[class*="bg-[#022c22]"]:hover,
+[data-complex-themed="true"] button[class*="bg-emerald-950"]:hover {
+  background-color: var(--complex-secondary) !important;
+  border-color: var(--complex-accent) !important;
+  color: #ffffff !important;
+}
+
+/* Accent Buttons (like 'المجمعات' and 'الإعدادات' and primary CTA buttons) */
+[data-complex-themed="true"] button[class*="bg-[#fbbf24]"],
+[data-complex-themed="true"] button[class*="bg-amber-400"],
+[data-complex-themed="true"] button[class*="bg-amber-500"],
+[data-complex-themed="true"] [class*="bg-[#fbbf24]"] button,
+[data-complex-themed="true"] .btn-primary-theme {
+  background-color: var(--complex-accent) !important;
+  color: var(--complex-primary) !important;
+  font-weight: 800 !important;
+  box-shadow: 0 0 16px rgba(var(--complex-accent-rgb), 0.35) !important;
+}
+
+[data-complex-themed="true"] button[class*="bg-[#fbbf24]"]:hover,
+[data-complex-themed="true"] button[class*="bg-amber-400"]:hover,
+[data-complex-themed="true"] button[class*="bg-amber-500"]:hover {
+  filter: brightness(1.12) !important;
+  box-shadow: 0 0 24px rgba(var(--complex-accent-rgb), 0.5) !important;
+}
+
+[data-complex-themed="true"] button[class*="bg-[#fbbf24]"] svg,
+[data-complex-themed="true"] button[class*="bg-amber-400"] svg,
+[data-complex-themed="true"] button[class*="bg-amber-500"] svg,
+[data-complex-themed="true"] button[class*="bg-[#fbbf24]"] span,
+[data-complex-themed="true"] button[class*="bg-amber-400"] span {
+  color: var(--complex-primary) !important;
+  stroke: var(--complex-primary) !important;
+}
+
+/* 3. Accent Backgrounds (Gold / Highlights) */
 [data-complex-themed="true"] .bg-\[\#fbbf24\],
 [data-complex-themed="true"] [class*="bg-[#fbbf24]"],
 [data-complex-themed="true"] .bg-amber-400,
@@ -120,24 +166,7 @@
 [data-complex-themed="true"] [class*="bg-[#fbbf24]/"],
 [data-complex-themed="true"] [class*="bg-amber-400/"],
 [data-complex-themed="true"] [class*="bg-amber-500/"] {
-  background-color: rgba(var(--complex-accent-rgb), 0.18) !important;
-}
-
-/* 3. High-Contrast Text / Icons on Accent Buttons */
-[data-complex-themed="true"] [class*="bg-[#fbbf24]"] [class*="text-[#064e3b]"],
-[data-complex-themed="true"] [class*="bg-amber-400"] [class*="text-[#064e3b]"],
-[data-complex-themed="true"] [class*="bg-amber-500"] [class*="text-[#064e3b]"],
-[data-complex-themed="true"] [class*="bg-[#fbbf24]"].text-\[\#064e3b\],
-[data-complex-themed="true"] [class*="bg-amber-400"].text-\[\#064e3b\],
-[data-complex-themed="true"] button[class*="bg-[#fbbf24]"],
-[data-complex-themed="true"] button[class*="bg-amber-400"] {
-  color: var(--complex-primary) !important;
-}
-
-[data-complex-themed="true"] button[class*="bg-[#fbbf24]"] svg,
-[data-complex-themed="true"] button[class*="bg-amber-400"] svg {
-  color: var(--complex-primary) !important;
-  stroke: var(--complex-primary) !important;
+  background-color: rgba(var(--complex-accent-rgb), 0.2) !important;
 }
 
 /* 4. Text & Accent Colors */
@@ -148,12 +177,15 @@
 [data-complex-themed="true"] .text-amber-400,
 [data-complex-themed="true"] [class*="text-amber-400"],
 [data-complex-themed="true"] .text-amber-500,
-[data-complex-themed="true"] [class*="text-amber-500"] {
+[data-complex-themed="true"] [class*="text-amber-500"],
+[data-complex-themed="true"] [class*="text-[#f59e0b]"] {
   color: var(--complex-accent) !important;
 }
 
 [data-complex-themed="true"] .text-\[\#86efac\],
 [data-complex-themed="true"] [class*="text-[#86efac]"],
+[data-complex-themed="true"] .text-emerald-100,
+[data-complex-themed="true"] [class*="text-emerald-100"],
 [data-complex-themed="true"] .text-emerald-200,
 [data-complex-themed="true"] [class*="text-emerald-200"],
 [data-complex-themed="true"] .text-emerald-300,
@@ -170,14 +202,17 @@
 /* 5. Borders */
 [data-complex-themed="true"] .border-\[\#065f46\],
 [data-complex-themed="true"] [class*="border-[#065f46]"],
+[data-complex-themed="true"] [class*="border-[#064e3b]"],
 [data-complex-themed="true"] [class*="border-emerald-800"],
 [data-complex-themed="true"] [class*="border-emerald-700"],
-[data-complex-themed="true"] [class*="border-emerald-600"] {
+[data-complex-themed="true"] [class*="border-emerald-600"],
+[data-complex-themed="true"] [class*="border-emerald-500"] {
   border-color: var(--complex-border) !important;
 }
 
-[data-complex-themed="true"] [class*="border-[#065f46]/"] {
-  border-color: rgba(var(--complex-border-rgb), 0.45) !important;
+[data-complex-themed="true"] [class*="border-[#065f46]/"],
+[data-complex-themed="true"] [class*="border-emerald-500/"] {
+  border-color: rgba(var(--complex-border-rgb), 0.5) !important;
 }
 
 [data-complex-themed="true"] .border-\[\#fbbf24\],
@@ -190,10 +225,23 @@
 [data-complex-themed="true"] [class*="border-[#fbbf24]/"],
 [data-complex-themed="true"] [class*="border-amber-400/"],
 [data-complex-themed="true"] [class*="border-amber-500/"] {
-  border-color: rgba(var(--complex-accent-rgb), 0.35) !important;
+  border-color: rgba(var(--complex-accent-rgb), 0.4) !important;
 }
 
-/* 6. Gradients (e.g. Hero Welcome Banner, Halaqah Banner) */
+/* 6. Dividers & Rings */
+[data-complex-themed="true"] [class*="divide-[#065f46]"],
+[data-complex-themed="true"] [class*="divide-emerald-800"],
+[data-complex-themed="true"] [class*="divide-[#064e3b]"] {
+  border-color: rgba(var(--complex-border-rgb), 0.6) !important;
+}
+
+[data-complex-themed="true"] [class*="ring-[#065f46]"],
+[data-complex-themed="true"] [class*="ring-[#fbbf24]"],
+[data-complex-themed="true"] [class*="ring-emerald-500"] {
+  --tw-ring-color: var(--complex-accent) !important;
+}
+
+/* 7. Gradients (e.g. Hero Welcome Banner, Halaqah Banner) */
 [data-complex-themed="true"] [class*="bg-gradient-to-r"][class*="from-[#064e3b]"][class*="to-[#064e3b]"],
 [data-complex-themed="true"] [class*="bg-gradient-to-l"][class*="from-[#064e3b]"][class*="to-[#064e3b]"] {
   background-image: linear-gradient(to right, var(--complex-secondary), var(--complex-primary), var(--complex-secondary)) !important;
@@ -222,6 +270,16 @@
   --tw-gradient-to: var(--complex-primary) var(--tw-gradient-to-position) !important;
 }
 
+[data-complex-themed="true"] [class*="from-emerald-900"],
+[data-complex-themed="true"] [class*="from-emerald-950"] {
+  --tw-gradient-from: var(--complex-secondary) var(--tw-gradient-from-position) !important;
+}
+
+[data-complex-themed="true"] [class*="to-emerald-950"],
+[data-complex-themed="true"] [class*="to-emerald-900"] {
+  --tw-gradient-to: var(--complex-primary) var(--tw-gradient-to-position) !important;
+}
+
 [data-complex-themed="true"] [class*="from-amber-400"],
 [data-complex-themed="true"] [class*="from-amber-500"] {
   --tw-gradient-from: var(--complex-accent) var(--tw-gradient-from-position) !important;
@@ -232,7 +290,46 @@
   --tw-gradient-to: var(--complex-accent) var(--tw-gradient-to-position) !important;
 }
 
-/* 7. Hover & Interactive States */
+/* 8. Forms, Inputs, Selects, and Textareas */
+[data-complex-themed="true"] input[type="text"],
+[data-complex-themed="true"] input[type="number"],
+[data-complex-themed="true"] input[type="search"],
+[data-complex-themed="true"] input[type="password"],
+[data-complex-themed="true"] textarea,
+[data-complex-themed="true"] select {
+  background-color: rgba(var(--complex-primary-rgb), 0.7) !important;
+  border-color: var(--complex-border) !important;
+  color: var(--complex-text) !important;
+}
+
+[data-complex-themed="true"] input:focus,
+[data-complex-themed="true"] textarea:focus,
+[data-complex-themed="true"] select:focus {
+  border-color: var(--complex-accent) !important;
+  box-shadow: 0 0 10px rgba(var(--complex-accent-rgb), 0.3) !important;
+}
+
+[data-complex-themed="true"] select option {
+  background-color: var(--complex-primary) !important;
+  color: #ffffff !important;
+}
+
+/* 9. Tables */
+[data-complex-themed="true"] table th {
+  background-color: var(--complex-secondary) !important;
+  color: var(--complex-accent) !important;
+  border-color: var(--complex-border) !important;
+}
+
+[data-complex-themed="true"] table td {
+  border-color: rgba(var(--complex-border-rgb), 0.4) !important;
+}
+
+[data-complex-themed="true"] table tr:hover {
+  background-color: rgba(var(--complex-secondary-rgb), 0.35) !important;
+}
+
+/* 10. Hover & Interactive States */
 [data-complex-themed="true"] [class*="hover:bg-[#064e3b]"]:hover,
 [data-complex-themed="true"] [class*="hover:bg-emerald-900"]:hover {
   background-color: var(--complex-secondary) !important;
@@ -264,7 +361,7 @@
   border-color: var(--complex-accent) !important;
 }
 
-/* 8. Shadows & Glows */
+/* 11. Shadows & Glows */
 [data-complex-themed="true"] .gold-glow {
   box-shadow: 0 0 30px -5px rgba(var(--complex-accent-rgb), 0.35) !important;
 }
@@ -285,7 +382,13 @@
   --tw-shadow-color: rgba(var(--complex-primary-rgb), 0.55) !important;
 }
 
-/* 9. Scrollbar & Selection */
+/* 12. Geometric Matrix Pattern in Complex Theme */
+[data-complex-themed="true"] .artistic-pattern {
+  background-color: var(--complex-bg) !important;
+  background-image: radial-gradient(circle at 2px 2px, rgba(var(--complex-accent-rgb), 0.08) 1px, transparent 0) !important;
+}
+
+/* 13. Scrollbar & Selection */
 [data-complex-themed="true"] ::-webkit-scrollbar-track {
   background: var(--complex-primary) !important;
 }
@@ -303,7 +406,7 @@
   color: var(--complex-primary) !important;
 }
 
-/* Artistic Flair Geometric Matrix & Islamic Atmosphere */
+/* Artistic Flair Geometric Matrix & Islamic Atmosphere (Platform Natural Default) */
 .artistic-pattern {
   background-color: var(--complex-bg, #022c22);
   background-image: radial-gradient(circle at 2px 2px, rgba(251, 191, 36, 0.06) 1px, transparent 0);

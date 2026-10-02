@@ -141,16 +141,34 @@ export const Navbar: React.FC<NavbarProps> = ({
 
               {/* Complex Switcher / Badge: Restricted strictly: Programmer switches all, teacher/supervisor switches ONLY if linked to multiple complexes */}
               {canSwitchComplex && availableComplexes.length > 1 && onSwitchComplex ? (
-                <div className="flex items-center gap-1.5 bg-[#022c22] border border-amber-400/40 rounded-xl px-2 py-0.5 shadow-sm">
-                  <Building2 className="w-3.5 h-3.5 text-[#fbbf24]" />
+                <div
+                  className="flex items-center gap-1.5 rounded-xl px-2.5 py-1 shadow-md transition-all border border-amber-400/50 bg-[#064e3b] hover:bg-[#065f46]"
+                  style={activeComplex?.theme ? {
+                    backgroundColor: activeComplex.theme.cardColor || `${activeComplex.theme.secondaryColor}`,
+                    borderColor: activeComplex.theme.accentColor ? `${activeComplex.theme.accentColor}77` : undefined
+                  } : undefined}
+                >
+                  <Building2
+                    className="w-3.5 h-3.5 text-[#fbbf24] shrink-0"
+                    style={activeComplex?.theme?.accentColor ? { color: activeComplex.theme.accentColor } : undefined}
+                  />
                   <select
                     value={activeComplexId || availableComplexes[0]?.id || ''}
                     onChange={e => onSwitchComplex(e.target.value)}
                     className="text-xs text-amber-300 font-black bg-transparent border-none focus:outline-none cursor-pointer pr-1"
+                    style={activeComplex?.theme?.accentColor ? { color: activeComplex.theme.accentColor } : undefined}
                     title={isDeveloper ? "التبديل بين كافة المجمعات القرآنية (إشراف شامل)" : "التبديل بين المجمعات المرتبط بها"}
                   >
                     {availableComplexes.map(c => (
-                      <option key={c.id} value={c.id} className="bg-[#064e3b] text-white">
+                      <option
+                        key={c.id}
+                        value={c.id}
+                        className="bg-[#022c22] text-white py-1"
+                        style={activeComplex?.theme?.primaryColor ? {
+                          backgroundColor: activeComplex.theme.primaryColor,
+                          color: '#ffffff'
+                        } : undefined}
+                      >
                         {c.name}
                       </option>
                     ))}
@@ -160,7 +178,8 @@ export const Navbar: React.FC<NavbarProps> = ({
                       type="button"
                       onClick={onOpenMultiComplexModal}
                       title="عرض بطاقات المجمعات والحلقات التابعة لك"
-                      className="p-1 rounded-md hover:bg-emerald-800 text-amber-300 hover:text-white transition-colors cursor-pointer"
+                      className="p-1 rounded-md hover:bg-white/15 text-amber-300 hover:text-white transition-colors cursor-pointer"
+                      style={activeComplex?.theme?.accentColor ? { color: activeComplex.theme.accentColor } : undefined}
                     >
                       <Layers className="w-3.5 h-3.5" />
                     </button>
@@ -284,12 +303,25 @@ export const Navbar: React.FC<NavbarProps> = ({
             <button
               onClick={onOpenComplexManagement}
               title="إدارة المجمعات القرآنية وتوزيع الحلقات"
-              className="flex items-center gap-1.5 py-1.5 px-3 rounded-2xl bg-gradient-to-r from-amber-400 to-amber-500 hover:brightness-110 text-[#064e3b] text-xs font-black shadow-[0_0_15px_rgba(251,191,36,0.3)] transition-all cursor-pointer"
+              className="flex items-center gap-1.5 py-1.5 px-3 rounded-2xl bg-[#fbbf24] hover:bg-[#f59e0b] text-[#064e3b] text-xs font-black shadow-[0_0_15px_rgba(251,191,36,0.3)] transition-all cursor-pointer"
+              style={activeComplex?.theme ? {
+                backgroundColor: activeComplex.theme.accentColor,
+                color: activeComplex.theme.primaryColor
+              } : undefined}
             >
-              <Building2 className="w-4 h-4" />
+              <Building2 className="w-4 h-4 text-[#064e3b]" style={activeComplex?.theme?.primaryColor ? { color: activeComplex.theme.primaryColor } : undefined} />
               <span>المجمعات</span>
               {complexesCount !== undefined && (
-                <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-[#022c22] text-amber-300 font-mono font-bold">
+                <span
+                  className="text-[10px] px-1.5 py-0.5 rounded-full font-mono font-bold"
+                  style={activeComplex?.theme ? {
+                    backgroundColor: `${activeComplex.theme.primaryColor}30`,
+                    color: activeComplex.theme.primaryColor
+                  } : {
+                    backgroundColor: '#022c22',
+                    color: '#fcd34d'
+                  }}
+                >
                   {complexesCount}
                 </span>
               )}
@@ -300,10 +332,17 @@ export const Navbar: React.FC<NavbarProps> = ({
           {currentUser?.role === 'admin' && isSupervisor && onOpenSettings && (
             <button
               onClick={onOpenSettings}
-              title="إعدادات الحلقات والمعلمين ونقل الطلاب"
-              className="flex items-center gap-1.5 py-1.5 px-3 rounded-2xl bg-[#fbbf24] hover:bg-[#f59e0b] text-[#064e3b] text-xs font-black shadow-[0_0_15px_rgba(251,191,36,0.25)] transition-all cursor-pointer"
+              title="إعدادات الحلقات والمعلمين ونقل الطلاب وتخصيص هوية وثيم المجمع"
+              className="flex items-center gap-1.5 py-1.5 px-3 rounded-2xl bg-[#fbbf24] hover:bg-[#f59e0b] text-[#064e3b] text-xs font-black shadow-[0_0_15px_rgba(251,191,36,0.3)] transition-all cursor-pointer"
+              style={activeComplex?.theme ? {
+                backgroundColor: activeComplex.theme.accentColor,
+                color: activeComplex.theme.primaryColor
+              } : undefined}
             >
-              <Settings className="w-4 h-4" />
+              <Settings
+                className="w-4 h-4 text-[#064e3b]"
+                style={activeComplex?.theme?.primaryColor ? { color: activeComplex.theme.primaryColor } : undefined}
+              />
               <span className="hidden sm:inline">الإعدادات</span>
             </button>
           )}
@@ -312,11 +351,28 @@ export const Navbar: React.FC<NavbarProps> = ({
             <button
               onClick={onOpenTeacherManagement}
               title="إدارة حسابات المعلمين"
-              className="flex items-center gap-1.5 py-1.5 px-3 rounded-2xl bg-[#022c22] hover:bg-[#065f46] border border-[#fbbf24]/30 hover:border-[#fbbf24] text-xs font-bold text-[#fbbf24] shadow-sm transition-all cursor-pointer"
+              className="flex items-center gap-1.5 py-1.5 px-3 rounded-2xl bg-[#064e3b] hover:bg-[#065f46] border border-[#fbbf24]/40 hover:border-[#fbbf24] text-xs font-bold text-[#fbbf24] shadow-sm transition-all cursor-pointer"
+              style={activeComplex?.theme ? {
+                backgroundColor: activeComplex.theme.cardColor || activeComplex.theme.secondaryColor,
+                borderColor: activeComplex.theme.accentColor ? `${activeComplex.theme.accentColor}66` : undefined,
+                color: activeComplex.theme.accentColor
+              } : undefined}
             >
-              <Users className="w-3.5 h-3.5 text-[#fbbf24]" />
+              <Users
+                className="w-3.5 h-3.5 text-[#fbbf24]"
+                style={activeComplex?.theme?.accentColor ? { color: activeComplex.theme.accentColor } : undefined}
+              />
               <span className="hidden sm:inline">إدارة المعلمين</span>
-              <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-[#064e3b] text-[#86efac] font-mono font-bold">
+              <span
+                className="text-[10px] px-1.5 py-0.2 rounded-full font-mono font-bold"
+                style={activeComplex?.theme ? {
+                  backgroundColor: activeComplex.theme.primaryColor,
+                  color: activeComplex.theme.accentColor
+                } : {
+                  backgroundColor: '#064e3b',
+                  color: '#86efac'
+                }}
+              >
                 {teachersCount}
               </span>
             </button>

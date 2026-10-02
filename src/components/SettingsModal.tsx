@@ -28,87 +28,7 @@ import {
   Check
 } from 'lucide-react';
 import { TeacherAccount, Halaqah, Student, AppSettings, QuranComplex, ComplexThemeConfig, isTeacherSupervisor, getThreePartNameValidation } from '../types';
-
-export const ISLAMIC_THEME_PRESETS: { name: string; subtitle: string; colors: ComplexThemeConfig }[] = [
-  {
-    name: 'الزمردي النبوي الأصيل',
-    subtitle: 'أخضر زمردي داكن مع لمسات ذهبية مشرقة',
-    colors: {
-      primaryColor: '#022c22',
-      secondaryColor: '#064e3b',
-      accentColor: '#fbbf24',
-      backgroundColor: '#022c22',
-      surfaceColor: 'rgba(6, 78, 59, 0.45)',
-      cardColor: '#064e3b',
-      textColor: '#f0f9f6'
-    }
-  },
-  {
-    name: 'الكحلي القرآني الملكي',
-    subtitle: 'أزرق كحلي عميق مع ذهبي وأزرق سماوي فاخر',
-    colors: {
-      primaryColor: '#090d16',
-      secondaryColor: '#1e293b',
-      accentColor: '#38bdf8',
-      backgroundColor: '#0b1120',
-      surfaceColor: 'rgba(30, 41, 59, 0.5)',
-      cardColor: '#1e293b',
-      textColor: '#f8fafc'
-    }
-  },
-  {
-    name: 'الذهبي الأندلسي الفاخر',
-    subtitle: 'بني شوكولاتي داكن مع ذهب خالص ونقوش تراثية',
-    colors: {
-      primaryColor: '#141210',
-      secondaryColor: '#292524',
-      accentColor: '#f59e0b',
-      backgroundColor: '#1c1917',
-      surfaceColor: 'rgba(41, 37, 36, 0.5)',
-      cardColor: '#292524',
-      textColor: '#fef3c7'
-    }
-  },
-  {
-    name: 'الزيتوني الشامي الوقور',
-    subtitle: 'درجات الأخضر الزيتوني الهادئ المريح للأعين',
-    colors: {
-      primaryColor: '#0d170f',
-      secondaryColor: '#1c3320',
-      accentColor: '#a3e635',
-      backgroundColor: '#142316',
-      surfaceColor: 'rgba(28, 51, 32, 0.5)',
-      cardColor: '#1c3320',
-      textColor: '#f0fdf4'
-    }
-  },
-  {
-    name: 'العنابي التراثي الراقي',
-    subtitle: 'عنابي داكن مع درجات الورد والذهب',
-    colors: {
-      primaryColor: '#1a080d',
-      secondaryColor: '#3e1320',
-      accentColor: '#fb7185',
-      backgroundColor: '#270d14',
-      surfaceColor: 'rgba(62, 19, 32, 0.5)',
-      cardColor: '#3e1320',
-      textColor: '#fff1f2'
-    }
-  },
-  {
-    name: 'الفحمي القرآني العصري',
-    subtitle: 'رمادي فحمي هادئ مع أصفر ذهبي ساطع وتباين نقي',
-    colors: {
-      primaryColor: '#09090b',
-      secondaryColor: '#27272a',
-      accentColor: '#eab308',
-      backgroundColor: '#18181b',
-      surfaceColor: 'rgba(39, 39, 42, 0.5)',
-      cardColor: '#27272a',
-      textColor: '#fafafa'
-    }
-  }
-];
+import { ISLAMIC_THEME_PRESETS, generateHarmoniousIslamicPalette, IslamicThemePreset, hexToRgb, lightenHex } from '../lib/themeUtils';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -951,40 +871,68 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             </div>
 
             {/* Section: Islamic Presets */}
-            <div className="bg-[#022c22]/70 border border-[#065f46] rounded-2xl p-4 sm:p-5 space-y-3">
-              <h4 className="text-xs sm:text-sm font-bold text-white flex items-center gap-2">
-                <Sparkles className="w-4 h-4 text-[#fbbf24]" />
-                <span>قوالب ألوان إسلامية فاخرة جاهزة (بنقرة واحدة)</span>
-              </h4>
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
-                {ISLAMIC_THEME_PRESETS.map((preset, idx) => {
+            <div className="bg-[#022c22]/80 border border-[#065f46] rounded-2xl p-4 sm:p-5 space-y-3.5 shadow-md">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-[#065f46]/70 pb-2.5">
+                <div>
+                  <h4 className="text-sm font-bold text-white flex items-center gap-2">
+                    <Sparkles className="w-4 h-4 text-[#fbbf24]" />
+                    <span>قوالب الهوية الإسلامية الفاخرة (10 أنماط ملكية بنقرة واحدة)</span>
+                  </h4>
+                  <p className="text-[11px] text-[#86efac]/80 mt-0.5">
+                    أنماط لونية مدروسة بعناية فائقة تضمن تباين الحروف وظهور الأزرار والبطاقات دون أن تختفي في الخلفية.
+                  </p>
+                </div>
+                <span className="text-[10px] text-amber-300 bg-amber-500/10 px-2.5 py-1 rounded-full border border-amber-500/30 self-start sm:self-auto font-bold">
+                  تباين معتمد 100%
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+                {ISLAMIC_THEME_PRESETS.map((preset) => {
                   const isSelected =
-                    themeColors.primaryColor === preset.colors.primaryColor &&
-                    themeColors.secondaryColor === preset.colors.secondaryColor;
+                    themeColors.backgroundColor === preset.colors.backgroundColor &&
+                    themeColors.accentColor === preset.colors.accentColor;
                   return (
                     <button
-                      key={idx}
+                      key={preset.id}
                       type="button"
-                      onClick={() => setThemeColors(preset.colors)}
-                      className={`p-2.5 rounded-xl border text-right transition-all cursor-pointer select-none flex flex-col justify-between gap-2 ${
+                      onClick={() => setThemeColors({ ...preset.colors })}
+                      className={`p-3 rounded-2xl border text-right transition-all cursor-pointer select-none flex flex-col justify-between gap-2.5 relative group ${
                         isSelected
-                          ? 'border-[#fbbf24] bg-[#064e3b] shadow-lg ring-2 ring-[#fbbf24]/50'
-                          : 'border-[#065f46] bg-[#022c22] hover:border-amber-400/50'
+                          ? 'border-[#fbbf24] bg-[#064e3b] shadow-xl ring-2 ring-[#fbbf24]/60 scale-[1.02]'
+                          : 'border-[#065f46] bg-[#022c22] hover:border-amber-400/50 hover:bg-[#064e3b]/30'
                       }`}
                     >
-                      <div className="flex items-center gap-1.5">
+                      {isSelected && (
+                        <span className="absolute -top-2 -left-2 bg-[#fbbf24] text-[#064e3b] rounded-full p-0.5 shadow-md">
+                          <Check className="w-3.5 h-3.5 stroke-[3]" />
+                        </span>
+                      )}
+
+                      {/* Visual 3-color palette chip */}
+                      <div className="flex items-center gap-1.5 p-1.5 rounded-xl bg-black/30 border border-white/10 w-fit">
                         <div
-                          className="w-4 h-4 rounded-full border border-white/20 shadow-sm shrink-0"
-                          style={{ backgroundColor: preset.colors.secondaryColor }}
+                          className="w-5 h-5 rounded-lg border border-white/20 shadow-sm shrink-0"
+                          style={{ backgroundColor: preset.colors.backgroundColor }}
+                          title="لون الخلفية"
                         />
                         <div
-                          className="w-4 h-4 rounded-full border border-white/20 shadow-sm shrink-0"
+                          className="w-5 h-5 rounded-lg border border-white/20 shadow-sm shrink-0"
+                          style={{ backgroundColor: preset.colors.cardColor || preset.colors.secondaryColor }}
+                          title="لون البطاقات"
+                        />
+                        <div
+                          className="w-5 h-5 rounded-lg border border-white/20 shadow-sm shrink-0"
                           style={{ backgroundColor: preset.colors.accentColor }}
+                          title="لون التمييز والأزرار"
                         />
                       </div>
+
                       <div>
-                        <span className="font-bold text-xs text-white block truncate">{preset.name}</span>
-                        <span className="text-[9px] text-[#86efac]/70 block truncate mt-0.5">{preset.subtitle}</span>
+                        <span className="font-extrabold text-xs text-white block truncate">{preset.name}</span>
+                        <span className="text-[10px] text-[#86efac]/80 block line-clamp-2 mt-0.5 leading-relaxed">
+                          {preset.subtitle}
+                        </span>
                       </div>
                     </button>
                   );
@@ -992,139 +940,251 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               </div>
             </div>
 
-            {/* Section: Custom Color Pickers */}
-            <div className="bg-[#022c22]/70 border border-[#065f46] rounded-2xl p-4 sm:p-5 space-y-3">
-              <h4 className="text-xs sm:text-sm font-bold text-white flex items-center gap-2">
-                <Palette className="w-4 h-4 text-[#fbbf24]" />
-                <span>تعديل درجات الألوان المخصصة للمنصة</span>
-              </h4>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
-                {/* 1. Primary */}
-                <div className="bg-[#064e3b]/50 p-2.5 rounded-xl border border-[#065f46] space-y-1.5">
-                  <label className="text-[11px] font-bold text-[#86efac] block">اللون الأساسي (Primary)</label>
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="color"
-                      value={themeColors.primaryColor}
-                      onChange={e => setThemeColors({ ...themeColors, primaryColor: e.target.value })}
-                      className="w-8 h-8 rounded-lg cursor-pointer bg-transparent border-0"
-                    />
-                    <input
-                      type="text"
-                      value={themeColors.primaryColor}
-                      onChange={e => setThemeColors({ ...themeColors, primaryColor: e.target.value })}
-                      className="flex-1 bg-[#022c22] border border-[#065f46] rounded-lg px-2 py-1 text-xs text-white font-mono"
-                    />
-                  </div>
+            {/* Section: Smart Color Harmonizer (مُولّد التناغم اللوني الذكي) */}
+            <div className="bg-[#022c22]/80 border border-[#065f46] rounded-2xl p-4 sm:p-5 space-y-4 shadow-md">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-[#065f46]/70 pb-2.5">
+                <div>
+                  <h4 className="text-sm font-bold text-white flex items-center gap-2">
+                    <Palette className="w-4 h-4 text-[#fbbf24]" />
+                    <span>مُوَلّد التناغم اللوني الذكي (Smart Color Harmonizer)</span>
+                  </h4>
+                  <p className="text-[11px] text-[#86efac]/80 mt-0.5">
+                    اختر اللون الأساسي ولون التمييز بنقرة واحدة، وسيقوم النظام فوراً بحساب درجات البطاقات والأزرار ونسب التباين تلقائياً.
+                  </p>
                 </div>
+              </div>
 
-                {/* 2. Secondary */}
-                <div className="bg-[#064e3b]/50 p-2.5 rounded-xl border border-[#065f46] space-y-1.5">
-                  <label className="text-[11px] font-bold text-[#86efac] block">اللون الثانوي (Secondary)</label>
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="color"
-                      value={themeColors.secondaryColor}
-                      onChange={e => setThemeColors({ ...themeColors, secondaryColor: e.target.value })}
-                      className="w-8 h-8 rounded-lg cursor-pointer bg-transparent border-0"
-                    />
-                    <input
-                      type="text"
-                      value={themeColors.secondaryColor}
-                      onChange={e => setThemeColors({ ...themeColors, secondaryColor: e.target.value })}
-                      className="flex-1 bg-[#022c22] border border-[#065f46] rounded-lg px-2 py-1 text-xs text-white font-mono"
-                    />
-                  </div>
+              {/* Quick Base Hues */}
+              <div className="space-y-2">
+                <span className="text-[11px] font-bold text-[#86efac] block">
+                  1. اختر درجة اللون الأساسي للمجمع:
+                </span>
+                <div className="flex items-center gap-2 flex-wrap">
+                  {[
+                    { label: 'زمردي نبوي', hex: '#022c22' },
+                    { label: 'كحلي ملكي', hex: '#030f1c' },
+                    { label: 'فيروزي أصفهاني', hex: '#031a1b' },
+                    { label: 'عنابي راقي', hex: '#1c050d' },
+                    { label: 'شوكولاتي أندلسي', hex: '#150d06' },
+                    { label: 'بنفسجي أموي', hex: '#150a24' },
+                    { label: 'زيتوني شامي', hex: '#0c190f' },
+                    { label: 'فحمي كعبوي', hex: '#09090b' },
+                    { label: 'لازوردي نيلي', hex: '#021626' },
+                    { label: 'نحاسي عتيق', hex: '#190e06' }
+                  ].map((hue) => (
+                    <button
+                      key={hue.hex}
+                      type="button"
+                      onClick={() => {
+                        const generated = generateHarmoniousIslamicPalette(hue.hex, themeColors.accentColor || '#fbbf24');
+                        setThemeColors(generated);
+                      }}
+                      className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border border-white/10 hover:border-amber-400 bg-[#064e3b]/50 hover:bg-[#064e3b] transition-all text-xs text-white font-bold cursor-pointer"
+                    >
+                      <span className="w-3.5 h-3.5 rounded-full border border-white/30" style={{ backgroundColor: hue.hex }} />
+                      <span>{hue.label}</span>
+                    </button>
+                  ))}
                 </div>
+              </div>
 
-                {/* 3. Accent / Gold */}
-                <div className="bg-[#064e3b]/50 p-2.5 rounded-xl border border-[#065f46] space-y-1.5">
-                  <label className="text-[11px] font-bold text-[#86efac] block">لون التمييز (Accent / ذهبي)</label>
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="color"
-                      value={themeColors.accentColor}
-                      onChange={e => setThemeColors({ ...themeColors, accentColor: e.target.value })}
-                      className="w-8 h-8 rounded-lg cursor-pointer bg-transparent border-0"
-                    />
-                    <input
-                      type="text"
-                      value={themeColors.accentColor}
-                      onChange={e => setThemeColors({ ...themeColors, accentColor: e.target.value })}
-                      className="flex-1 bg-[#022c22] border border-[#065f46] rounded-lg px-2 py-1 text-xs text-white font-mono"
-                    />
-                  </div>
+              {/* Quick Accent Swatches */}
+              <div className="space-y-2">
+                <span className="text-[11px] font-bold text-[#86efac] block">
+                  2. اختر لون التمييز للأزرار والنجوم والأوسمة (Accent):
+                </span>
+                <div className="flex items-center gap-2 flex-wrap">
+                  {[
+                    { label: 'ذهب مكي مشرق', hex: '#fbbf24' },
+                    { label: 'عنبر مدني دافئ', hex: '#f59e0b' },
+                    { label: 'أزرق سماوي ساطع', hex: '#38bdf8' },
+                    { label: 'تركواز برّاق', hex: '#2dd4bf' },
+                    { label: 'ورد ياقوتي', hex: '#fb7185' },
+                    { label: 'أرجواني زهري', hex: '#e879f9' },
+                    { label: 'ليموني زيتوني', hex: '#a3e635' },
+                    { label: 'أصفر خالص', hex: '#eab308' },
+                    { label: 'برتقالي عنبري', hex: '#fb923c' }
+                  ].map((accent) => (
+                    <button
+                      key={accent.hex}
+                      type="button"
+                      onClick={() => {
+                        setThemeColors(prev => ({
+                          ...prev,
+                          accentColor: accent.hex
+                        }));
+                      }}
+                      className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border transition-all text-xs font-bold cursor-pointer ${
+                        themeColors.accentColor === accent.hex
+                          ? 'border-amber-400 bg-amber-400/20 text-white ring-1 ring-amber-400'
+                          : 'border-white/10 bg-[#064e3b]/50 hover:border-amber-400/60 text-white'
+                      }`}
+                    >
+                      <span className="w-3.5 h-3.5 rounded-full border border-white/40 shadow-sm" style={{ backgroundColor: accent.hex }} />
+                      <span>{accent.label}</span>
+                    </button>
+                  ))}
                 </div>
+              </div>
 
-                {/* 4. Background */}
-                <div className="bg-[#064e3b]/50 p-2.5 rounded-xl border border-[#065f46] space-y-1.5">
-                  <label className="text-[11px] font-bold text-[#86efac] block">لون الخلفية (Background)</label>
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="color"
-                      value={themeColors.backgroundColor}
-                      onChange={e => setThemeColors({ ...themeColors, backgroundColor: e.target.value })}
-                      className="w-8 h-8 rounded-lg cursor-pointer bg-transparent border-0"
-                    />
-                    <input
-                      type="text"
-                      value={themeColors.backgroundColor}
-                      onChange={e => setThemeColors({ ...themeColors, backgroundColor: e.target.value })}
-                      className="flex-1 bg-[#022c22] border border-[#065f46] rounded-lg px-2 py-1 text-xs text-white font-mono"
-                    />
+              {/* Section: Custom Color Fine-Tuning */}
+              <div className="pt-2 border-t border-[#065f46]/60">
+                <span className="text-[11px] font-bold text-[#86efac] block mb-2">
+                  3. التعديل الدقيق لكل مكوّن لوني على حدة:
+                </span>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+                  {/* 1. Canvas Background */}
+                  <div className="bg-[#064e3b]/50 p-2.5 rounded-xl border border-[#065f46] space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <label className="text-[11px] font-bold text-[#86efac] block">خلفية الواجهة (Canvas)</label>
+                      <span className="text-[9px] text-slate-400">الخلفية الكبرى</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="color"
+                        value={themeColors.backgroundColor}
+                        onChange={e => setThemeColors({ ...themeColors, backgroundColor: e.target.value })}
+                        className="w-8 h-8 rounded-lg cursor-pointer bg-transparent border-0 shrink-0"
+                      />
+                      <input
+                        type="text"
+                        value={themeColors.backgroundColor}
+                        onChange={e => setThemeColors({ ...themeColors, backgroundColor: e.target.value })}
+                        className="flex-1 bg-[#022c22] border border-[#065f46] rounded-lg px-2 py-1 text-xs text-white font-mono"
+                      />
+                    </div>
                   </div>
-                </div>
 
-                {/* 5. Text */}
-                <div className="bg-[#064e3b]/50 p-2.5 rounded-xl border border-[#065f46] space-y-1.5">
-                  <label className="text-[11px] font-bold text-[#86efac] block">لون النصوص (Text)</label>
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="color"
-                      value={themeColors.textColor || '#f0f9f6'}
-                      onChange={e => setThemeColors({ ...themeColors, textColor: e.target.value })}
-                      className="w-8 h-8 rounded-lg cursor-pointer bg-transparent border-0"
-                    />
-                    <input
-                      type="text"
-                      value={themeColors.textColor || '#f0f9f6'}
-                      onChange={e => setThemeColors({ ...themeColors, textColor: e.target.value })}
-                      className="flex-1 bg-[#022c22] border border-[#065f46] rounded-lg px-2 py-1 text-xs text-white font-mono"
-                    />
+                  {/* 2. Cards & Navbar */}
+                  <div className="bg-[#064e3b]/50 p-2.5 rounded-xl border border-[#065f46] space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <label className="text-[11px] font-bold text-[#86efac] block">البطاقات والأشرطة (Cards)</label>
+                      <span className="text-[9px] text-amber-300 font-bold">أفتح من الخلفية</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="color"
+                        value={themeColors.cardColor || themeColors.secondaryColor}
+                        onChange={e => setThemeColors({
+                          ...themeColors,
+                          cardColor: e.target.value,
+                          secondaryColor: e.target.value,
+                          surfaceColor: `rgba(${hexToRgb(e.target.value)}, 0.7)`
+                        })}
+                        className="w-8 h-8 rounded-lg cursor-pointer bg-transparent border-0 shrink-0"
+                      />
+                      <input
+                        type="text"
+                        value={themeColors.cardColor || themeColors.secondaryColor}
+                        onChange={e => setThemeColors({
+                          ...themeColors,
+                          cardColor: e.target.value,
+                          secondaryColor: e.target.value,
+                          surfaceColor: `rgba(${hexToRgb(e.target.value)}, 0.7)`
+                        })}
+                        className="flex-1 bg-[#022c22] border border-[#065f46] rounded-lg px-2 py-1 text-xs text-white font-mono"
+                      />
+                    </div>
+                  </div>
+
+                  {/* 3. Accent / Gold */}
+                  <div className="bg-[#064e3b]/50 p-2.5 rounded-xl border border-[#065f46] space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <label className="text-[11px] font-bold text-[#86efac] block">التمييز والأزرار (Accent)</label>
+                      <span className="text-[9px] text-[#fbbf24] font-bold">ذهبي / ساطع</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="color"
+                        value={themeColors.accentColor}
+                        onChange={e => setThemeColors({ ...themeColors, accentColor: e.target.value })}
+                        className="w-8 h-8 rounded-lg cursor-pointer bg-transparent border-0 shrink-0"
+                      />
+                      <input
+                        type="text"
+                        value={themeColors.accentColor}
+                        onChange={e => setThemeColors({ ...themeColors, accentColor: e.target.value })}
+                        className="flex-1 bg-[#022c22] border border-[#065f46] rounded-lg px-2 py-1 text-xs text-white font-mono"
+                      />
+                    </div>
+                  </div>
+
+                  {/* 4. Primary Dark Accent */}
+                  <div className="bg-[#064e3b]/50 p-2.5 rounded-xl border border-[#065f46] space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <label className="text-[11px] font-bold text-[#86efac] block">اللون العميق (Primary)</label>
+                      <span className="text-[9px] text-slate-400">خطوط التدرج</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="color"
+                        value={themeColors.primaryColor}
+                        onChange={e => setThemeColors({ ...themeColors, primaryColor: e.target.value })}
+                        className="w-8 h-8 rounded-lg cursor-pointer bg-transparent border-0 shrink-0"
+                      />
+                      <input
+                        type="text"
+                        value={themeColors.primaryColor}
+                        onChange={e => setThemeColors({ ...themeColors, primaryColor: e.target.value })}
+                        className="flex-1 bg-[#022c22] border border-[#065f46] rounded-lg px-2 py-1 text-xs text-white font-mono"
+                      />
+                    </div>
+                  </div>
+
+                  {/* 5. Text */}
+                  <div className="bg-[#064e3b]/50 p-2.5 rounded-xl border border-[#065f46] space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <label className="text-[11px] font-bold text-[#86efac] block">لون النصوص (Text)</label>
+                      <span className="text-[9px] text-slate-400">عالي التباين</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="color"
+                        value={themeColors.textColor || '#f0f9f6'}
+                        onChange={e => setThemeColors({ ...themeColors, textColor: e.target.value })}
+                        className="w-8 h-8 rounded-lg cursor-pointer bg-transparent border-0 shrink-0"
+                      />
+                      <input
+                        type="text"
+                        value={themeColors.textColor || '#f0f9f6'}
+                        onChange={e => setThemeColors({ ...themeColors, textColor: e.target.value })}
+                        className="flex-1 bg-[#022c22] border border-[#065f46] rounded-lg px-2 py-1 text-xs text-white font-mono"
+                      />
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
 
-            {/* Section: Live Realtime Preview (المعاينة الحية الفورية للصفحة الرئيسية للمشرف) */}
+            {/* Section: Live Realtime Preview (المعاينة الحية الفورية الشاملة للمنصة) */}
             <div className="bg-[#011a14] border-2 border-amber-400/50 rounded-2xl p-4 sm:p-5 space-y-3 shadow-2xl">
-              <div className="flex items-center justify-between border-b border-[#065f46] pb-2">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-[#065f46] pb-2">
                 <div className="flex items-center gap-2">
                   <Eye className="w-4 h-4 text-[#fbbf24]" />
                   <span className="text-xs sm:text-sm font-bold text-white">
-                    معاينة حية ومباشرة: هكذا ستبدو لوحة المشرف وشاشات المنصة بالألوان والشعار المختار
+                    معاينة حية مباشرة: شريط التنقل، والأزرار، والبطاقات، والحلقات بالألوان المختارة
                   </span>
                 </div>
-                <span className="text-[10px] text-amber-300 bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-500/30">
-                  تحديث فوري
+                <span className="text-[10px] text-amber-300 bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-500/30 font-bold self-start sm:self-auto">
+                  تحديث لحظي فوري
                 </span>
               </div>
 
-              {/* Mockup Frame */}
+              {/* Mockup Canvas */}
               <div
-                className="rounded-2xl p-4 space-y-4 border transition-colors shadow-lg"
+                className="rounded-2xl p-4 sm:p-5 space-y-4 border transition-colors shadow-lg"
                 style={{
                   backgroundColor: themeColors.backgroundColor,
                   borderColor: themeColors.primaryColor,
                   color: themeColors.textColor || '#f0f9f6'
                 }}
               >
-                {/* Mockup Header */}
+                {/* 1. Mockup Header / Navbar */}
                 <div
-                  className="p-3 rounded-xl border flex items-center justify-between gap-3 shadow-md"
+                  className="p-3 sm:p-3.5 rounded-2xl border flex items-center justify-between gap-3 shadow-md"
                   style={{
-                    backgroundColor: themeColors.secondaryColor,
-                    borderColor: themeColors.primaryColor
+                    backgroundColor: themeColors.cardColor || themeColors.secondaryColor,
+                    borderColor: lightenHex(themeColors.secondaryColor, 0.15)
                   }}
                 >
                   <div className="flex items-center gap-3">
@@ -1143,79 +1203,170 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       )}
                     </div>
                     <div>
-                      <h5
-                        className="text-sm sm:text-base font-extrabold font-heading"
-                        style={{ color: themeColors.accentColor }}
-                      >
-                        {themeComplexName || targetThemeComplex?.name || 'مجمع تحفيظ القرآن الكريم'}
-                      </h5>
-                      <span className="text-[10px] opacity-80 block">
+                      <div className="flex items-center gap-2">
+                        <h5
+                          className="text-sm sm:text-base font-extrabold font-heading"
+                          style={{ color: themeColors.accentColor }}
+                        >
+                          {themeComplexName || targetThemeComplex?.name || 'مجمع تحفيظ القرآن الكريم'}
+                        </h5>
+                        
+                        {/* Switcher Pill inside Navbar */}
+                        <span
+                          className="text-[10px] px-2 py-0.5 rounded-lg border font-bold flex items-center gap-1 shadow-sm"
+                          style={{
+                            backgroundColor: `${themeColors.primaryColor}bb`,
+                            borderColor: `${themeColors.accentColor}66`,
+                            color: themeColors.accentColor
+                          }}
+                        >
+                          <Building2 className="w-3 h-3" />
+                          <span>التبديل بين المجمعات</span>
+                        </span>
+                      </div>
+                      <span className="text-[10px] opacity-80 block mt-0.5">
                         لوحة تحكم المشرف • إدارة الحلقات القرآنية
                       </span>
                     </div>
                   </div>
 
+                  {/* Right Action Buttons inside Mockup Navbar */}
                   <div className="flex items-center gap-2">
-                    <span
-                      className="px-2.5 py-1 rounded-lg text-xs font-bold shadow-sm"
+                    <button
+                      type="button"
+                      className="px-3 py-1.5 rounded-xl text-xs font-black shadow-md cursor-default pointer-events-none flex items-center gap-1.5"
                       style={{
                         backgroundColor: themeColors.accentColor,
                         color: themeColors.primaryColor
                       }}
                     >
-                      الحلقة النموذجية
-                    </span>
+                      <Building2 className="w-3.5 h-3.5" />
+                      <span>المجمعات</span>
+                    </button>
+                    <button
+                      type="button"
+                      className="px-3 py-1.5 rounded-xl text-xs font-black shadow-md cursor-default pointer-events-none flex items-center gap-1.5"
+                      style={{
+                        backgroundColor: themeColors.accentColor,
+                        color: themeColors.primaryColor
+                      }}
+                    >
+                      <Settings className="w-3.5 h-3.5" />
+                      <span>الإعدادات</span>
+                    </button>
                   </div>
                 </div>
 
-                {/* Mockup Stats Cards */}
+                {/* 2. Mockup Welcome Banner */}
+                <div
+                  className="p-4 sm:p-5 rounded-2xl border shadow-md flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+                  style={{
+                    background: `linear-gradient(to right, ${themeColors.secondaryColor}, ${themeColors.primaryColor}, ${themeColors.secondaryColor})`,
+                    borderColor: lightenHex(themeColors.secondaryColor, 0.2)
+                  }}
+                >
+                  <div>
+                    <span
+                      className="inline-block text-[10px] font-bold px-2 py-0.5 rounded-full border mb-1.5"
+                      style={{
+                        backgroundColor: `${themeColors.accentColor}25`,
+                        borderColor: `${themeColors.accentColor}55`,
+                        color: themeColors.accentColor
+                      }}
+                    >
+                      لوحة المتابعة المشتركة
+                    </span>
+                    <h6 className="text-sm sm:text-base font-bold text-white">
+                      مرحباً بك، <span style={{ color: themeColors.accentColor }}>المشرف العام</span>
+                    </h6>
+                    <p className="text-xs opacity-80 mt-0.5">
+                      تسميع وحفظ اليوم في حلقات {themeComplexName || 'المجمع'}.
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <button
+                      type="button"
+                      className="px-3.5 py-1.5 rounded-xl text-xs font-black shadow-md cursor-default pointer-events-none flex items-center gap-1"
+                      style={{
+                        backgroundColor: themeColors.accentColor,
+                        color: themeColors.primaryColor
+                      }}
+                    >
+                      <Check className="w-3.5 h-3.5" />
+                      <span>تسجيل حضور اليوم</span>
+                    </button>
+                    <button
+                      type="button"
+                      className="px-3.5 py-1.5 rounded-xl text-xs font-bold border shadow-sm cursor-default pointer-events-none flex items-center gap-1"
+                      style={{
+                        backgroundColor: themeColors.cardColor || `${themeColors.secondaryColor}`,
+                        borderColor: `${themeColors.accentColor}66`,
+                        color: themeColors.accentColor
+                      }}
+                    >
+                      <BookOpen className="w-3.5 h-3.5" />
+                      <span>تقييم التسميع</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* 3. Mockup Stats Cards */}
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div
-                    className="p-3 rounded-xl border space-y-1 shadow-sm"
+                    className="p-3.5 rounded-2xl border space-y-1 shadow-sm"
                     style={{
-                      backgroundColor: themeColors.surfaceColor || 'rgba(6, 78, 59, 0.4)',
-                      borderColor: themeColors.secondaryColor
+                      backgroundColor: themeColors.cardColor || themeColors.secondaryColor,
+                      borderColor: lightenHex(themeColors.secondaryColor, 0.18)
                     }}
                   >
-                    <span className="text-[10px] opacity-75 block">إجمالي طلاب المجمع</span>
+                    <span className="text-[11px] opacity-80 block">إجمالي طلاب المجمع</span>
                     <strong
-                      className="text-lg font-black block font-mono"
+                      className="text-xl font-black block font-mono"
                       style={{ color: themeColors.accentColor }}
                     >
                       {students.length || 24} طالباً
                     </strong>
+                    <span className="text-[10px] opacity-70 block">سجلات نشطة ومحدثة</span>
                   </div>
 
                   <div
-                    className="p-3 rounded-xl border space-y-1 shadow-sm"
+                    className="p-3.5 rounded-2xl border space-y-1 shadow-sm"
                     style={{
-                      backgroundColor: themeColors.surfaceColor || 'rgba(6, 78, 59, 0.4)',
-                      borderColor: themeColors.secondaryColor
+                      backgroundColor: themeColors.cardColor || themeColors.secondaryColor,
+                      borderColor: lightenHex(themeColors.secondaryColor, 0.18)
                     }}
                   >
-                    <span className="text-[10px] opacity-75 block">الحلقات النشطة</span>
+                    <span className="text-[11px] opacity-80 block">الحلقات النشطة</span>
                     <strong
-                      className="text-lg font-black block font-mono"
+                      className="text-xl font-black block font-mono"
                       style={{ color: themeColors.accentColor }}
                     >
                       {halaqahs.length || 3} حلقات
                     </strong>
+                    <span className="text-[10px] opacity-70 block">توزيع منهجي معتمد</span>
                   </div>
 
                   <div
-                    className="p-3 rounded-xl border space-y-1 shadow-sm flex items-center justify-between"
+                    className="p-3.5 rounded-2xl border space-y-1 shadow-sm flex items-center justify-between"
                     style={{
-                      backgroundColor: themeColors.surfaceColor || 'rgba(6, 78, 59, 0.4)',
-                      borderColor: themeColors.secondaryColor
+                      backgroundColor: themeColors.cardColor || themeColors.secondaryColor,
+                      borderColor: lightenHex(themeColors.secondaryColor, 0.18)
                     }}
                   >
                     <div>
-                      <span className="text-[10px] opacity-75 block">ختم المجمع المعتمد</span>
-                      <span className="text-[10px] font-bold text-amber-300 block">
-                        {themeStampUrl ? 'ختم رسمي مرفوع ✓' : 'ختم قياسي'}
+                      <span className="text-[11px] opacity-80 block">ختم المجمع الرسمي</span>
+                      <span className="text-xs font-bold block mt-1" style={{ color: themeColors.accentColor }}>
+                        {themeStampUrl ? 'ختم رسمي مرفوع ✓' : 'ختم قياسي معتمد'}
                       </span>
                     </div>
-                    <div className="w-10 h-10 rounded-full border flex items-center justify-center overflow-hidden shrink-0" style={{ borderColor: themeColors.accentColor }}>
+                    <div
+                      className="w-11 h-11 rounded-full border-2 flex items-center justify-center overflow-hidden shrink-0 shadow-inner"
+                      style={{
+                        backgroundColor: `${themeColors.primaryColor}80`,
+                        borderColor: themeColors.accentColor
+                      }}
+                    >
                       {themeStampUrl ? (
                         <img src={themeStampUrl} alt="ختم" className="w-full h-full object-contain p-0.5" />
                       ) : (
@@ -1225,19 +1376,22 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   </div>
                 </div>
 
-                {/* Mockup Button */}
-                <div className="flex items-center justify-between pt-1">
-                  <span className="text-[11px] opacity-75">نموذج أزرار وتفاعلات المنصة:</span>
-                  <button
-                    type="button"
-                    className="px-4 py-1.5 rounded-xl text-xs font-black shadow-md cursor-default pointer-events-none"
-                    style={{
-                      backgroundColor: themeColors.accentColor,
-                      color: themeColors.primaryColor
-                    }}
-                  >
-                    تسجيل التسميع اليومي
-                  </button>
+                {/* 4. Contrast Confirmation Banner */}
+                <div
+                  className="p-2.5 rounded-xl border flex items-center justify-between text-xs"
+                  style={{
+                    backgroundColor: `${themeColors.primaryColor}cc`,
+                    borderColor: `${themeColors.accentColor}55`,
+                    color: themeColors.textColor || '#ffffff'
+                  }}
+                >
+                  <span className="flex items-center gap-1.5">
+                    <CheckCircle className="w-4 h-4" style={{ color: themeColors.accentColor }} />
+                    <span>ضمان التباين: الأزرار والبطاقات والأشرطة متميزة تماماً عن الخلفية ومريحة للعين.</span>
+                  </span>
+                  <span className="font-bold text-[11px]" style={{ color: themeColors.accentColor }}>
+                    من الألف إلى الياء ✓
+                  </span>
                 </div>
               </div>
             </div>
@@ -1251,16 +1405,20 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 type="button"
                 onClick={handleSaveTheme}
                 disabled={isSavingTheme}
-                className="px-6 py-3 rounded-2xl bg-gradient-to-r from-amber-400 to-amber-500 hover:brightness-110 text-[#064e3b] font-black text-sm flex items-center gap-2 shadow-[0_0_20px_rgba(251,191,36,0.35)] transition-all cursor-pointer disabled:opacity-50"
+                className="px-6 py-3 rounded-2xl bg-[#fbbf24] hover:bg-[#f59e0b] text-[#064e3b] font-black text-sm flex items-center gap-2 shadow-[0_0_20px_rgba(251,191,36,0.35)] transition-all cursor-pointer disabled:opacity-50"
+                style={{
+                  backgroundColor: themeColors.accentColor,
+                  color: themeColors.primaryColor
+                }}
               >
                 {isSavingTheme ? (
                   <>
-                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    <RefreshCw className="w-4 h-4 animate-spin" style={{ color: themeColors.primaryColor }} />
                     <span>جاري حفظ الثيم...</span>
                   </>
                 ) : (
                   <>
-                    <Check className="w-4 h-4" />
+                    <Check className="w-4 h-4" style={{ color: themeColors.primaryColor }} />
                     <span>حفظ ثيم وهوية المجمع</span>
                   </>
                 )}

@@ -15,9 +15,11 @@ import {
   ExternalLink,
   BookOpen,
   Sparkles,
-  UserPlus
+  UserPlus,
+  Palette
 } from 'lucide-react';
 import { QuranComplex, Halaqah, TeacherAccount, Student, getThreePartNameValidation } from '../types';
+import { ISLAMIC_THEME_PRESETS } from '../lib/themeUtils';
 
 interface ComplexManagementModalProps {
   isOpen: boolean;
@@ -576,6 +578,49 @@ export const ComplexManagementModal: React.FC<ComplexManagementModalProps> = ({
                     </div>
                   </div>
                 )}
+              </div>
+
+              {/* Theme & Visual Identity Selection */}
+              <div className="bg-[#022c22]/90 border border-[#065f46] rounded-2xl p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Palette className="w-4 h-4 text-amber-400" />
+                    <span className="text-xs font-bold text-amber-300">الثيم والهوية البصرية للمجمع (يتغير كل شيء في المجمع فور اختياره):</span>
+                  </div>
+                  <span className="text-[10px] text-emerald-300 font-bold bg-emerald-500/20 px-2 py-0.5 rounded-full border border-emerald-500/30">
+                    تطبيق فوري
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 pt-1">
+                  {ISLAMIC_THEME_PRESETS.map(preset => {
+                    const currentThemeBg = editingComplex.theme?.backgroundColor || '#021e17';
+                    const isSelected = currentThemeBg === preset.colors.backgroundColor;
+
+                    return (
+                      <button
+                        key={preset.id}
+                        type="button"
+                        onClick={() => setEditingComplex(prev => ({
+                          ...prev,
+                          theme: { ...preset.colors }
+                        }))}
+                        className={`p-2 rounded-xl border text-right transition-all cursor-pointer flex flex-col justify-between gap-1.5 ${
+                          isSelected
+                            ? 'border-amber-400 bg-[#064e3b] shadow-md ring-2 ring-amber-400/50'
+                            : 'border-[#065f46] bg-[#064e3b]/30 hover:border-amber-400/50'
+                        }`}
+                      >
+                        <div className="flex items-center gap-1">
+                          <span className="w-3.5 h-3.5 rounded-full border border-white/20 shrink-0" style={{ backgroundColor: preset.colors.backgroundColor }} />
+                          <span className="w-3.5 h-3.5 rounded-full border border-white/20 shrink-0" style={{ backgroundColor: preset.colors.cardColor || preset.colors.secondaryColor }} />
+                          <span className="w-3.5 h-3.5 rounded-full border border-white/20 shrink-0" style={{ backgroundColor: preset.colors.accentColor }} />
+                        </div>
+                        <span className="text-[11px] font-bold text-white block truncate">{preset.name}</span>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
 
               <div className="flex items-center justify-end gap-3 pt-2">
