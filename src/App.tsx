@@ -90,6 +90,7 @@ import { CertificatesTab } from './components/tabs/CertificatesTab';
 import { LeaderboardTab } from './components/tabs/LeaderboardTab';
 import { TeacherAttendanceTab } from './components/tabs/TeacherAttendanceTab';
 import { EditAccountModal } from './components/EditAccountModal';
+import { applyComplexThemeToDOM } from './lib/themeUtils';
 
 export function App() {
   // Authentication State
@@ -607,31 +608,11 @@ export function App() {
     }
 
     // 3. Dynamic Complex Theme Colors on Document Root & Body
-    if (activeComplex?.theme) {
-      const { primaryColor, secondaryColor, accentColor, backgroundColor, textColor } = activeComplex.theme;
-      if (backgroundColor) {
-        document.body.style.backgroundColor = backgroundColor;
-      }
-      if (textColor) {
-        document.body.style.color = textColor;
-      }
-      document.documentElement.style.setProperty('--complex-primary', primaryColor);
-      document.documentElement.style.setProperty('--complex-secondary', secondaryColor);
-      document.documentElement.style.setProperty('--complex-accent', accentColor);
-      document.documentElement.style.setProperty('--complex-bg', backgroundColor);
-      if (textColor) {
-        document.documentElement.style.setProperty('--complex-text', textColor);
-      }
-    } else {
-      document.body.style.backgroundColor = '#022c22';
-      document.body.style.color = '#f0f9f6';
-      document.documentElement.style.setProperty('--complex-primary', '#022c22');
-      document.documentElement.style.setProperty('--complex-secondary', '#064e3b');
-      document.documentElement.style.setProperty('--complex-accent', '#fbbf24');
-      document.documentElement.style.setProperty('--complex-bg', '#022c22');
-      document.documentElement.style.setProperty('--complex-text', '#f0f9f6');
-    }
-  }, [activeComplex, settings.complexName]);
+    // Strictly: Only apply complex theme if inside a complex (logged-in user or active portal student).
+    // Outside the complex (landing page, login modal, privacy), strictly resets to natural platform colors (#022c22 & #fbbf24)!
+    const isInsideComplex = Boolean(currentUser || activePortalStudent);
+    applyComplexThemeToDOM(activeComplex?.theme, isInsideComplex);
+  }, [activeComplex, settings.complexName, currentUser, activePortalStudent]);
 
   const isSupervisor = useMemo(() => {
     if (!currentUser || currentUser.role !== 'admin') return false;
@@ -1780,7 +1761,15 @@ export function App() {
     }
 
     return (
-      <div className="min-h-screen bg-[#022c22] text-[#f0f9f6] font-sans selection:bg-[#fbbf24] selection:text-[#064e3b]" dir="rtl">
+      <div
+        data-complex-themed={activeComplex?.theme ? "true" : undefined}
+        className="min-h-screen bg-[#022c22] text-[#f0f9f6] font-sans selection:bg-[#fbbf24] selection:text-[#064e3b] transition-colors duration-300"
+        style={activeComplex?.theme ? {
+          backgroundColor: activeComplex.theme.backgroundColor || '#022c22',
+          color: activeComplex.theme.textColor || '#f0f9f6'
+        } : undefined}
+        dir="rtl"
+      >
         <AnimatedBackground />
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -1896,7 +1885,15 @@ export function App() {
   // If user is a teacher with no assigned halaqah yet:
   if (currentUser?.role === 'admin' && !isSupervisor && assignedHalaqahs.length === 0) {
     return (
-      <div className="min-h-screen bg-[#022c22] text-[#f0f9f6] font-sans selection:bg-[#fbbf24] selection:text-[#064e3b]" dir="rtl">
+      <div
+        data-complex-themed={activeComplex?.theme ? "true" : undefined}
+        className="min-h-screen bg-[#022c22] text-[#f0f9f6] font-sans selection:bg-[#fbbf24] selection:text-[#064e3b] transition-colors duration-300"
+        style={activeComplex?.theme ? {
+          backgroundColor: activeComplex.theme.backgroundColor || '#022c22',
+          color: activeComplex.theme.textColor || '#f0f9f6'
+        } : undefined}
+        dir="rtl"
+      >
         <AnimatedBackground />
         <Navbar
           currentUser={currentUser}
@@ -1961,6 +1958,7 @@ export function App() {
 
   return (
     <div
+      data-complex-themed={activeComplex?.theme ? "true" : undefined}
       className="min-h-screen bg-[#022c22] text-[#f0f9f6] font-sans selection:bg-[#fbbf24] selection:text-[#064e3b] pb-12 transition-colors duration-300"
       style={activeComplex?.theme ? {
         backgroundColor: activeComplex.theme.backgroundColor || '#022c22',

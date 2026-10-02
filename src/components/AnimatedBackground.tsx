@@ -21,7 +21,7 @@ export const AnimatedBackground: React.FC = () => {
       <div 
         className="absolute inset-0 opacity-40 pointer-events-none"
         style={{
-          backgroundImage: 'radial-gradient(circle at 2px 2px, rgba(251, 191, 36, 0.08) 1px, transparent 0)',
+          backgroundImage: 'radial-gradient(circle at 2px 2px, rgba(var(--complex-accent-rgb, 251, 191, 36), 0.08) 1px, transparent 0)',
           backgroundSize: '40px 40px'
         }} 
       />

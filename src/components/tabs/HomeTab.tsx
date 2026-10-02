@@ -78,14 +78,21 @@ export const HomeTab: React.FC<HomeTabProps> = ({
   return (
     <div className="space-y-6">
       {/* Welcome Banner */}
-      <div className="relative overflow-hidden rounded-[32px] bg-gradient-to-r from-[#064e3b] via-[#022c22] to-[#064e3b] border border-[#fbbf24]/30 p-6 sm:p-8 shadow-2xl shadow-emerald-950/60">
+      <div
+        className="relative overflow-hidden rounded-[32px] bg-gradient-to-r from-[#064e3b] via-[#022c22] to-[#064e3b] border border-[#fbbf24]/30 p-6 sm:p-8 shadow-2xl shadow-emerald-950/60 transition-all duration-300"
+        style={activeComplex?.theme ? {
+          background: `linear-gradient(to right, ${activeComplex.theme.secondaryColor}, ${activeComplex.theme.primaryColor || activeComplex.theme.backgroundColor}, ${activeComplex.theme.secondaryColor})`,
+          borderColor: activeComplex.theme.accentColor ? `${activeComplex.theme.accentColor}55` : undefined
+        } : undefined}
+      >
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div>
             <div
               className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#fbbf24]/20 text-[#fbbf24] border border-[#fbbf24]/40 text-xs font-bold mb-3 shadow-[0_0_12px_rgba(251,191,36,0.2)]"
               style={activeComplex?.theme?.accentColor ? {
+                backgroundColor: `${activeComplex.theme.accentColor}25`,
                 color: activeComplex.theme.accentColor,
-                borderColor: `${activeComplex.theme.accentColor}66`
+                borderColor: `${activeComplex.theme.accentColor}55`
               } : undefined}
             >
               <Sparkles className="w-3.5 h-3.5" />
@@ -103,23 +110,37 @@ export const HomeTab: React.FC<HomeTabProps> = ({
             <button
               onClick={() => onNavigateTab('attendance')}
               className="px-5 py-2.5 rounded-2xl bg-[#fbbf24] hover:bg-[#f59e0b] text-[#064e3b] font-black text-xs sm:text-sm flex items-center gap-2 shadow-[0_0_20px_rgba(251,191,36,0.3)] transition-all cursor-pointer"
+              style={activeComplex?.theme ? {
+                backgroundColor: activeComplex.theme.accentColor,
+                color: activeComplex.theme.primaryColor
+              } : undefined}
             >
-              <CheckCircle className="w-4 h-4 text-[#064e3b]" />
+              <CheckCircle className="w-4 h-4 text-[#064e3b]" style={activeComplex?.theme ? { color: activeComplex.theme.primaryColor } : undefined} />
               <span>تسجيل حضور اليوم</span>
             </button>
             <button
               onClick={() => onNavigateTab('evaluation')}
               className="px-5 py-2.5 rounded-2xl bg-[#064e3b] hover:bg-[#065f46] text-[#fbbf24] border border-[#fbbf24]/30 font-bold text-xs sm:text-sm flex items-center gap-2 shadow-lg transition-all cursor-pointer"
+              style={activeComplex?.theme ? {
+                backgroundColor: activeComplex.theme.secondaryColor,
+                color: activeComplex.theme.accentColor,
+                borderColor: activeComplex.theme.accentColor ? `${activeComplex.theme.accentColor}55` : undefined
+              } : undefined}
             >
-              <BookOpen className="w-4 h-4 text-[#fbbf24]" />
+              <BookOpen className="w-4 h-4 text-[#fbbf24]" style={activeComplex?.theme ? { color: activeComplex.theme.accentColor } : undefined} />
               <span>تقييم التسميع</span>
             </button>
             {onOpenTeacherManagement && (
               <button
                 onClick={onOpenTeacherManagement}
                 className="px-4 py-2.5 rounded-2xl bg-[#022c22] hover:bg-[#065f46] text-[#86efac] hover:text-[#fbbf24] border border-[#065f46] hover:border-[#fbbf24]/40 font-bold text-xs sm:text-sm flex items-center gap-2 transition-all cursor-pointer"
+                style={activeComplex?.theme ? {
+                  backgroundColor: activeComplex.theme.backgroundColor,
+                  color: activeComplex.theme.accentColor,
+                  borderColor: activeComplex.theme.secondaryColor
+                } : undefined}
               >
-                <Users className="w-4 h-4 text-[#fbbf24]" />
+                <Users className="w-4 h-4 text-[#fbbf24]" style={activeComplex?.theme ? { color: activeComplex.theme.accentColor } : undefined} />
                 <span>إدارة المعلمين ({teachers.length})</span>
               </button>
             )}
@@ -127,7 +148,12 @@ export const HomeTab: React.FC<HomeTabProps> = ({
         </div>
 
         {/* Decorative Arabesque Corner */}
-        <div className="absolute top-0 left-0 w-64 h-64 bg-radial from-[#fbbf24]/10 to-transparent pointer-events-none" />
+        <div
+          className="absolute top-0 left-0 w-64 h-64 bg-radial from-[#fbbf24]/10 to-transparent pointer-events-none"
+          style={activeComplex?.theme?.accentColor ? {
+            backgroundImage: `radial-gradient(circle at 0 0, ${activeComplex.theme.accentColor}20, transparent 70%)`
+          } : undefined}
+        />
       </div>
 
       {/* Main Stats Grid */}
