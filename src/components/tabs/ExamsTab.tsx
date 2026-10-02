@@ -56,7 +56,8 @@ import {
   LeaderboardSettings,
   LeaderboardScope,
   GoogleOAuthConfig,
-  getStudentParentPhone
+  getStudentParentPhone,
+  QuranComplex
 } from '../../types';
 import { GoogleWorkspaceService } from '../../lib/googleWorkspace';
 import { OmranDataService } from '../../lib/firebase';
@@ -72,12 +73,14 @@ interface ExamsTabProps {
   isSupervisor: boolean;
   googleAuthConfig?: GoogleOAuthConfig;
   leaderboardSettings?: LeaderboardSettings;
+  activeComplex?: QuranComplex | null;
   onSaveExam: (exam: Exam) => Promise<void>;
   onDeleteExam: (examId: string) => Promise<void>;
   onSaveSubmission: (submission: ExamSubmission) => Promise<void>;
   onDeleteSubmission?: (submissionId: string) => Promise<void>;
   onSaveLeaderboardSettings: (settings: LeaderboardSettings) => Promise<void>;
   onRefreshGoogleAuth?: () => Promise<void>;
+  onSaveCertificate?: (cert: any) => Promise<void>;
 }
 
 // Helper to format Arabic date preview
@@ -119,7 +122,9 @@ export const ExamsTab: React.FC<ExamsTabProps> = ({
   onSaveSubmission,
   onDeleteSubmission,
   onSaveLeaderboardSettings,
-  onRefreshGoogleAuth
+  onRefreshGoogleAuth,
+  activeComplex,
+  onSaveCertificate
 }) => {
   const [activeSubTab, setActiveSubTab] = useState<'exams' | 'submissions' | 'google_sheets'>('exams');
   const [isCreatingExam, setIsCreatingExam] = useState(false);
@@ -933,7 +938,8 @@ export const ExamsTab: React.FC<ExamsTabProps> = ({
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.setAttribute('href', url);
-    link.setAttribute('download', `نتائج_${targetExam ? targetExam.title : 'كافة_الاختبارات'}_عمران.csv`);
+    const compTag = activeComplex?.name ? activeComplex.name.replace(/\s+/g, '_') : 'المجمع';
+    link.setAttribute('download', `نتائج_${targetExam ? targetExam.title : 'كافة_الاختبارات'}_${compTag}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -3216,7 +3222,7 @@ export const ExamsTab: React.FC<ExamsTabProps> = ({
                       ctx.textAlign = 'left';
                       ctx.fillStyle = '#fbbf24';
                       ctx.font = "bold 22px 'Cairo', sans-serif";
-                      ctx.fillText('معتمد إلكترونياً • منصة عُمران', 100, 1080);
+                      ctx.fillText(`معتمد إلكترونياً • ${activeComplex?.name || 'مجمع تحفيظ القرآن الكريم'}`, 100, 1080);
 
                       const pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
                       pdf.addImage(canvas.toDataURL('image/jpeg', 0.95), 'JPEG', 0, 0, 297, 210);
@@ -3248,7 +3254,7 @@ export const ExamsTab: React.FC<ExamsTabProps> = ({
 
 📄 *مرفق مع هذه الرسالة ملف الشهادة المعتمدة (PDF).*
 بارك الله في جهوده وجهودكم المباركة في تربيته على مائدة القرآن العظيم.
-مع تحيات إدارة حلقة: ${sub.halaqahName || 'القرآن الكريم'}`;
+مع تحيات إدارة: ${activeComplex?.name || sub.halaqahName || 'مجمع تحفيظ القرآن الكريم'}`;
 
                     try {
                       const canvas = document.createElement('canvas');
@@ -3330,7 +3336,7 @@ export const ExamsTab: React.FC<ExamsTabProps> = ({
                         ctx.textAlign = 'left';
                         ctx.fillStyle = '#fbbf24';
                         ctx.font = "bold 22px 'Cairo', sans-serif";
-                        ctx.fillText('معتمد إلكترونياً • منصة عُمران', 100, 1080);
+                        ctx.fillText(`معتمد إلكترونياً • ${activeComplex?.name || 'مجمع تحفيظ القرآن الكريم'}`, 100, 1080);
 
                         const pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
                         pdf.addImage(canvas.toDataURL('image/jpeg', 0.95), 'JPEG', 0, 0, 297, 210);

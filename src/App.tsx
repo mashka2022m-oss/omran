@@ -511,6 +511,37 @@ export function App() {
     }
   }, [currentUser, teachers]);
 
+  // 1. Resolve active student for parent/student portal if active
+  const activePortalStudent = useMemo<Student | null>(() => {
+    if (portalStudentId) {
+      return (
+        directPortalStudent ||
+        students.find(
+          s =>
+            s.id === portalStudentId ||
+            s.id.toLowerCase() === portalStudentId.toLowerCase() ||
+            s.name.trim() === portalStudentId.trim() ||
+            s.name.replace(/\s+/g, '') === portalStudentId.replace(/\s+/g, '') ||
+            s.phone.replace(/\D/g, '') === portalStudentId.replace(/\D/g, '') ||
+            (s.parentPhones && s.parentPhones.some(p => p.replace(/\D/g, '') === portalStudentId.replace(/\D/g, '')))
+        ) ||
+        null
+      );
+    }
+    if (currentUser?.role === 'student') {
+      return (
+        students.find(
+          s =>
+            (currentUser.studentId && s.id === currentUser.studentId) ||
+            (currentUser.studentId && s.id.toLowerCase() === currentUser.studentId.toLowerCase()) ||
+            s.name.trim() === currentUser.username.trim() ||
+            normalizeArabicText(s.name) === normalizeArabicText(currentUser.username)
+        ) || null
+      );
+    }
+    return null;
+  }, [portalStudentId, directPortalStudent, students, currentUser]);
+
   // All complexes associated with current teacher (or all complexes if developer)
   const availableTeacherComplexes = useMemo(() => {
     if (!currentUser || currentUser.role !== 'admin') return complexes;
@@ -524,9 +555,25 @@ export function App() {
     return isDeveloper;
   }, [isDeveloper]);
 
-  // Active Complex: either specifically selected by developer, or strictly locked to teacher's single complex
+  // Active Complex:
+  // 1. If portal student or direct student logged in: resolved strictly to student's complex
+  // 2. If developer: specifically selected complex (or first complex)
+  // 3. For teacher/supervisor: strictly locked to teacher's single complex
   const activeComplex = useMemo<QuranComplex | null>(() => {
     if (complexes.length === 0) return null;
+    if (activePortalStudent) {
+      if (activePortalStudent.complexId) {
+        const match = complexes.find(c => c.id === activePortalStudent.complexId);
+        if (match) return match;
+      }
+      if (activePortalStudent.halaqahId) {
+        const hMatch = halaqahs.find(h => h.id === activePortalStudent.halaqahId);
+        if (hMatch?.complexId) {
+          const cMatch = complexes.find(c => c.id === hMatch.complexId);
+          if (cMatch) return cMatch;
+        }
+      }
+    }
     if (!isDeveloper) {
       return availableTeacherComplexes[0] || complexes[0] || null;
     }
@@ -535,7 +582,7 @@ export function App() {
       if (match) return match;
     }
     return complexes[0] || null;
-  }, [availableTeacherComplexes, selectedComplexId, complexes, isDeveloper]);
+  }, [activePortalStudent, halaqahs, availableTeacherComplexes, selectedComplexId, complexes, isDeveloper]);
 
   // Complex scope resolution for teacher/supervisor:
   const supervisedComplex = activeComplex;
@@ -578,6 +625,11 @@ export function App() {
     } else {
       document.body.style.backgroundColor = '#022c22';
       document.body.style.color = '#f0f9f6';
+      document.documentElement.style.setProperty('--complex-primary', '#022c22');
+      document.documentElement.style.setProperty('--complex-secondary', '#064e3b');
+      document.documentElement.style.setProperty('--complex-accent', '#fbbf24');
+      document.documentElement.style.setProperty('--complex-bg', '#022c22');
+      document.documentElement.style.setProperty('--complex-text', '#f0f9f6');
     }
   }, [activeComplex, settings.complexName]);
 
@@ -1590,27 +1642,6 @@ export function App() {
     setActiveTab('behavior');
   };
 
-  // If URL contains portal query param or logged in as student:
-  const activePortalStudent = portalStudentId
-    ? directPortalStudent ||
-      students.find(
-        s =>
-          s.id === portalStudentId ||
-          s.id.toLowerCase() === portalStudentId.toLowerCase() ||
-          s.name.trim() === portalStudentId.trim() ||
-          s.name.replace(/\s+/g, '') === portalStudentId.replace(/\s+/g, '') ||
-          s.phone.replace(/\D/g, '') === portalStudentId.replace(/\D/g, '') ||
-          (s.parentPhones && s.parentPhones.some(p => p.replace(/\D/g, '') === portalStudentId.replace(/\D/g, '')))
-      )
-    : currentUser?.role === 'student'
-    ? students.find(s =>
-        (currentUser.studentId && s.id === currentUser.studentId) ||
-        (currentUser.studentId && s.id.toLowerCase() === currentUser.studentId.toLowerCase()) ||
-        s.name.trim() === currentUser.username.trim() ||
-        normalizeArabicText(s.name) === normalizeArabicText(currentUser.username)
-      )
-    : null;
-
   // Scoped settings for students / parent portal
   const portalSettings = useMemo<AppSettings>(() => {
     if (!activePortalStudent) return scopedSettings;
@@ -1929,7 +1960,14 @@ export function App() {
   ];
 
   return (
-    <div className="min-h-screen bg-[#022c22] text-[#f0f9f6] font-sans selection:bg-[#fbbf24] selection:text-[#064e3b] pb-12" dir="rtl">
+    <div
+      className="min-h-screen bg-[#022c22] text-[#f0f9f6] font-sans selection:bg-[#fbbf24] selection:text-[#064e3b] pb-12 transition-colors duration-300"
+      style={activeComplex?.theme ? {
+        backgroundColor: activeComplex.theme.backgroundColor || '#022c22',
+        color: activeComplex.theme.textColor || '#f0f9f6'
+      } : undefined}
+      dir="rtl"
+    >
       <AnimatedBackground />
 
       {/* Main Navbar with Settings Button & Halaqah Selector */}
@@ -1973,10 +2011,23 @@ export function App() {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -8, scale: 0.99 }}
             transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
-            className="bg-gradient-to-r from-[#064e3b] via-[#022c22] to-[#064e3b] p-3.5 sm:p-4 rounded-2xl border border-[#065f46] shadow-md flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 relative overflow-hidden"
+            className="p-3.5 sm:p-4 rounded-2xl border shadow-md flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 relative overflow-hidden transition-all"
+            style={activeComplex?.theme ? {
+              background: `linear-gradient(to right, ${activeComplex.theme.secondaryColor}, ${activeComplex.theme.primaryColor}, ${activeComplex.theme.secondaryColor})`,
+              borderColor: activeComplex.theme.primaryColor
+            } : {
+              background: 'linear-gradient(to right, #064e3b, #022c22, #064e3b)',
+              borderColor: '#065f46'
+            }}
           >
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-[#fbbf24]/20 border border-[#fbbf24]/40 text-[#fbbf24] flex items-center justify-center shrink-0 shadow-sm">
+              <div
+                className="w-10 h-10 rounded-xl bg-[#fbbf24]/20 border border-[#fbbf24]/40 text-[#fbbf24] flex items-center justify-center shrink-0 shadow-sm"
+                style={activeComplex?.theme?.accentColor ? {
+                  color: activeComplex.theme.accentColor,
+                  borderColor: `${activeComplex.theme.accentColor}66`
+                } : undefined}
+              >
                 <Layers className="w-5 h-5" />
               </div>
               <div>
@@ -1990,7 +2041,17 @@ export function App() {
                       : scopedHalaqahs.find(h => h.id === activeHalaqahId)?.name || 'الحلقة المختارة'}
                   </span>
                   {activeHalaqahId !== 'all' && (
-                    <span className="text-[11px] px-2.5 py-0.5 rounded-full bg-[#fbbf24]/15 text-[#fbbf24] border border-[#fbbf24]/30 font-bold">
+                    <span
+                      className="text-[11px] px-2.5 py-0.5 rounded-full font-bold"
+                      style={activeComplex?.theme?.accentColor ? {
+                        backgroundColor: `${activeComplex.theme.accentColor}22`,
+                        color: activeComplex.theme.accentColor,
+                        borderColor: `${activeComplex.theme.accentColor}44`
+                      } : {
+                        backgroundColor: 'rgba(251, 191, 36, 0.15)',
+                        color: '#fbbf24'
+                      }}
+                    >
                       {displayedStudents.length} طلاب
                     </span>
                   )}
@@ -2026,9 +2087,13 @@ export function App() {
                     onClick={() => setActiveHalaqahId('all')}
                     className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                       activeHalaqahId === 'all'
-                        ? 'bg-[#fbbf24] text-[#064e3b] shadow-sm'
+                        ? 'bg-[#fbbf24] text-[#064e3b] shadow-sm font-black'
                         : 'text-[#86efac] hover:text-white'
                     }`}
+                    style={activeHalaqahId === 'all' && activeComplex?.theme ? {
+                      backgroundColor: activeComplex.theme.accentColor,
+                      color: activeComplex.theme.primaryColor
+                    } : undefined}
                   >
                     الكل
                   </button>
@@ -2038,9 +2103,13 @@ export function App() {
                       onClick={() => setActiveHalaqahId(h.id)}
                       className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                         activeHalaqahId === h.id
-                          ? 'bg-[#fbbf24] text-[#064e3b] shadow-sm'
+                          ? 'bg-[#fbbf24] text-[#064e3b] shadow-sm font-black'
                           : 'text-[#86efac] hover:text-white'
                       }`}
+                      style={activeHalaqahId === h.id && activeComplex?.theme ? {
+                        backgroundColor: activeComplex.theme.accentColor,
+                        color: activeComplex.theme.primaryColor
+                      } : undefined}
                     >
                       {h.name}
                     </button>
@@ -2056,9 +2125,13 @@ export function App() {
                         onClick={() => setActiveHalaqahId(h.id)}
                         className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                           activeHalaqahId === h.id
-                            ? 'bg-[#fbbf24] text-[#064e3b] shadow-sm'
+                            ? 'bg-[#fbbf24] text-[#064e3b] shadow-sm font-black'
                             : 'text-[#86efac] hover:text-white'
                         }`}
+                        style={activeHalaqahId === h.id && activeComplex?.theme ? {
+                          backgroundColor: activeComplex.theme.accentColor,
+                          color: activeComplex.theme.primaryColor
+                        } : undefined}
                       >
                         {h.name}
                       </button>
@@ -2075,7 +2148,14 @@ export function App() {
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
-          className="flex items-center gap-1.5 overflow-x-auto pb-2 scrollbar-none bg-[#064e3b]/80 p-1.5 rounded-2xl border border-[#065f46] backdrop-blur-md shadow-lg relative"
+          className="flex items-center gap-1.5 overflow-x-auto pb-2 scrollbar-none p-1.5 rounded-2xl border backdrop-blur-md shadow-lg relative transition-all"
+          style={activeComplex?.theme ? {
+            backgroundColor: activeComplex.theme.secondaryColor ? `${activeComplex.theme.secondaryColor}e6` : 'rgba(6, 78, 59, 0.8)',
+            borderColor: activeComplex.theme.primaryColor || '#065f46'
+          } : {
+            backgroundColor: 'rgba(6, 78, 59, 0.8)',
+            borderColor: '#065f46'
+          }}
         >
           {navItems.map(item => {
             const Icon = item.icon;
@@ -2095,17 +2175,29 @@ export function App() {
                   <motion.div
                     layoutId="activeTabIndicator"
                     className="absolute inset-0 bg-[#fbbf24] rounded-xl shadow-lg shadow-amber-950/40 z-0"
+                    style={activeComplex?.theme?.accentColor ? {
+                      backgroundColor: activeComplex.theme.accentColor
+                    } : undefined}
                     transition={{ type: 'spring', stiffness: 450, damping: 35 }}
                   />
                 )}
-                <span className="relative z-10 flex items-center gap-2">
-                  <Icon className={`w-4 h-4 ${isActive ? 'text-[#064e3b]' : 'text-[#86efac]'}`} />
+                <span
+                  className="relative z-10 flex items-center gap-2"
+                  style={isActive && activeComplex?.theme?.primaryColor ? {
+                    color: activeComplex.theme.primaryColor
+                  } : undefined}
+                >
+                  <Icon className={`w-4 h-4 ${isActive ? 'text-[#064e3b]' : 'text-[#86efac]'}`} style={isActive && activeComplex?.theme?.primaryColor ? { color: activeComplex.theme.primaryColor } : undefined} />
                   <span>{item.label}</span>
                   {item.badge !== undefined && (
                     <span
                       className={`text-[10px] px-1.5 py-0.5 rounded-full font-mono ${
                         isActive ? 'bg-[#064e3b]/20 text-[#064e3b] font-black' : 'bg-[#022c22] text-[#86efac]'
                       }`}
+                      style={isActive && activeComplex?.theme?.primaryColor ? {
+                        backgroundColor: `${activeComplex.theme.primaryColor}22`,
+                        color: activeComplex.theme.primaryColor
+                      } : undefined}
                     >
                       {item.badge}
                     </span>
@@ -2134,6 +2226,7 @@ export function App() {
                 settings={scopedSettings}
                 teachers={scopedTeachers}
                 currentUserName={currentUser?.username || scopedSettings.teacherName}
+                activeComplex={activeComplex}
                 onNavigateTab={handleNavigateTab}
                 onSelectStudentForEval={handleSelectStudentForEval}
                 onOpenTeacherManagement={() => setIsSettingsModalOpen(true)}
@@ -2294,6 +2387,7 @@ export function App() {
                 preselectedStudentId={targetStudentForWhatsApp}
                 senderAccountName={currentTeacher?.name || currentUser?.username || scopedSettings.teacherName}
                 currentUserName={currentUser?.username}
+                activeComplex={activeComplex}
               />
             )}
 

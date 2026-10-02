@@ -730,7 +730,7 @@ export const PrintableQuranicReport: React.FC<PrintableQuranicReportProps> = ({
                   <div>
                     <h4 className="section-heading">
                       <BookOpen style={{ width: '13px', height: '13px' }} className="text-[#b45309]" />
-                      <span>سجل التسميع والمراجعة والتقييمات بالمنظومة:</span>
+                      <span>سجل التسميع والمراجعة والتقييمات:</span>
                     </h4>
 
                     {studentEvals.length === 0 ? (

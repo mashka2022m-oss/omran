@@ -162,7 +162,7 @@ export const ReportsTab: React.FC<ReportsTabProps> = ({
       ? 'التقرير الأسبوعي'
       : (customReportTimeframe === 'monthly' ? 'التقرير الشهري' : 'السجل القرآني الشامل');
 
-    const complex = settings.complexName || 'منظومة عُمران لإدارة المجمعات القرآنية';
+    const complex = activeComplex?.name || settings.complexName || 'مجمع تحفيظ القرآن الكريم';
     const teacher = teacherName || settings.teacherName || 'معلم الحلقة';
 
     let msg = `🌿 *${timeframeLabel}* 🌿\n`;
@@ -220,7 +220,7 @@ export const ReportsTab: React.FC<ReportsTabProps> = ({
     });
 
     msg += `------------------------------------\n`;
-    msg += `✅ *معتمد إلكترونياً* من إدارة المنظومة\n`;
+    msg += `✅ *معتمد إلكترونياً* من إدارة ${complex}\n`;
     msg += `﴿ وَرَتِّلِ الْقُرْآنَ تَرْتِيلًا ﴾`;
 
     setGeneratedReportText(msg);

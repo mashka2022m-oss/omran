@@ -20,7 +20,7 @@ import {
   ShieldAlert,
   MessageCircle
 } from 'lucide-react';
-import { Student, AttendanceRecord, StudentEvaluation, AppSettings, TeacherAccount } from '../../types';
+import { Student, AttendanceRecord, StudentEvaluation, AppSettings, TeacherAccount, QuranComplex } from '../../types';
 
 interface HomeTabProps {
   students: Student[];
@@ -29,6 +29,7 @@ interface HomeTabProps {
   settings: AppSettings;
   teachers?: TeacherAccount[];
   currentUserName?: string;
+  activeComplex?: QuranComplex | null;
   onNavigateTab: (tab: string) => void;
   onSelectStudentForEval?: (studentId: string) => void;
   onOpenTeacherManagement?: () => void;
@@ -41,6 +42,7 @@ export const HomeTab: React.FC<HomeTabProps> = ({
   settings,
   teachers = [],
   currentUserName,
+  activeComplex,
   onNavigateTab,
   onSelectStudentForEval,
   onOpenTeacherManagement
@@ -79,15 +81,21 @@ export const HomeTab: React.FC<HomeTabProps> = ({
       <div className="relative overflow-hidden rounded-[32px] bg-gradient-to-r from-[#064e3b] via-[#022c22] to-[#064e3b] border border-[#fbbf24]/30 p-6 sm:p-8 shadow-2xl shadow-emerald-950/60">
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div>
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#fbbf24]/20 text-[#fbbf24] border border-[#fbbf24]/40 text-xs font-bold mb-3 shadow-[0_0_12px_rgba(251,191,36,0.2)]">
-              <Sparkles className="w-3.5 h-3.5 text-[#fbbf24]" />
-              <span>لوحة المتابعة المشتركة للحلقة القرآنية</span>
+            <div
+              className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#fbbf24]/20 text-[#fbbf24] border border-[#fbbf24]/40 text-xs font-bold mb-3 shadow-[0_0_12px_rgba(251,191,36,0.2)]"
+              style={activeComplex?.theme?.accentColor ? {
+                color: activeComplex.theme.accentColor,
+                borderColor: `${activeComplex.theme.accentColor}66`
+              } : undefined}
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>لوحة المتابعة المشتركة • {activeComplex?.name || 'مجمع تحفيظ القرآن الكريم'}</span>
             </div>
             <h2 className="text-2xl sm:text-3xl font-bold font-heading text-white">
-              مرحباً بك، <span className="text-[#fbbf24]">{displayTeacherName}</span>
+              مرحباً بك، <span style={activeComplex?.theme?.accentColor ? { color: activeComplex.theme.accentColor } : undefined} className="text-[#fbbf24]">{displayTeacherName}</span>
             </h2>
             <p className="text-[#86efac]/90 text-sm mt-1 max-w-xl">
-              تسميع وحفظ اليوم في {settings.halaqahName}. المنظومة مرتبطة سحابياً بحيث يتشارك جميع معلمي الحلقة نفس الطلاب والتقييمات فورياً ولحظياً.
+              تسميع وحفظ اليوم في {settings.halaqahName}. نظام المجمع مرتبط سحابياً بحيث يتشارك جميع المعلمين نفس الطلاب والتقييمات فورياً ولحظياً.
             </p>
           </div>
 

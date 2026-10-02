@@ -685,12 +685,35 @@ export const ParentPortalView: React.FC<ParentPortalViewProps> = ({
   }
 
   return (
-    <div className="min-h-screen bg-[#022c22] text-[#f0f9f6] p-4 sm:p-6 lg:p-8 relative z-10">
+    <div
+      className="min-h-screen p-4 sm:p-6 lg:p-8 relative z-10 transition-colors duration-300"
+      style={resolvedComplex?.theme ? {
+        backgroundColor: resolvedComplex.theme.backgroundColor || '#022c22',
+        color: resolvedComplex.theme.textColor || '#f0f9f6'
+      } : {
+        backgroundColor: '#022c22',
+        color: '#f0f9f6'
+      }}
+    >
       <div className="max-w-4xl mx-auto space-y-6">
         {/* Top Portal Header */}
-        <div className="bg-[#064e3b]/60 border border-[#065f46] rounded-[32px] p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-xl backdrop-blur-md">
+        <div
+          className="border rounded-[32px] p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-xl backdrop-blur-md transition-all"
+          style={resolvedComplex?.theme ? {
+            backgroundColor: resolvedComplex.theme.secondaryColor ? `${resolvedComplex.theme.secondaryColor}bb` : 'rgba(6, 78, 59, 0.6)',
+            borderColor: resolvedComplex.theme.primaryColor || '#065f46'
+          } : {
+            backgroundColor: 'rgba(6, 78, 59, 0.6)',
+            borderColor: '#065f46'
+          }}
+        >
           <div className="flex items-center gap-3.5">
-            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-[#fbbf24] to-[#f59e0b] text-[#064e3b] flex items-center justify-center border border-[#fbbf24]/40 shadow-lg font-black shrink-0 overflow-hidden">
+            <div
+              className="w-12 h-12 rounded-2xl bg-gradient-to-br from-[#fbbf24] to-[#f59e0b] text-[#064e3b] flex items-center justify-center border border-[#fbbf24]/40 shadow-lg font-black shrink-0 overflow-hidden"
+              style={resolvedComplex?.theme?.accentColor ? {
+                borderColor: resolvedComplex.theme.accentColor
+              } : undefined}
+            >
               {resolvedComplex?.logoUrl ? (
                 <img src={resolvedComplex.logoUrl} alt={displayComplexName} className="w-full h-full object-cover" />
               ) : (
@@ -698,10 +721,16 @@ export const ParentPortalView: React.FC<ParentPortalViewProps> = ({
               )}
             </div>
             <div>
-              <h1 className="text-lg sm:text-xl font-bold font-heading text-white flex items-center gap-2">
+              <h1
+                className="text-lg sm:text-xl font-bold font-heading text-white flex items-center gap-2"
+                style={resolvedComplex?.theme?.accentColor ? { color: resolvedComplex.theme.accentColor } : undefined}
+              >
                 {displayComplexName}
               </h1>
-              <p className="text-xs text-[#fbbf24] font-bold">
+              <p
+                className="text-xs font-bold"
+                style={resolvedComplex?.theme?.accentColor ? { color: resolvedComplex.theme.accentColor } : { color: '#fbbf24' }}
+              >
                 {currentStudent.halaqahName || settings.halaqahName || 'الحلقة القرآنية'} • إشراف المعلم: {settings.teacherName || 'معلم ومحفظ الحلقة'}
               </p>
             </div>

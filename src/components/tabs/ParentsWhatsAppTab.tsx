@@ -15,7 +15,7 @@ import {
   UserCheck
 } from 'lucide-react';
 import { motion } from 'motion/react';
-import { Student, AttendanceRecord, StudentEvaluation, AppSettings } from '../../types';
+import { Student, AttendanceRecord, StudentEvaluation, AppSettings, QuranComplex } from '../../types';
 import { calculateRealisticQuranAssignment, formatQuranPortion, getSurahInfo } from '../../data/quranData';
 
 interface ParentsWhatsAppTabProps {
@@ -26,6 +26,7 @@ interface ParentsWhatsAppTabProps {
   preselectedStudentId?: string;
   senderAccountName?: string;
   currentUserName?: string;
+  activeComplex?: QuranComplex | null;
 }
 
 export const ParentsWhatsAppTab: React.FC<ParentsWhatsAppTabProps> = ({
@@ -35,7 +36,8 @@ export const ParentsWhatsAppTab: React.FC<ParentsWhatsAppTabProps> = ({
   settings,
   preselectedStudentId,
   senderAccountName,
-  currentUserName
+  currentUserName,
+  activeComplex
 }) => {
   const todayStr = new Date().toISOString().split('T')[0];
   const [searchTerm, setSearchTerm] = useState('');
@@ -189,11 +191,12 @@ export const ParentsWhatsAppTab: React.FC<ParentsWhatsAppTabProps> = ({
       realisticAssignment.dailyNote;
 
     const effectiveSender = customSender || senderName;
+    const complexDisplayName = activeComplex?.name || settings.complexName || 'مجمع تحفيظ القرآن الكريم';
 
     // Construct clean, formatted WhatsApp message
     let msg = `السلام عليكم ورحمة الله وبركاته\n`;
     msg += `المكرم ولي أمر الطالب العزيز / *${student.name}* حفظه الله ورعاه\n`;
-    msg += `نحيطكم علماً بتقرير متابعة الطالب في *${student.halaqahName || settings.halaqahName || 'حلقة القرآن الكريم'}* ليوم ${new Date().toLocaleDateString('ar-SA')}:\n\n`;
+    msg += `نحيطكم علماً بتقرير متابعة الطالب في *${student.halaqahName || settings.halaqahName || 'حلقة القرآن الكريم'}* (${complexDisplayName}) ليوم ${new Date().toLocaleDateString('ar-SA')}:\n\n`;
 
     msg += `• *حالة الحضور اليوم:* ${status}\n\n`;
 
@@ -215,7 +218,8 @@ export const ParentsWhatsAppTab: React.FC<ParentsWhatsAppTabProps> = ({
     msg += `• *لمتابعة ملف الطالب وخطة حفظه وسجل درجاته مباشرة عبر البوابة الحية، اضغط على الرابط:* \n`;
     msg += `${portalUrl}\n\n`;
     msg += `جزاكم الله خيراً ونفع بكم وبأبنائنا الكرام\n`;
-    msg += `معلم ومحفظ الحلقة: *${effectiveSender}*`;
+    msg += `معلم ومحفظ الحلقة: *${effectiveSender}*\n`;
+    msg += `إدارة: *${complexDisplayName}*`;
 
     return msg;
   };
@@ -236,7 +240,7 @@ export const ParentsWhatsAppTab: React.FC<ParentsWhatsAppTabProps> = ({
     });
 
     setMessagesMap(updatedMap);
-  }, [students, attendance, evaluations, settings, senderName]);
+  }, [students, attendance, evaluations, settings, senderName, activeComplex]);
 
   const handleUpdateSenderName = (newName: string) => {
     setSenderName(newName);

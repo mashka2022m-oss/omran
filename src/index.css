@@ -1,10 +1,18 @@
 @import "tailwindcss";
 
+:root {
+  --complex-primary: #022c22;
+  --complex-secondary: #064e3b;
+  --complex-accent: #fbbf24;
+  --complex-bg: #022c22;
+  --complex-text: #f0f9f6;
+}
+
 @layer base {
   body {
     font-family: 'Cairo', 'Tajawal', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    background-color: #022c22;
-    color: #f0f9f6;
+    background-color: var(--complex-bg, #022c22);
+    color: var(--complex-text, #f0f9f6);
   }
   
   .font-quran {
@@ -18,7 +26,7 @@
 
 /* Artistic Flair Geometric Matrix & Islamic Atmosphere */
 .artistic-pattern {
-  background-color: #022c22;
+  background-color: var(--complex-bg, #022c22);
   background-image: radial-gradient(circle at 2px 2px, rgba(251, 191, 36, 0.06) 1px, transparent 0);
   background-size: 40px 40px;
 }

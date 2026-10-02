@@ -164,6 +164,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     return complexes.find(c => c.id === selectedThemeComplexId) || activeComplex || complexes[0] || null;
   }, [complexes, selectedThemeComplexId, activeComplex]);
 
+  const [themeComplexName, setThemeComplexName] = useState<string>(() => targetThemeComplex?.name || '');
   const [themeLogoUrl, setThemeLogoUrl] = useState<string>(() => targetThemeComplex?.logoUrl || '');
   const [themeStampUrl, setThemeStampUrl] = useState<string>(() => targetThemeComplex?.stampUrl || '');
   const [themeColors, setThemeColors] = useState<ComplexThemeConfig>(() => {
@@ -177,6 +178,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   // Sync state whenever targetThemeComplex changes
   useEffect(() => {
     if (targetThemeComplex) {
+      setThemeComplexName(targetThemeComplex.name || '');
       setThemeLogoUrl(targetThemeComplex.logoUrl || '');
       setThemeStampUrl(targetThemeComplex.stampUrl || '');
       setThemeColors(targetThemeComplex.theme || ISLAMIC_THEME_PRESETS[0].colors);
@@ -190,7 +192,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     const maxBytes = 5 * 1024 * 1024; // 5MB strict limit
     if (file.size > maxBytes) {
       const sizeMB = (file.size / (1024 * 1024)).toFixed(2);
-      setFileError(`⚠️ حجم صورة الشعار (${sizeMB} ميجابايت) يتجاوز الحد الأقصى الإلزامي (5 ميجابايت). يرجى اختيار ملف أصغر حجماً.`);
+      setFileError(`⚠️ شرط إلزامي: حجم صورة الشعار (${sizeMB} ميجابايت) يتجاوز الحد الأقصى (5 ميجابايت). يرجى اختيار ملف أصغر حجماً.`);
       e.target.value = '';
       return;
     }
@@ -208,7 +210,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     const maxBytes = 5 * 1024 * 1024; // 5MB strict limit
     if (file.size > maxBytes) {
       const sizeMB = (file.size / (1024 * 1024)).toFixed(2);
-      setFileError(`⚠️ حجم صورة الختم (${sizeMB} ميجابايت) يتجاوز الحد الأقصى الإلزامي (5 ميجابايت). يرجى اختيار ملف أصغر حجماً.`);
+      setFileError(`⚠️ شرط إلزامي: حجم صورة الختم (${sizeMB} ميجابايت) يتجاوز الحد الأقصى (5 ميجابايت). يرجى اختيار ملف أصغر حجماً.`);
       e.target.value = '';
       return;
     }
@@ -231,13 +233,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       setFileError(null);
       const updated: QuranComplex = {
         ...targetThemeComplex,
+        name: themeComplexName.trim() || targetThemeComplex.name,
         logoUrl: themeLogoUrl || undefined,
         stampUrl: themeStampUrl || undefined,
         theme: themeColors,
         updatedAt: new Date().toISOString()
       };
       await onSaveComplex(updated);
-      setThemeSuccessMsg(`تم حفظ وتطبيق هوية وثيم "${targetThemeComplex.name}" بنجاح! تم اعتماد الشعار والختم والألوان بالكامل.`);
+      setThemeSuccessMsg(`تم حفظ وتطبيق هوية وثيم "${updated.name}" بنجاح! تم اعتماد اسم المجمع والشعار والختم والألوان بالكامل.`);
       setTimeout(() => setThemeSuccessMsg(null), 5000);
     } catch (err: any) {
       setFileError(err?.message || 'حدث خطأ أثناء حفظ ثيم المجمع');
@@ -682,12 +685,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             }}
             className={`flex items-center gap-2 px-4 py-2 rounded-2xl text-xs sm:text-sm font-bold transition-all cursor-pointer ${
               activeSubTab === 'theme'
-                ? 'bg-[#fbbf24] text-[#064e3b] shadow-md'
+                ? 'bg-[#fbbf24] text-[#064e3b] shadow-md ring-2 ring-[#fbbf24]/50'
                 : 'bg-[#022c22] text-[#86efac] hover:text-white hover:bg-[#022c22]/80 border border-[#065f46]'
             }`}
           >
             <Palette className="w-4 h-4" />
-            <span>ثيم وهوية المجمع</span>
+            <span>قسم المجمع</span>
           </button>
 
           <button
@@ -755,7 +758,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         )}
 
         {/* ========================================================================= */}
-        {/* SUB-TAB 0: COMPLEX THEME & IDENTITY (الشعار، الختم، والألوان)           */}
+        {/* SUB-TAB 0: COMPLEX SECTION (قسم المجمع: الهوية، الشعار، الختم، والألوان)     */}
         {/* ========================================================================= */}
         {activeSubTab === 'theme' && (
           <div className="space-y-6 flex-1 text-right">
@@ -764,10 +767,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               <div>
                 <h3 className="text-base font-bold text-white flex items-center gap-2 font-heading">
                   <Palette className="w-5 h-5 text-[#fbbf24]" />
-                  <span>تخصيص ثيم وهوية المجمع القرآني</span>
+                  <span>قسم المجمع: الهوية والشعار والختم وألوان المنصة</span>
                 </h3>
                 <p className="text-xs text-[#86efac] mt-1 leading-relaxed">
-                  ارفع شعار المجمع وختمه المعتمد (بحد أقصى 5 ميجابايت)، وخصص ألوان المنصة بالكامل مع معاينة حية ومباشرة.
+                  ارفع شعار المجمع (صورة تبويب المتصفح) وختم المجمع الرسمي للشهادات والتقارير (بحد أقصى 5 ميجابايت إلزامياً)، وخصص ألوان المنصة بالكامل مع معاينة حية ومباشرة.
                 </p>
               </div>
 
@@ -788,6 +791,24 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   </select>
                 </div>
               )}
+            </div>
+
+            {/* Complex Name Field */}
+            <div className="bg-[#022c22]/80 border border-[#065f46] rounded-2xl p-4 sm:p-5 space-y-2">
+              <label className="text-sm font-bold text-white flex items-center gap-2">
+                <Building2 className="w-4 h-4 text-[#fbbf24]" />
+                <span>اسم مجمع التحفيظ الرسمي</span>
+              </label>
+              <p className="text-[11px] text-[#86efac]/80 leading-relaxed">
+                هذا الاسم سيظهر في الشريط العلوي للمنصة، وعنوان تبويب المتصفح، وكافة الشهادات والتقارير المستخرجة بدلاً من أي اسم آخر.
+              </p>
+              <input
+                type="text"
+                value={themeComplexName}
+                onChange={e => setThemeComplexName(e.target.value)}
+                placeholder="مثال: مجمع تحفيظ القرآن الكريم"
+                className="w-full bg-[#064e3b]/70 border border-[#fbbf24]/50 rounded-xl px-4 py-2.5 text-sm text-white font-bold outline-none focus:ring-2 focus:ring-[#fbbf24]"
+              />
             </div>
 
             {/* Error or Success notification */}
@@ -1126,7 +1147,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         className="text-sm sm:text-base font-extrabold font-heading"
                         style={{ color: themeColors.accentColor }}
                       >
-                        {targetThemeComplex?.name || 'مجمع تحفيظ القرآن الكريم'}
+                        {themeComplexName || targetThemeComplex?.name || 'مجمع تحفيظ القرآن الكريم'}
                       </h5>
                       <span className="text-[10px] opacity-80 block">
                         لوحة تحكم المشرف • إدارة الحلقات القرآنية
