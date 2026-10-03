@@ -20,7 +20,10 @@ import {
   Mail,
   ExternalLink,
   Layers,
-  ChevronDown
+  ChevronDown,
+  Globe,
+  User,
+  UserCheck
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { QuranComplex, Halaqah, Student, AttendanceRecord, StudentEvaluation, Exam, GoogleOAuthConfig, ComplexMigrationProgress, ComplexMigrationResult } from '../types';
@@ -64,13 +67,16 @@ export const ComplexDatabaseTransferModal: React.FC<ComplexDatabaseTransferModal
 
   const targetComplex = complexes.find(c => c.id === selectedComplexId) || complexes[0];
 
-  // Target Google Account state
+  // Developer email from platform settings
+  const developerEmail = (googleAuthConfig?.connectedEmail || '').trim();
+
+  // Mode: 'different_account' (default - client or different account) vs 'developer_account'
+  const [accountMode, setAccountMode] = useState<'different_account' | 'developer_account'>('different_account');
+
+  // Target Google Account state (defaults to existing complex config if any, otherwise empty so developer can choose freely)
   const [targetGoogleEmail, setTargetGoogleEmail] = useState<string>(() => {
     if (targetComplex?.databaseConfig?.connectedEmail) {
       return targetComplex.databaseConfig.connectedEmail;
-    }
-    if (googleAuthConfig?.connectedEmail) {
-      return googleAuthConfig.connectedEmail;
     }
     return '';
   });
@@ -114,10 +120,7 @@ export const ComplexDatabaseTransferModal: React.FC<ComplexDatabaseTransferModal
     if (targetComplex) {
       if (targetComplex.databaseConfig?.connectedEmail) {
         setTargetGoogleEmail(targetComplex.databaseConfig.connectedEmail);
-      } else if (!targetGoogleEmail && googleAuthConfig?.connectedEmail) {
-        setTargetGoogleEmail(googleAuthConfig.connectedEmail);
       }
-
       setTargetDatabaseId(targetComplex.databaseConfig?.databaseId || `isolated-${targetComplex.id}`);
       setTargetProjectId(targetComplex.databaseConfig?.projectId || firebaseConfig.projectId || 'omran-ffbad');
     }
@@ -130,17 +133,29 @@ export const ComplexDatabaseTransferModal: React.FC<ComplexDatabaseTransferModal
   const complexHalaqahIds = new Set(complexHalaqahs.map(h => h.id));
   const complexStudents = students.filter(s => (s.halaqahId && complexHalaqahIds.has(s.halaqahId)) || s.complexId === targetComplex?.id);
 
-  // Google sign in / link handler
+  // Is target email different from developer's current email?
+  const isDifferentAccount = !developerEmail || (targetGoogleEmail && targetGoogleEmail.trim().toLowerCase() !== developerEmail.toLowerCase());
+
+  // Google sign in / account chooser handler (Forces Google Account Chooser so developer can pick ANY account)
   const handleSelectGoogleAccount = async () => {
     setIsSigningInGoogle(true);
     setErrorMessage(null);
     try {
-      const res = await GoogleWorkspaceService.linkGoogleAccount();
+      const res = await GoogleWorkspaceService.selectAnyGoogleAccountForMigration();
       if (res?.email) {
-        setTargetGoogleEmail(res.email);
+        setTargetGoogleEmail(res.email.trim());
+        setAccountMode('different_account');
       }
     } catch (err: any) {
-      setErrorMessage(err?.message || 'تعذر استكمال تسجيل الدخول بحساب Google.');
+      if (err?.isPopupClosed) {
+        setErrorMessage('تم إغلاق نافذة اختيار الحساب من Google قبل الاختيار. يمكنك المحاولة مجدداً أو كتابة البريد يدوياً.');
+      } else if (err?.isPopupBlocked) {
+        setErrorMessage('قام المتصفح بحظر نافذة Google المنبثقة. يمكنك كتابة بريد الحساب يدوياً بالأسفل.');
+      } else if (err?.isUnauthorizedDomain) {
+        setErrorMessage(err.message || 'النطاق الحالي غير مصرح له بالنوافذ المنبثقة، يمكنك إدخال بريد الحساب يدوياً بالأسفل.');
+      } else {
+        setErrorMessage(err?.message || 'تعذر استكمال اختيار حساب Google.');
+      }
     } finally {
       setIsSigningInGoogle(false);
     }
@@ -152,20 +167,20 @@ export const ComplexDatabaseTransferModal: React.FC<ComplexDatabaseTransferModal
 
     let activeEmail = (overrideEmail || targetGoogleEmail || '').trim();
 
-    // If no email selected yet, seamlessly open Google Account selector right now!
+    // If no email selected yet, open Google Account selector right now!
     if (!activeEmail) {
       setIsSigningInGoogle(true);
       setErrorMessage(null);
       try {
-        const res = await GoogleWorkspaceService.linkGoogleAccount();
+        const res = await GoogleWorkspaceService.selectAnyGoogleAccountForMigration();
         if (res?.email) {
           activeEmail = res.email.trim();
           setTargetGoogleEmail(res.email.trim());
         } else {
-          throw new Error('لم يتم استلام بريد حساب Google.');
+          throw new Error('لم يتم تحديد بريد حساب Google.');
         }
       } catch (err: any) {
-        setErrorMessage(err?.message || 'تم إلغاء أو تعذر تسجيل الدخول بحساب Google.');
+        setErrorMessage(err?.message || 'يرجى اختيار أو كتابة حساب Google المستهدف للمجمع قبل بدء النقل.');
         setIsSigningInGoogle(false);
         return;
       } finally {
@@ -174,7 +189,7 @@ export const ComplexDatabaseTransferModal: React.FC<ComplexDatabaseTransferModal
     }
 
     if (!activeEmail) {
-      setErrorMessage('يرجى تسجيل الدخول واختيار حساب Google المعتمد للمجمع.');
+      setErrorMessage('يرجى تحديد أو اختيار حساب Google المستهدف لنقل المجمع إليه.');
       return;
     }
 
@@ -344,10 +359,10 @@ export const ComplexDatabaseTransferModal: React.FC<ComplexDatabaseTransferModal
                       الإنشاء والربط السحابي التلقائي الكامل (1-Click Automated)
                     </span>
                     <h4 className="text-base sm:text-lg font-black text-white font-heading">
-                      تسجيل الدخول وإنشاء قاعدة البيانات والنقل التلقائي
+                      ترحيل المجمع وإنشاء قاعدة البيانات سحابياً بالكامل
                     </h4>
                     <p className="text-xs text-[#86efac] leading-relaxed">
-                      لست بحاجة لفتح أي موقع أو إدخال أي مفاتيح! بمجرد الضغط على الزر واختيار حساب Google، سيتولى البرنامج إنشاء المشروع وتهيئة قاعدة بيانات Firestore ونقل كافة بيانات المجمع كاملة من أولها لآخرها!
+                      اختر الحساب المستهدف (حساب عميل مستقل أو حساب مجمع آخر)، وبضغطة زر واحدة سيتولى النظام إنشاء المشروع وقاعدة بيانات Firestore المستقلة ونقل الحلقات والطلاب وسجلات المجمع كاملة من أولها لآخرها!
                     </p>
                   </div>
                 </div>
@@ -362,15 +377,15 @@ export const ComplexDatabaseTransferModal: React.FC<ComplexDatabaseTransferModal
                     {isSigningInGoogle ? (
                       <>
                         <Loader2 className="w-5 h-5 animate-spin text-[#064e3b]" />
-                        <span>جاري المصادقة بحساب Google والبدء...</span>
+                        <span>جاري فتح نافذة Google والمصادقة والبدء...</span>
                       </>
                     ) : (
                       <>
                         <LogIn className="w-5 h-5 text-[#064e3b]" />
                         <span>
                           {targetGoogleEmail
-                            ? `بدء الترحيل التلقائي الآن على حساب (${targetGoogleEmail}) 🚀`
-                            : 'تسجيل الدخول بحساب Google والبدء التلقائي في إنشاء قاعدة البيانات ونقل المجمع فوراً 🚀'}
+                            ? `بدء الترحيل التلقائي الآن إلى قاعدة بيانات حساب (${targetGoogleEmail}) 🚀`
+                            : 'اختر أو اكتب حساب Google المستهدف واضغط للبدء التلقائي في نقل المجمع 🚀'}
                         </span>
                       </>
                     )}
@@ -378,7 +393,7 @@ export const ComplexDatabaseTransferModal: React.FC<ComplexDatabaseTransferModal
                 </div>
               </div>
 
-              {/* Step 1: Select Target Google Account */}
+              {/* Step 1: Target Google Account Selection (اختيار حساب Google المستهدف للمجمع - خيار لحساب آخر أو حساب المبرمج) */}
               <div className="bg-[#022c22] border-2 border-emerald-500/50 rounded-2xl p-4 sm:p-5 space-y-4 shadow-xl">
                 <div className="flex items-center justify-between pb-2 border-b border-[#065f46]">
                   <div className="flex items-center gap-2">
@@ -386,60 +401,175 @@ export const ComplexDatabaseTransferModal: React.FC<ComplexDatabaseTransferModal
                       1
                     </div>
                     <h4 className="text-sm font-bold text-white">
-                      اختيار حساب Google المستهدف للمجمع (Google Account)
+                      اختيار حساب Google المستهدف (حساب العميل أو حساب مستقل)
                     </h4>
                   </div>
                   <span className="text-[10px] bg-emerald-500/20 text-emerald-300 font-bold px-2 py-0.5 rounded-full border border-emerald-400/30">
-                    خطوة المصادقة
+                    ميزة حصرية للمبرمج
                   </span>
                 </div>
 
-                <p className="text-[11px] text-[#86efac]/90 leading-relaxed">
-                  سيتم إنشاء قاعدة البيانات السحابية الجديدة لهذا المجمع على هذا الحساب مباشرة، ونقل المجمع وبياناته وكل شيء حرفياً إليه:
-                </p>
+                {/* Account Choice Toggle (خيار حساب آخر أو حساب المبرمج) */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 bg-[#064e3b]/40 p-1.5 rounded-xl border border-[#065f46]">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAccountMode('different_account');
+                      if (targetGoogleEmail && developerEmail && targetGoogleEmail.toLowerCase() === developerEmail.toLowerCase()) {
+                        setTargetGoogleEmail('');
+                      }
+                    }}
+                    className={`py-2.5 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                      accountMode === 'different_account'
+                        ? 'bg-amber-400 text-[#064e3b] shadow-md font-black'
+                        : 'text-[#86efac] hover:text-white hover:bg-white/5'
+                    }`}
+                  >
+                    <Globe className="w-4 h-4" />
+                    <span>حساب Google آخر (عميل / مجمع مستقل)</span>
+                  </button>
 
-                <div className="space-y-3">
-                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-                    <div className="flex-1 relative">
-                      <Mail className="w-4 h-4 text-emerald-400 absolute right-3 top-3" />
-                      <input
-                        type="email"
-                        value={targetGoogleEmail}
-                        onChange={e => setTargetGoogleEmail(e.target.value)}
-                        placeholder="مثال: omran.complex@gmail.com"
-                        className="w-full bg-[#064e3b] border border-amber-400/40 rounded-xl pr-9 pl-3 py-2.5 text-xs text-white font-mono placeholder:text-emerald-300/40 outline-none focus:border-amber-400"
-                        dir="ltr"
-                      />
-                    </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAccountMode('developer_account');
+                      if (developerEmail) {
+                        setTargetGoogleEmail(developerEmail);
+                      }
+                    }}
+                    className={`py-2.5 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                      accountMode === 'developer_account'
+                        ? 'bg-emerald-500 text-white shadow-md font-black'
+                        : 'text-[#86efac] hover:text-white hover:bg-white/5'
+                    }`}
+                  >
+                    <User className="w-4 h-4" />
+                    <span>حساب المبرمج الحالي {developerEmail ? `(${developerEmail.split('@')[0]})` : ''}</span>
+                  </button>
+                </div>
 
+                {/* DIFFERENT ACCOUNT MODE: Official Google Account Chooser Popup + Direct Email Input */}
+                {accountMode === 'different_account' && (
+                  <div className="space-y-4 pt-1">
+                    <p className="text-[11px] text-[#86efac]/90 leading-relaxed">
+                      يمكنك اختيار أي حساب Google مختلف تملكه أو يملكه العميل؛ ستفتح لك نافذة Google الرسمية متضمنة خيار <strong className="text-amber-300">&quot;استخدام حساب آخر&quot;</strong> لتسجيل الدخول بحساب العميل مباشرة، أو يمكنك كتابة بريده الإلكتروني يدوياً:
+                    </p>
+
+                    {/* Official Google Account Picker Button */}
                     <button
                       type="button"
                       onClick={handleSelectGoogleAccount}
                       disabled={isSigningInGoogle}
-                      className="px-4 py-2.5 rounded-xl bg-[#fbbf24] hover:bg-[#f59e0b] text-[#064e3b] font-black text-xs shadow-md transition-all cursor-pointer flex items-center justify-center gap-2 shrink-0 disabled:opacity-50"
-                      title="فتح نافذة تسجيل الدخول واختيار الحساب المعتمد"
+                      className="w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-amber-400 via-amber-300 to-yellow-400 hover:brightness-110 text-[#064e3b] font-black text-xs sm:text-sm shadow-md transition-all cursor-pointer flex items-center justify-center gap-2.5 disabled:opacity-50"
                     >
                       {isSigningInGoogle ? (
                         <>
                           <Loader2 className="w-4 h-4 animate-spin text-[#064e3b]" />
-                          <span>جاري المصادقة...</span>
+                          <span>جاري فتح نافذة Google الرسمية لاختيار الحساب...</span>
                         </>
                       ) : (
                         <>
-                          <LogIn className="w-4 h-4 text-[#064e3b]" />
-                          <span>تسجيل الدخول واختيار حساب Google</span>
+                          <Globe className="w-4 h-4 text-[#064e3b]" />
+                          <span>فتح نافذة Google الرسمية لاختيار أو تبديل الحساب (Google Account Chooser) 🌐</span>
                         </>
                       )}
                     </button>
-                  </div>
 
-                  {targetGoogleEmail && (
-                    <div className="p-2.5 rounded-xl bg-emerald-950/60 border border-emerald-500/40 text-emerald-300 flex items-center gap-2">
-                      <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                      <span>الحساب المعتمد للنقل: <strong className="font-mono text-white mr-1">{targetGoogleEmail}</strong></span>
+                    {/* Manual Email Input Alternative */}
+                    <div className="space-y-1.5 pt-1">
+                      <div className="flex items-center justify-between text-[11px]">
+                        <label className="text-[#86efac] font-bold">
+                          أو كتابة / لصق بريد حساب Google المستهدف يدوياً:
+                        </label>
+                        <span className="text-[10px] text-amber-300/80">يدعم أي بريد Google</span>
+                      </div>
+                      <div className="relative">
+                        <Mail className="w-4 h-4 text-emerald-400 absolute right-3 top-3" />
+                        <input
+                          type="email"
+                          value={targetGoogleEmail}
+                          onChange={e => {
+                            setTargetGoogleEmail(e.target.value);
+                            setAccountMode('different_account');
+                          }}
+                          placeholder="مثال: client.complex@gmail.com أو supervisor@gmail.com"
+                          className="w-full bg-[#064e3b] border border-amber-400/50 rounded-xl pr-9 pl-3 py-2.5 text-xs text-white font-mono placeholder:text-emerald-300/40 outline-none focus:border-amber-400 shadow-inner"
+                          dir="ltr"
+                        />
+                      </div>
                     </div>
-                  )}
-                </div>
+                  </div>
+                )}
+
+                {/* DEVELOPER ACCOUNT MODE */}
+                {accountMode === 'developer_account' && (
+                  <div className="p-3.5 rounded-xl bg-[#064e3b]/60 border border-emerald-500/40 space-y-2">
+                    <div className="flex items-center gap-2 text-emerald-300 font-bold text-xs">
+                      <UserCheck className="w-4 h-4 text-emerald-400" />
+                      <span>حساب المبرمج الشخصي المعتمد في المنصة:</span>
+                    </div>
+                    <div className="font-mono text-sm text-white font-bold bg-[#022c22] p-2.5 rounded-lg border border-[#065f46]" dir="ltr">
+                      {developerEmail || 'لم يتم تسجيل بريد المبرمج في إعدادات المنصة'}
+                    </div>
+                    <p className="text-[11px] text-amber-200/90 leading-relaxed">
+                      💡 <strong>ملاحظة للمبرمج:</strong> عند اختيار حسابك الشخصي سيتم إنشاء قاعدة البيانات المستقلة للمجمع على نفس حسابك. إذا كنت تقوم بتسليم النظام لعميل أو مجمع مستقل، نوصي بالضغط على تبويب <span className="text-amber-300 underline font-bold cursor-pointer" onClick={() => setAccountMode('different_account')}>&quot;حساب Google آخر&quot;</span> بالأعلى لاختيار حساب العميل.
+                    </p>
+                  </div>
+                )}
+
+                {/* Active Target Account Confirmation Card */}
+                {targetGoogleEmail && (
+                  <div className={`p-3.5 rounded-xl border-2 transition-all space-y-2 ${
+                    isDifferentAccount
+                      ? 'bg-emerald-950/70 border-emerald-400 text-emerald-200 shadow-lg'
+                      : 'bg-amber-950/70 border-amber-400 text-amber-200 shadow-lg'
+                  }`}>
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                      <div className="flex items-center gap-2.5">
+                        <CheckCircle2 className={`w-5 h-5 shrink-0 ${isDifferentAccount ? 'text-emerald-400' : 'text-amber-400'}`} />
+                        <div>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-bold text-white text-xs">الحساب المعتمد لنقل قاعدة البيانات:</span>
+                            {isDifferentAccount ? (
+                              <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-400 text-[#064e3b] font-black">
+                                ✨ حساب مستقل للعميل / المجمع (غير حساب المبرمج)
+                              </span>
+                            ) : (
+                              <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-400 text-[#064e3b] font-black">
+                                👤 حساب المبرمج الشخصي
+                              </span>
+                            )}
+                          </div>
+                          <div className="font-mono text-white text-sm font-bold mt-1" dir="ltr">
+                            {targetGoogleEmail}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 self-end sm:self-center">
+                        <button
+                          type="button"
+                          onClick={handleSelectGoogleAccount}
+                          disabled={isSigningInGoogle}
+                          className="px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white text-[11px] font-bold flex items-center gap-1.5 transition-all cursor-pointer"
+                          title="فتح نافذة Google لاختيار حساب آخر"
+                        >
+                          <RefreshCw className="w-3.5 h-3.5" />
+                          <span>تبديل الحساب</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setTargetGoogleEmail('')}
+                          className="px-2.5 py-1.5 rounded-lg bg-red-500/20 hover:bg-red-500/30 text-red-300 text-[11px] font-bold flex items-center gap-1 transition-all cursor-pointer"
+                          title="مسح الحساب لاختيار حساب آخر"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                          <span>مسح</span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Step 2: Target Database ID & Project Settings */}

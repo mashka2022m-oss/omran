@@ -1382,6 +1382,75 @@ export class GoogleWorkspaceService {
     await this.saveGoogleAuthConfig(config);
   }
 
+  // Developer Feature: Select or switch to ANY Google Account for Complex Database Migration
+  // Forces Google to show the account picker ('prompt: select_account') so the developer can choose
+  // any of their Google accounts or click 'Use another account' to log in with the client's/complex's Google account!
+  static async selectAnyGoogleAccountForMigration(): Promise<{
+    email: string;
+    displayName?: string;
+    photoURL?: string | null;
+    accessToken?: string;
+  }> {
+    // 1. Try Google Identity Services (GIS) if oAuthClientId is configured
+    if (typeof window !== 'undefined' && firebaseConfig.oAuthClientId) {
+      try {
+        await loadGoogleGISScript();
+        if (window.google?.accounts?.oauth2) {
+          const gisRes = await requestAccessTokenViaGIS(firebaseConfig.oAuthClientId, ['email', 'profile']);
+          if (gisRes?.email) {
+            return {
+              email: gisRes.email,
+              displayName: gisRes.displayName,
+              photoURL: gisRes.photoURL,
+              accessToken: gisRes.accessToken
+            };
+          }
+        }
+      } catch (gisErr: any) {
+        console.warn('GIS Token client migration chooser notice:', gisErr?.message || gisErr);
+      }
+    }
+
+    // 2. Firebase Auth popup fallback with explicit prompt: select_account
+    try {
+      const provider = new GoogleAuthProvider();
+      provider.addScope('email');
+      provider.addScope('profile');
+      provider.setCustomParameters({
+        prompt: 'select_account'
+      });
+
+      const result = await signInWithPopup(auth, provider);
+      const credential = GoogleAuthProvider.credentialFromResult(result);
+      const accessToken = credential?.accessToken;
+
+      const email = result.user.email || '';
+      if (!email) {
+        throw new Error('لم يتم استلام بريد حساب Google.');
+      }
+
+      return {
+        email,
+        displayName: result.user.displayName || undefined,
+        photoURL: result.user.photoURL || undefined,
+        accessToken
+      };
+    } catch (err: any) {
+      const errMsg = err?.message || String(err);
+      if (err?.code === 'auth/unauthorized-domain' || errMsg.includes('auth/unauthorized-domain')) {
+        const currentDomain = typeof window !== 'undefined' ? window.location.hostname : 'النطاق الحالي';
+        throw new UnauthorizedDomainError(currentDomain, firebaseConfig.projectId);
+      }
+      if (err?.code === 'auth/popup-closed-by-user' || errMsg.includes('auth/popup-closed-by-user')) {
+        throw new PopupClosedByUserError();
+      }
+      if (err?.code === 'auth/popup-blocked' || errMsg.includes('auth/popup-blocked')) {
+        throw new PopupBlockedError();
+      }
+      throw err;
+    }
+  }
+
   // Create Google Form and linked Google Sheet for an Exam
   static async createGoogleFormAndSheet(exam: Exam, tokenOverride?: string): Promise<{
     formId: string;
