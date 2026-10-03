@@ -147,12 +147,39 @@ export const ComplexDatabaseTransferModal: React.FC<ComplexDatabaseTransferModal
   };
 
   // Start Transfer Handler
-  const handleStartMigration = async () => {
+  const handleStartMigration = async (overrideEmail?: string) => {
     if (!targetComplex) return;
-    if (!targetGoogleEmail || !targetGoogleEmail.trim()) {
-      setErrorMessage('يرجى تحديد أو تسجيل الدخول بحساب Google المعتمد للمجمع قبل بدء النقل.');
+
+    let activeEmail = (overrideEmail || targetGoogleEmail || '').trim();
+
+    // If no email selected yet, seamlessly open Google Account selector right now!
+    if (!activeEmail) {
+      setIsSigningInGoogle(true);
+      setErrorMessage(null);
+      try {
+        const res = await GoogleWorkspaceService.linkGoogleAccount();
+        if (res?.email) {
+          activeEmail = res.email.trim();
+          setTargetGoogleEmail(res.email.trim());
+        } else {
+          throw new Error('لم يتم استلام بريد حساب Google.');
+        }
+      } catch (err: any) {
+        setErrorMessage(err?.message || 'تم إلغاء أو تعذر تسجيل الدخول بحساب Google.');
+        setIsSigningInGoogle(false);
+        return;
+      } finally {
+        setIsSigningInGoogle(false);
+      }
+    }
+
+    if (!activeEmail) {
+      setErrorMessage('يرجى تسجيل الدخول واختيار حساب Google المعتمد للمجمع.');
       return;
     }
+
+    const cleanProjId = (targetProjectId || `omran-${targetComplex.id}`).trim();
+    const cleanDbId = (targetDatabaseId || `isolated-${targetComplex.id}`).trim();
 
     setErrorMessage(null);
     setMigrationState('transferring');
@@ -160,18 +187,21 @@ export const ComplexDatabaseTransferModal: React.FC<ComplexDatabaseTransferModal
       step: 1,
       totalSteps: 10,
       percent: 5,
-      title: 'تهيئة جلسة الترحيل السحابي...',
-      detail: 'جاري الاتصال والتحقق من الصلاحيات...',
-      logs: [`[${new Date().toLocaleTimeString('ar-SA')}] بدء جلسة نقل بيانات مجمع (${targetComplex.name})...`]
+      title: 'تهيئة جلسة الترحيل السحابي التلقائي...',
+      detail: `جاري الاتصال بحساب Google (${activeEmail}) وتجهيز المشروع وقاعدة البيانات...`,
+      logs: [
+        `[${new Date().toLocaleTimeString('ar-SA')}] بدء جلسة نقل بيانات مجمع (${targetComplex.name})...`,
+        `[${new Date().toLocaleTimeString('ar-SA')}] تم تأكيد هوية حساب Google: (${activeEmail})`
+      ]
     });
 
     try {
       const res = await OmranDataService.migrateComplexToDedicatedDatabase(
         {
           complexId: targetComplex.id,
-          targetGoogleEmail: targetGoogleEmail.trim(),
-          targetProjectId: targetProjectId.trim(),
-          targetDatabaseId: targetDatabaseId.trim(),
+          targetGoogleEmail: activeEmail,
+          targetProjectId: cleanProjId,
+          targetDatabaseId: cleanDbId,
           purgeFromCentral: purgeFromCentral
         },
         (p) => {
@@ -303,6 +333,49 @@ export const ComplexDatabaseTransferModal: React.FC<ComplexDatabaseTransferModal
                     </div>
                   </div>
                 )}
+              </div>
+
+              {/* PRIMARY 1-CLICK AUTOMATED LAUNCH BANNER */}
+              <div className="bg-gradient-to-r from-amber-500/25 via-emerald-500/20 to-teal-500/25 border-2 border-amber-400 rounded-3xl p-5 sm:p-6 space-y-4 shadow-2xl relative overflow-hidden">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div className="space-y-1.5">
+                    <span className="text-[10px] px-3 py-0.5 rounded-full bg-amber-400 text-[#064e3b] font-black inline-flex items-center gap-1 shadow-sm">
+                      <Sparkles className="w-3.5 h-3.5" />
+                      الإنشاء والربط السحابي التلقائي الكامل (1-Click Automated)
+                    </span>
+                    <h4 className="text-base sm:text-lg font-black text-white font-heading">
+                      تسجيل الدخول وإنشاء قاعدة البيانات والنقل التلقائي
+                    </h4>
+                    <p className="text-xs text-[#86efac] leading-relaxed">
+                      لست بحاجة لفتح أي موقع أو إدخال أي مفاتيح! بمجرد الضغط على الزر واختيار حساب Google، سيتولى البرنامج إنشاء المشروع وتهيئة قاعدة بيانات Firestore ونقل كافة بيانات المجمع كاملة من أولها لآخرها!
+                    </p>
+                  </div>
+                </div>
+
+                <div className="pt-1">
+                  <button
+                    type="button"
+                    onClick={() => handleStartMigration()}
+                    disabled={isSigningInGoogle}
+                    className="w-full py-4 px-6 rounded-2xl bg-gradient-to-r from-amber-400 via-amber-300 to-yellow-400 hover:brightness-110 text-[#064e3b] font-black text-xs sm:text-sm shadow-[0_0_25px_rgba(251,191,36,0.4)] transition-all cursor-pointer flex items-center justify-center gap-2.5"
+                  >
+                    {isSigningInGoogle ? (
+                      <>
+                        <Loader2 className="w-5 h-5 animate-spin text-[#064e3b]" />
+                        <span>جاري المصادقة بحساب Google والبدء...</span>
+                      </>
+                    ) : (
+                      <>
+                        <LogIn className="w-5 h-5 text-[#064e3b]" />
+                        <span>
+                          {targetGoogleEmail
+                            ? `بدء الترحيل التلقائي الآن على حساب (${targetGoogleEmail}) 🚀`
+                            : 'تسجيل الدخول بحساب Google والبدء التلقائي في إنشاء قاعدة البيانات ونقل المجمع فوراً 🚀'}
+                        </span>
+                      </>
+                    )}
+                  </button>
+                </div>
               </div>
 
               {/* Step 1: Select Target Google Account */}
@@ -773,11 +846,16 @@ export const ComplexDatabaseTransferModal: React.FC<ComplexDatabaseTransferModal
 
               <button
                 type="button"
-                onClick={handleStartMigration}
+                onClick={() => handleStartMigration()}
+                disabled={isSigningInGoogle}
                 className="px-6 py-3 rounded-2xl bg-[#fbbf24] hover:bg-[#f59e0b] text-[#064e3b] text-xs sm:text-sm font-black shadow-xl transition-all cursor-pointer flex items-center gap-2"
               >
                 <ArrowRightLeft className="w-4 h-4 text-[#064e3b] stroke-[2.5]" />
-                <span>بدء نقل البيانات وإنشاء القاعدة المنفصلة الآن</span>
+                <span>
+                  {targetGoogleEmail
+                    ? 'بدء الترحيل التلقائي وإنشاء القاعدة المنفصلة الآن'
+                    : 'تسجيل الدخول بحساب Google والبدء التلقائي'}
+                </span>
               </button>
             </>
           )}
