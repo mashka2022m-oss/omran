@@ -56,6 +56,7 @@ interface ComplexDatabaseTransferModalProps {
   students?: Student[];
   googleAuthConfig?: GoogleOAuthConfig;
   onSuccessRefresh: () => Promise<void>;
+  onSelectComplex?: (complexId: string) => void;
 }
 
 export const ComplexDatabaseTransferModal: React.FC<ComplexDatabaseTransferModalProps> = ({
@@ -66,7 +67,8 @@ export const ComplexDatabaseTransferModal: React.FC<ComplexDatabaseTransferModal
   halaqahs = [],
   students = [],
   googleAuthConfig,
-  onSuccessRefresh
+  onSuccessRefresh,
+  onSelectComplex
 }) => {
   // Complex selection
   const [selectedComplexId, setSelectedComplexId] = useState<string>(
@@ -102,7 +104,11 @@ export const ComplexDatabaseTransferModal: React.FC<ComplexDatabaseTransferModal
   });
 
   const [targetDatabaseId, setTargetDatabaseId] = useState<string>(() => {
-    return targetComplex?.databaseConfig?.databaseId || '(default)';
+    const existing = targetComplex?.databaseConfig?.databaseId;
+    if (existing && existing !== '(default)' && !existing.startsWith('isolated-')) {
+      return existing;
+    }
+    return '(default)';
   });
 
   const [targetAuthDomain, setTargetAuthDomain] = useState<string>('');
@@ -114,7 +120,7 @@ export const ComplexDatabaseTransferModal: React.FC<ComplexDatabaseTransferModal
   const [isRawSnippetParsed, setIsRawSnippetParsed] = useState<boolean>(false);
 
   // Options
-  const [purgeFromCentral, setPurgeFromCentral] = useState<boolean>(false);
+  const [purgeFromCentral, setPurgeFromCentral] = useState<boolean>(true);
   const [showDeveloperGuide, setShowDeveloperGuide] = useState<boolean>(true);
   const [copiedRules, setCopiedRules] = useState<boolean>(false);
 
@@ -161,8 +167,10 @@ export const ComplexDatabaseTransferModal: React.FC<ComplexDatabaseTransferModal
       if (targetComplex.databaseConfig?.apiKey) {
         setTargetApiKey(targetComplex.databaseConfig.apiKey);
       }
-      if (targetComplex.databaseConfig?.databaseId) {
+      if (targetComplex.databaseConfig?.databaseId && !targetComplex.databaseConfig.databaseId.startsWith('isolated-')) {
         setTargetDatabaseId(targetComplex.databaseConfig.databaseId);
+      } else {
+        setTargetDatabaseId('(default)');
       }
       setConnectionTestResult(null);
     }
@@ -663,16 +671,22 @@ service cloud.firestore {
 
                   <div>
                     <label className="block text-[11px] font-bold text-emerald-200 mb-1">
-                      معرف قاعدة البيانات (Database ID):
+                      معرف قاعدة البيانات (Database ID) - اتركه (default):
                     </label>
                     <input
                       type="text"
                       value={targetDatabaseId}
-                      onChange={e => setTargetDatabaseId(e.target.value)}
+                      onChange={e => {
+                        const val = e.target.value.trim();
+                        setTargetDatabaseId(val || '(default)');
+                      }}
                       placeholder="(default)"
                       className="w-full bg-[#064e3b] border border-[#065f46] rounded-xl px-3 py-2 text-xs text-white font-mono outline-none focus:border-amber-400"
                       dir="ltr"
                     />
+                    <span className="text-[10px] text-amber-300/80 block mt-1">
+                      💡 في فايربيس تكون قاعدة البيانات دائماً <code className="text-white font-bold">(default)</code>
+                    </span>
                   </div>
 
                   <div>

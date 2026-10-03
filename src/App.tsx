@@ -104,6 +104,7 @@ export function App() {
     role: UserRole;
     studentId?: string;
     teacherId?: string;
+    complexId?: string;
   } | null>(() => {
     const saved = localStorage.getItem('omran_session');
     if (saved) {
@@ -185,7 +186,14 @@ export function App() {
   const [isComplexModalOpen, setIsComplexModalOpen] = useState(false);
   const [selectedComplexId, setSelectedComplexId] = useState<string>(() => {
     try {
-      return localStorage.getItem('omran_selected_complex_id') || '';
+      const saved = localStorage.getItem('omran_selected_complex_id');
+      if (saved) return saved;
+      const session = localStorage.getItem('omran_session');
+      if (session) {
+        const u = JSON.parse(session);
+        if (u?.complexId) return u.complexId;
+      }
+      return '';
     } catch {
       return '';
     }
@@ -357,94 +365,6 @@ export function App() {
     }
   };
 
-  useEffect(() => {
-    let isMounted = true;
-    const initialize = async () => {
-      try {
-        await OmranDataService.testConnection();
-      } catch (err) {
-        // Safe connection test fallback
-      }
-      if (isMounted) {
-        await loadAllData();
-      }
-    };
-    initialize();
-
-    // Attach Firestore real-time subscriptions for multi-teacher live sync
-    const unsubStudents = OmranDataService.subscribeStudents(newStudents => {
-      setStudents(newStudents);
-    });
-    const unsubAttendance = OmranDataService.subscribeAttendance(newAtt => {
-      setAttendance(newAtt);
-    });
-    const unsubEvaluations = OmranDataService.subscribeEvaluations(newEvals => {
-      setEvaluations(newEvals);
-    });
-    const unsubCriteria = OmranDataService.subscribeCriteria(newCrit => {
-      setCriteria(newCrit);
-    });
-    const unsubSettings = OmranDataService.subscribeSettings(newSet => {
-      setSettings(newSet);
-    });
-    const unsubTeachers = OmranDataService.subscribeTeachers(newTeach => {
-      setTeachers(newTeach);
-    });
-    const unsubViolations = OmranDataService.subscribeViolations(newViolations => {
-      setViolations(newViolations);
-    });
-    const unsubHalaqahs = OmranDataService.subscribeHalaqahs(newHalaqahs => {
-      setHalaqahs(newHalaqahs);
-    });
-    const unsubComplexes = OmranDataService.subscribeComplexes(newComplexes => {
-      setComplexes(newComplexes);
-    });
-    const unsubExams = OmranDataService.subscribeExams(newExams => {
-      setExams(newExams);
-    });
-    const unsubSubmissions = OmranDataService.subscribeSubmissions(newSubs => {
-      setSubmissions(newSubs);
-    });
-    const unsubLeaderboard = OmranDataService.subscribeLeaderboardSettings(newLead => {
-      setLeaderboardSettings(newLead);
-    });
-    const unsubGoogle = OmranDataService.subscribeGoogleOAuthConfig(newGoogle => {
-      setGoogleAuthConfig(newGoogle);
-    });
-    const unsubRecordings = OmranDataService.subscribeRecordings(newRecordings => {
-      setRecordings(newRecordings);
-    });
-    const unsubRecordingsConfig = OmranDataService.subscribeRecordingsConfig(newConfig => {
-      setRecordingsConfig(newConfig);
-    });
-    const unsubCertificates = OmranDataService.subscribeCertificates(newCerts => {
-      setCertificates(newCerts);
-    });
-    const unsubListeningLogs = OmranDataService.subscribeListeningLogs(newLogs => {
-      setListeningLogs(newLogs);
-    });
-
-    return () => {
-      unsubStudents();
-      unsubAttendance();
-      unsubEvaluations();
-      unsubCriteria();
-      unsubSettings();
-      unsubTeachers();
-      unsubViolations();
-      unsubHalaqahs();
-      unsubComplexes();
-      unsubExams();
-      unsubSubmissions();
-      unsubLeaderboard();
-      unsubGoogle();
-      unsubRecordings();
-      unsubRecordingsConfig();
-      unsubCertificates();
-      unsubListeningLogs();
-    };
-  }, []);
-
   // Identify Teacher and Supervisor Roles (MUST run before any conditional returns)
   const currentTeacher = useMemo(() => {
     if (!currentUser || currentUser.role !== 'admin') return null;
@@ -589,6 +509,10 @@ export function App() {
       }
     }
     if (!isDeveloper) {
+      if (currentUser?.complexId) {
+        const cMatch = complexes.find(c => c.id === currentUser.complexId);
+        if (cMatch) return cMatch;
+      }
       return availableTeacherComplexes[0] || complexes[0] || null;
     }
     if (selectedComplexId) {
@@ -596,10 +520,100 @@ export function App() {
       if (match) return match;
     }
     return complexes[0] || null;
-  }, [activePortalStudent, halaqahs, availableTeacherComplexes, selectedComplexId, complexes, isDeveloper]);
+  }, [activePortalStudent, halaqahs, availableTeacherComplexes, selectedComplexId, complexes, isDeveloper, currentUser]);
 
   // Complex scope resolution for teacher/supervisor:
   const supervisedComplex = activeComplex;
+
+  // Synchronize OmranDataService active database whenever activeComplex changes,
+  // and bind real-time subscriptions to the active database instance!
+  useEffect(() => {
+    let isMounted = true;
+
+    // 1. Tell OmranDataService to set active complex and resolve its Firestore instance
+    OmranDataService.setActiveComplex(activeComplex);
+
+    // 2. Perform connection check & seed if empty for this database
+    OmranDataService.testConnection().catch(() => {});
+
+    // 3. Load all data from the active database
+    loadAllData();
+
+    // 4. Attach Firestore real-time subscriptions for the active database
+    const unsubStudents = OmranDataService.subscribeStudents(newStudents => {
+      if (isMounted) setStudents(newStudents);
+    });
+    const unsubAttendance = OmranDataService.subscribeAttendance(newAtt => {
+      if (isMounted) setAttendance(newAtt);
+    });
+    const unsubEvaluations = OmranDataService.subscribeEvaluations(newEvals => {
+      if (isMounted) setEvaluations(newEvals);
+    });
+    const unsubCriteria = OmranDataService.subscribeCriteria(newCrit => {
+      if (isMounted) setCriteria(newCrit);
+    });
+    const unsubSettings = OmranDataService.subscribeSettings(newSet => {
+      if (isMounted) setSettings(newSet);
+    });
+    const unsubTeachers = OmranDataService.subscribeTeachers(newTeach => {
+      if (isMounted) setTeachers(newTeach);
+    });
+    const unsubViolations = OmranDataService.subscribeViolations(newViolations => {
+      if (isMounted) setViolations(newViolations);
+    });
+    const unsubHalaqahs = OmranDataService.subscribeHalaqahs(newHalaqahs => {
+      if (isMounted) setHalaqahs(newHalaqahs);
+    });
+    // complexes subscription always listens to Central DB
+    const unsubComplexes = OmranDataService.subscribeComplexes(newComplexes => {
+      if (isMounted) setComplexes(newComplexes);
+    });
+    const unsubExams = OmranDataService.subscribeExams(newExams => {
+      if (isMounted) setExams(newExams);
+    });
+    const unsubSubmissions = OmranDataService.subscribeSubmissions(newSubs => {
+      if (isMounted) setSubmissions(newSubs);
+    });
+    const unsubLeaderboard = OmranDataService.subscribeLeaderboardSettings(newLead => {
+      if (isMounted) setLeaderboardSettings(newLead);
+    });
+    const unsubGoogle = OmranDataService.subscribeGoogleOAuthConfig(newGoogle => {
+      if (isMounted) setGoogleAuthConfig(newGoogle);
+    });
+    const unsubRecordings = OmranDataService.subscribeRecordings(newRecordings => {
+      if (isMounted) setRecordings(newRecordings);
+    });
+    const unsubRecordingsConfig = OmranDataService.subscribeRecordingsConfig(newConfig => {
+      if (isMounted) setRecordingsConfig(newConfig);
+    });
+    const unsubCertificates = OmranDataService.subscribeCertificates(newCerts => {
+      if (isMounted) setCertificates(newCerts);
+    });
+    const unsubListeningLogs = OmranDataService.subscribeListeningLogs(newLogs => {
+      if (isMounted) setListeningLogs(newLogs);
+    });
+
+    return () => {
+      isMounted = false;
+      unsubStudents();
+      unsubAttendance();
+      unsubEvaluations();
+      unsubCriteria();
+      unsubSettings();
+      unsubTeachers();
+      unsubViolations();
+      unsubHalaqahs();
+      unsubComplexes();
+      unsubExams();
+      unsubSubmissions();
+      unsubLeaderboard();
+      unsubGoogle();
+      unsubRecordings();
+      unsubRecordingsConfig();
+      unsubCertificates();
+      unsubListeningLogs();
+    };
+  }, [activeComplex?.id, activeComplex?.databaseConfig?.projectId, activeComplex?.databaseConfig?.databaseId]);
 
   // Real-time synchronization of Browser Tab Title, Favicon, and Complex Theme
   useEffect(() => {
@@ -951,8 +965,14 @@ export function App() {
   }, [isDeveloper, evaluations, scopedStudentIds]);
 
   // Save session on login
-  const handleLoginSuccess = (user: { username: string; role: UserRole; studentId?: string; teacherId?: string }) => {
+  const handleLoginSuccess = (user: { username: string; role: UserRole; studentId?: string; teacherId?: string; complexId?: string }) => {
     setCurrentUser(user);
+    if (user.complexId) {
+      setSelectedComplexId(user.complexId);
+      try {
+        localStorage.setItem('omran_selected_complex_id', user.complexId);
+      } catch {}
+    }
     localStorage.setItem('omran_session', JSON.stringify(user));
   };
 

@@ -88,9 +88,7 @@ export const ComplexMigrationModal: React.FC<ComplexMigrationModalProps> = ({
     const cleanId = activeComplex.name.replace(/[^\w\s-]/g, '').trim().replace(/\s+/g, '-').toLowerCase();
     return `omran-${cleanId || 'complex'}-${Math.floor(1000 + Math.random() * 9000)}`;
   });
-  const [targetDatabaseId, setTargetDatabaseId] = useState<string>(() => {
-    return `firestore-${activeComplex.id.replace(/[^\w-]/g, '')}`;
-  });
+  const [targetDatabaseId, setTargetDatabaseId] = useState<string>('(default)');
   const [targetApiKey, setTargetApiKey] = useState<string>('');
 
   // Complex Stats Inspection

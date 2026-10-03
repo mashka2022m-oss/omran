@@ -13,14 +13,16 @@ import {
   KeyRound,
   X
 } from 'lucide-react';
-import { Student, UserRole, AppSettings, TeacherAccount, getThreePartNameValidation } from '../types';
+import { Student, UserRole, AppSettings, TeacherAccount, getThreePartNameValidation, QuranComplex } from '../types';
 import { GoogleWorkspaceService, UnregisteredGoogleAccountError } from '../lib/googleWorkspace';
+import { OmranDataService } from '../lib/firebase';
 
 interface LoginModalProps {
-  onLoginSuccess: (user: { username: string; role: UserRole; studentId?: string; teacherId?: string }) => void;
+  onLoginSuccess: (user: { username: string; role: UserRole; studentId?: string; teacherId?: string; complexId?: string }) => void;
   onRegisterStudent: (newStudent: Partial<Student>) => Promise<boolean>;
   students: Student[];
   teachers?: TeacherAccount[];
+  complexes?: QuranComplex[];
   settings: AppSettings;
   onBackToLanding?: () => void;
   onOpenPrivacyPolicy?: () => void;
@@ -31,6 +33,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
   onRegisterStudent,
   students,
   teachers = [],
+  complexes = [],
   settings,
   onBackToLanding,
   onOpenPrivacyPolicy
@@ -197,6 +200,30 @@ export const LoginModal: React.FC<LoginModalProps> = ({
         role: 'admin',
         teacherId: foundTeacher.id
       });
+      return;
+    }
+
+    // 4. Check dedicated/isolated databases for migrated complexes
+    const customComplexes = complexes.filter(c => c.databaseConfig?.isCustom && c.databaseConfig?.projectId);
+    if (customComplexes.length > 0) {
+      setIsSubmitting(true);
+      OmranDataService.authenticateUserAcrossDatabases(cleanUser, cleanPass, customComplexes)
+        .then(result => {
+          if (result) {
+            onLoginSuccess({
+              ...result.user,
+              complexId: result.targetComplex.id
+            });
+          } else {
+            setLoginError('بيانات الدخول غير صحيحة. تأكد من الاسم وكلمة المرور.');
+          }
+        })
+        .catch(() => {
+          setLoginError('بيانات الدخول غير صحيحة. تأكد من الاسم وكلمة المرور.');
+        })
+        .finally(() => {
+          setIsSubmitting(false);
+        });
       return;
     }
 

@@ -186,9 +186,9 @@ export const Navbar: React.FC<NavbarProps> = ({
                   <select
                     value={activeComplexId || availableComplexes[0]?.id || ''}
                     onChange={e => onSwitchComplex(e.target.value)}
-                    className="text-xs text-amber-300 font-black bg-transparent border-none focus:outline-none cursor-pointer pr-1"
+                    className="text-xs text-amber-300 font-black bg-transparent border-none focus:outline-none cursor-pointer pr-1 max-w-[180px] sm:max-w-xs truncate"
                     style={activeComplex?.theme?.accentColor ? { color: activeComplex.theme.accentColor } : undefined}
-                    title={isDeveloper ? "التبديل بين كافة المجمعات القرآنية (إشراف شامل)" : "التبديل بين المجمعات المرتبط بها"}
+                    title={isDeveloper ? "التبديل بين كافة المجمعات القرآنية (إشراف شامل للمبرمج)" : "التبديل بين المجمعات المرتبط بها"}
                   >
                     {availableComplexes.map(c => (
                       <option
@@ -200,7 +200,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                           color: '#ffffff'
                         } : undefined}
                       >
-                        {c.name}
+                        {c.name} {c.databaseConfig?.isCustom ? `⚡ [مستقل: ${c.databaseConfig.projectId}]` : ' (المركزية)'}
                       </option>
                     ))}
                   </select>
@@ -217,6 +217,28 @@ export const Navbar: React.FC<NavbarProps> = ({
                   )}
                 </div>
               ) : null}
+
+              {/* Dedicated Database Status Indicator Badge */}
+              {activeComplex?.databaseConfig?.isCustom ? (
+                <div
+                  className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-black bg-emerald-500/20 text-emerald-300 border border-emerald-400/50 shadow-sm"
+                  title={`المجمع متصل ومستقل 100% بمشروع فايربيس: ${activeComplex.databaseConfig.projectId}`}
+                >
+                  <span className="relative flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-400" />
+                  </span>
+                  <span>قاعدة مستقلة: {activeComplex.databaseConfig.projectId}</span>
+                </div>
+              ) : (
+                <div
+                  className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/10 text-amber-300/80 border border-amber-500/20"
+                  title="متصل بالقاعدة المركزية المشتركة للمنظومة"
+                >
+                  <span className="h-1.5 w-1.5 rounded-full bg-amber-400" />
+                  <span>القاعدة المركزية</span>
+                </div>
+              )}
             </div>
 
             {/* Halaqah selector / label with smooth motion.div switching */}
