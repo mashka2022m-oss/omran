@@ -962,6 +962,21 @@ export const ComplexManagementModal: React.FC<ComplexManagementModalProps> = ({
 
                             {/* Actions on Complex */}
                             <div className="flex items-center gap-1.5 self-end sm:self-center">
+                              {onOpenDatabaseSettings && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    onClose();
+                                    onOpenDatabaseSettings();
+                                  }}
+                                  className="px-2.5 py-1.5 rounded-xl bg-amber-400/20 hover:bg-amber-400/30 text-amber-300 hover:text-white border border-amber-400/40 text-xs font-bold flex items-center gap-1 transition-all cursor-pointer shadow-sm"
+                                  title="نقل وترحيل بيانات المجمع لقاعدة بيانات Firebase منفصلة"
+                                >
+                                  <ArrowRightLeft className="w-3.5 h-3.5 text-amber-300 stroke-[2.5]" />
+                                  <span className="hidden sm:inline">نقل لقاعدة منفصلة</span>
+                                </button>
+                              )}
+
                               <button
                                 onClick={() => handleOpenAddHalaqahToComplex(complex.id)}
                                 className="px-2.5 py-1.5 rounded-xl bg-[#064e3b] hover:bg-emerald-700 text-[#86efac] hover:text-white text-xs font-bold border border-[#065f46] flex items-center gap-1 transition-all cursor-pointer"

@@ -30,7 +30,8 @@ import {
 } from 'lucide-react';
 import { OmranDataService, firebaseConfig, TARGET_FIRESTORE_DATABASE_ID } from '../../lib/firebase';
 import { GoogleWorkspaceService } from '../../lib/googleWorkspace';
-import { FullBackupData, GoogleOAuthConfig, QuranComplex, ComplexBackupData } from '../../types';
+import { FullBackupData, GoogleOAuthConfig, QuranComplex, ComplexBackupData, Halaqah, Student } from '../../types';
+import { ComplexDatabaseTransferModal } from '../ComplexDatabaseTransferModal';
 
 interface DataBackupTabProps {
   onRefreshAllData: () => Promise<void>;
@@ -40,6 +41,8 @@ interface DataBackupTabProps {
   isDeveloper?: boolean;
   complexes?: QuranComplex[];
   onSaveComplex?: (complex: QuranComplex) => Promise<void>;
+  halaqahs?: Halaqah[];
+  students?: Student[];
 }
 
 export const DataBackupTab: React.FC<DataBackupTabProps> = ({
@@ -49,7 +52,9 @@ export const DataBackupTab: React.FC<DataBackupTabProps> = ({
   isSupervisor,
   isDeveloper,
   complexes = [],
-  onSaveComplex
+  onSaveComplex,
+  halaqahs = [],
+  students = []
 }) => {
   const [isExporting, setIsExporting] = useState(false);
   const [isExportingDrive, setIsExportingDrive] = useState(false);
@@ -1113,7 +1118,12 @@ export const DataBackupTab: React.FC<DataBackupTabProps> = ({
                   <h4 className="text-base font-bold text-white">
                     المجمع النشط: <span className="text-amber-300">{activeComplex.name}</span>
                   </h4>
-                  {activeComplex.databaseConfig?.isCustom ? (
+                  {activeComplex.databaseConfig?.isIsolated ? (
+                    <span className="text-xs px-3 py-1 rounded-full bg-blue-900/90 text-blue-200 border border-blue-400 font-mono font-bold flex items-center gap-1.5 shadow-sm">
+                      <ShieldCheck className="w-3.5 h-3.5 text-blue-300" />
+                      قاعدة بيانات منفصلة معزولة 100%: {activeComplex.databaseConfig.databaseId || activeComplex.databaseConfig.projectId}
+                    </span>
+                  ) : activeComplex.databaseConfig?.isCustom ? (
                     <span className="text-xs px-3 py-1 rounded-full bg-blue-900/80 text-blue-200 border border-blue-400 font-mono font-bold">
                       قاعدة بيانات منفصلة: {activeComplex.databaseConfig.projectId}
                     </span>
@@ -1127,10 +1137,14 @@ export const DataBackupTab: React.FC<DataBackupTabProps> = ({
                   المشرف المسؤول: <strong className="text-white">{activeComplex.supervisorTeacherName || 'المشرف المسؤول'}</strong>
                   {activeComplex.databaseConfig?.connectedEmail && (
                     <span className="mr-3 text-emerald-300 font-mono text-[11px]">
-                      (الحساب المرتبط: {activeComplex.databaseConfig.connectedEmail})
+                      (حساب Google المعتمد: {activeComplex.databaseConfig.connectedEmail})
                     </span>
                   )}
-                  {activeComplex.databaseConfig?.enabledAt && (
+                  {activeComplex.databaseConfig?.migratedAt ? (
+                    <span className="mr-3 text-amber-300 font-mono text-[11px]">
+                      (تاريخ النقل السحابي: {new Date(activeComplex.databaseConfig.migratedAt).toLocaleDateString('ar-SA')})
+                    </span>
+                  ) : activeComplex.databaseConfig?.enabledAt && (
                     <span className="mr-3 text-slate-300">
                       (تاريخ الربط: {new Date(activeComplex.databaseConfig.enabledAt).toLocaleDateString('ar-SA')})
                     </span>
@@ -1140,15 +1154,26 @@ export const DataBackupTab: React.FC<DataBackupTabProps> = ({
 
               {/* Action buttons for this complex */}
               <div className="flex items-center gap-2 flex-wrap">
-                {/* Primary 1-Click Automated Sign-In & Linking */}
+                {/* Primary Developer Feature: Transfer Complex to Isolated Firebase DB with Google Account */}
+                <button
+                  type="button"
+                  onClick={() => setIsTransferModalOpen(true)}
+                  className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-amber-400 via-amber-300 to-yellow-400 hover:brightness-110 text-[#064e3b] text-xs font-black shadow-lg shadow-amber-400/20 transition-all cursor-pointer flex items-center gap-2"
+                  title="نقل وترحيل المجمع وبياناته بالكامل إلى قاعدة بيانات Firebase منفصلة بحساب Google"
+                >
+                  <ArrowRightLeft className="w-4 h-4 text-[#064e3b] stroke-[2.5]" />
+                  <span>نقل لقاعدة بيانات منفصلة (حساب Google)</span>
+                </button>
+
+                {/* Automated Sign-In & Linking */}
                 <button
                   type="button"
                   onClick={() => startAutomatedDatabaseLinking(activeComplex)}
-                  className="px-4 py-2.5 rounded-xl bg-[#fbbf24] hover:bg-[#f59e0b] text-[#064e3b] text-xs font-black shadow-lg transition-all cursor-pointer flex items-center gap-2"
+                  className="px-3.5 py-2.5 rounded-xl bg-[#064e3b] hover:bg-emerald-700 text-[#86efac] hover:text-white border border-[#065f46] text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5"
                   title="تسجيل الدخول والربط التلقائي بقاعدة البيانات دون إدخال يدوي"
                 >
-                  <Sparkles className="w-4 h-4 text-[#064e3b]" />
-                  <span>تسجيل الدخول والربط التلقائي</span>
+                  <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                  <span>الربط التلقائي</span>
                 </button>
 
                 {/* Secondary: Manual Developer Form Toggle */}
@@ -1334,22 +1359,28 @@ export const DataBackupTab: React.FC<DataBackupTabProps> = ({
                 </label>
               </div>
 
-              {/* Tile 3: Transfer to Database (نقل لقاعدة بيانات) */}
-              <div className="bg-[#064e3b]/40 border border-[#065f46] hover:border-amber-400/50 rounded-2xl p-4 flex flex-col justify-between gap-3 transition-all">
-                <div>
-                  <div className="w-10 h-10 rounded-xl bg-[#022c22] border border-blue-400/40 text-blue-400 flex items-center justify-center mb-2.5">
-                    <ArrowRightLeft className="w-5 h-5" />
+              {/* Tile 3: Transfer to Isolated Database (نقل وترحيل المجمع لقاعدة منفصلة) */}
+              <div className="bg-[#064e3b]/50 border-2 border-amber-400/60 hover:border-amber-400 rounded-2xl p-4 flex flex-col justify-between gap-3 transition-all relative overflow-hidden shadow-lg">
+                <div className="flex items-center justify-between">
+                  <div className="w-10 h-10 rounded-xl bg-[#022c22] border border-amber-400/60 text-amber-400 flex items-center justify-center shadow-sm">
+                    <ArrowRightLeft className="w-5 h-5 stroke-[2.5]" />
                   </div>
-                  <h4 className="text-xs font-bold text-white">نقل لقاعدة بيانات</h4>
-                  <p className="text-[11px] text-[#86efac]/80 mt-1 leading-relaxed">
-                    نقل وترحيل بيانات المجمع المحددة مباشرة إلى قاعدة بيانات خارجية أو خادم بديل.
+                  <span className="text-[9px] px-2 py-0.5 rounded-full bg-amber-400 text-[#064e3b] font-black">
+                    ميزة المبرمج المطورة
+                  </span>
+                </div>
+                <div>
+                  <h4 className="text-xs font-black text-white">نقل لقاعدة بيانات منفصلة (Google)</h4>
+                  <p className="text-[11px] text-[#86efac]/90 mt-1 leading-relaxed">
+                    اختيار حساب Google وإنشاء قاعدة بيانات Firebase منفصلة ونقل كافة الحلقات والطلاب وسجلات المجمع مباشرة سحابياً.
                   </p>
                 </div>
                 <button
                   onClick={() => setIsTransferModalOpen(true)}
-                  className="w-full py-2 px-3 rounded-xl bg-[#022c22] hover:bg-[#064e3b] border border-blue-400/40 text-blue-300 text-xs font-bold transition-all cursor-pointer"
+                  className="w-full py-2.5 px-3 rounded-xl bg-gradient-to-r from-amber-400 to-amber-500 hover:brightness-110 text-[#064e3b] text-xs font-black shadow transition-all cursor-pointer flex items-center justify-center gap-1.5"
                 >
-                  بدء نقل البيانات...
+                  <ArrowRightLeft className="w-3.5 h-3.5 stroke-[2.5]" />
+                  <span>بدء نقل البيانات للمجمع...</span>
                 </button>
               </div>
 
@@ -1731,64 +1762,18 @@ export const DataBackupTab: React.FC<DataBackupTabProps> = ({
       )}
 
       {/* ---------------------------------------------------- */}
-      {/* MODAL 4: Transfer Complex Data Modal (نقل لقاعدة بيانات) */}
+      {/* MODAL 4: Developer Feature: Complex Dedicated Firebase Database Transfer Modal */}
       {/* ---------------------------------------------------- */}
-      {isTransferModalOpen && activeComplex && (
-        <div className="fixed inset-0 z-[9999] bg-black/85 backdrop-blur-md flex items-center justify-center p-4">
-          <div className="w-full max-w-lg bg-[#022c22] border-2 border-blue-500 rounded-[32px] p-6 sm:p-7 shadow-2xl space-y-4 text-right">
-            <div className="flex items-center gap-3 text-blue-400">
-              <ArrowRightLeft className="w-7 h-7" />
-              <h3 className="text-lg font-black text-white">نقل بيانات مجمع ({activeComplex.name})</h3>
-            </div>
-            <p className="text-xs text-blue-200 leading-relaxed">
-              يقوم هذا الخيار باستخراج حزمة البيانات المهيأة للمجمع وتجهيزها للنقل والترحيل إلى قاعدة بيانات مخصصة أو خادم بديل:
-            </p>
-            <div className="space-y-3">
-              <div>
-                <label className="block text-xs font-bold text-emerald-200 mb-1">
-                  معرف قاعدة البيانات / المشروع المستهدف:
-                </label>
-                <input
-                  type="text"
-                  placeholder="مثال: quran-secondary-db"
-                  value={transferTargetDb.projectId}
-                  onChange={e => setTransferTargetDb(prev => ({ ...prev, projectId: e.target.value }))}
-                  className="w-full bg-[#064e3b] border border-[#065f46] rounded-xl px-3 py-2 text-xs text-white font-mono outline-none"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-emerald-200 mb-1">
-                  ملاحظات النقل:
-                </label>
-                <input
-                  type="text"
-                  placeholder="مثال: نقل الحلقات للمجمع الفرعي الجديد"
-                  value={transferTargetDb.notes}
-                  onChange={e => setTransferTargetDb(prev => ({ ...prev, notes: e.target.value }))}
-                  className="w-full bg-[#064e3b] border border-[#065f46] rounded-xl px-3 py-2 text-xs text-white outline-none"
-                />
-              </div>
-            </div>
-            <div className="flex items-center justify-end gap-2 pt-2">
-              <button
-                type="button"
-                onClick={() => setIsTransferModalOpen(false)}
-                className="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-bold cursor-pointer"
-              >
-                إلغاء
-              </button>
-              <button
-                type="button"
-                onClick={handleTransferComplexData}
-                disabled={isTransferring}
-                className="px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-black shadow-lg cursor-pointer disabled:opacity-50"
-              >
-                {isTransferring ? 'جاري تجهيز النقل...' : 'تأكيد النقل وتنزيل الحزمة'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ComplexDatabaseTransferModal
+        isOpen={isTransferModalOpen}
+        onClose={() => setIsTransferModalOpen(false)}
+        complexes={complexes}
+        activeComplexId={selectedComplexId || activeComplex?.id}
+        halaqahs={halaqahs}
+        students={students}
+        googleAuthConfig={googleAuthConfig}
+        onSuccessRefresh={onRefreshAllData}
+      />
 
       {/* ---------------------------------------------------- */}
       {/* MODAL 5: Automated Database Linking Modal (الربط التلقائي بتسجيل الدخول) */}

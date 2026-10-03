@@ -2463,6 +2463,8 @@ export function App() {
                 isDeveloper={isDeveloper}
                 complexes={complexes}
                 onSaveComplex={handleSaveComplex}
+                halaqahs={halaqahs}
+                students={students}
               />
             )}
               </>

@@ -23,6 +23,7 @@ export interface QuranComplex {
   updatedAt?: string;
   databaseConfig?: {
     isCustom?: boolean;
+    isIsolated?: boolean;
     projectId?: string;
     apiKey?: string;
     authDomain?: string;
@@ -31,6 +32,17 @@ export interface QuranComplex {
     enabledAt?: string;
     connectedEmail?: string;
     databaseId?: string;
+    migratedAt?: string;
+    migrationStats?: {
+      studentsCount: number;
+      halaqahsCount: number;
+      attendanceCount: number;
+      evaluationsCount: number;
+      examsCount: number;
+      violationsCount: number;
+      certificatesCount: number;
+      totalRecords: number;
+    };
   };
   // Independent Firebase database config if separated
   customFirebaseConfig?: {
@@ -554,6 +566,38 @@ export interface ComplexBackupData {
   violations?: BehaviorViolation[];
   exams?: Exam[];
   certificates?: IssuedCertificate[];
+}
+
+export interface ComplexMigrationProgress {
+  step: number;
+  totalSteps: number;
+  percent: number;
+  title: string;
+  detail: string;
+  currentEntity?: string;
+  entityCount?: number;
+  logs: string[];
+}
+
+export interface ComplexMigrationResult {
+  success: boolean;
+  complexId: string;
+  complexName: string;
+  targetGoogleEmail: string;
+  targetProjectId: string;
+  targetDatabaseId: string;
+  migratedAt: string;
+  purgedFromCentral: boolean;
+  stats: {
+    studentsCount: number;
+    halaqahsCount: number;
+    attendanceCount: number;
+    evaluationsCount: number;
+    examsCount: number;
+    violationsCount: number;
+    certificatesCount: number;
+    totalRecords: number;
+  };
 }
 
 export type ExamQuestionType = 'multiple_choice' | 'true_false' | 'essay' | 'short_answer';
