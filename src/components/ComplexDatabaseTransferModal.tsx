@@ -85,6 +85,7 @@ export const ComplexDatabaseTransferModal: React.FC<ComplexDatabaseTransferModal
   });
 
   const [purgeFromCentral, setPurgeFromCentral] = useState<boolean>(true);
+  const [showDeveloperGuide, setShowDeveloperGuide] = useState<boolean>(false);
 
   // Flow State: 'configure' | 'transferring' | 'completed' | 'error'
   const [migrationState, setMigrationState] = useState<'configure' | 'transferring' | 'completed' | 'error'>('configure');
@@ -433,6 +434,111 @@ export const ComplexDatabaseTransferModal: React.FC<ComplexDatabaseTransferModal
                     </div>
                   </label>
                 </div>
+              </div>
+
+              {/* Developer Step-by-Step Guide Accordion (دليل المبرمج التفصيلي) */}
+              <div className="bg-[#064e3b]/40 border-2 border-amber-400/40 rounded-2xl overflow-hidden shadow-lg transition-all">
+                <button
+                  type="button"
+                  onClick={() => setShowDeveloperGuide(!showDeveloperGuide)}
+                  className="w-full p-4 flex items-center justify-between text-right hover:bg-white/5 transition-colors cursor-pointer"
+                >
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-xl bg-amber-400/20 text-amber-300 flex items-center justify-center border border-amber-400/40 shrink-0 font-bold">
+                      <BookOpen className="w-4 h-4 text-amber-400" />
+                    </div>
+                    <div>
+                      <h5 className="text-xs sm:text-sm font-black text-white">
+                        دليل المبرمج التفصيلي: كيف تجلب بيانات Firebase لحساب Google خطوة بخطوة؟
+                      </h5>
+                      <span className="text-[11px] text-[#86efac]">
+                        اضغط هنا لعرض الخطوات المشروحة بالتفصيل لتجهيز مشروع Firebase والحصول على المعرفات
+                      </span>
+                    </div>
+                  </div>
+
+                  <ChevronDown className={`w-5 h-5 text-amber-400 transition-transform duration-200 shrink-0 ${showDeveloperGuide ? 'rotate-180' : ''}`} />
+                </button>
+
+                {showDeveloperGuide && (
+                  <div className="p-4 sm:p-5 border-t border-[#065f46] bg-[#022c22]/90 space-y-4 text-xs leading-relaxed text-[#f0f9f6]">
+                    
+                    {/* Step 1 */}
+                    <div className="p-3.5 rounded-xl bg-[#064e3b]/50 border border-[#065f46] space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold text-amber-300 flex items-center gap-1.5">
+                          <span className="w-5 h-5 rounded-full bg-amber-400 text-[#064e3b] flex items-center justify-center text-[11px] font-black">1</span>
+                          الدخول إلى منصة Firebase بحساب Google المطلوب
+                        </span>
+                        <a
+                          href="https://console.firebase.google.com/"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="px-2.5 py-1 rounded-lg bg-amber-400/20 hover:bg-amber-400/30 text-amber-300 text-[10px] font-bold border border-amber-400/30 flex items-center gap-1 cursor-pointer"
+                        >
+                          <span>فتح Firebase Console ↗</span>
+                        </a>
+                      </div>
+                      <p className="text-[11px] text-slate-300">
+                        افتح الرابط <code className="text-amber-300 font-mono" dir="ltr">console.firebase.google.com</code> وسجل الدخول بنفس حساب Google الذي تريد جعل المجمع ملكاً له.
+                      </p>
+                    </div>
+
+                    {/* Step 2 */}
+                    <div className="p-3.5 rounded-xl bg-[#064e3b]/50 border border-[#065f46] space-y-2">
+                      <span className="font-bold text-amber-300 flex items-center gap-1.5">
+                        <span className="w-5 h-5 rounded-full bg-amber-400 text-[#064e3b] flex items-center justify-center text-[11px] font-black">2</span>
+                        إنشاء مشروع جديد (Create / Add Project)
+                      </span>
+                      <p className="text-[11px] text-slate-300">
+                        اضغط على زر <strong className="text-white">&quot;Add project&quot;</strong>، اكتب اسم المشروع (مثلاً: <span className="font-mono text-emerald-300">quran-complex-1</span>). ستلاحظ ظهور <strong className="text-amber-300">معرف المشروع (Project ID)</strong> تلقائياً أسفل الاسم — هذا هو المعرف الذي تحتاجه في خانة Project ID.
+                      </p>
+                    </div>
+
+                    {/* Step 3 */}
+                    <div className="p-3.5 rounded-xl bg-[#064e3b]/50 border border-[#065f46] space-y-2">
+                      <span className="font-bold text-amber-300 flex items-center gap-1.5">
+                        <span className="w-5 h-5 rounded-full bg-amber-400 text-[#064e3b] flex items-center justify-center text-[11px] font-black">3</span>
+                        إنشاء قاعدة بيانات Cloud Firestore
+                      </span>
+                      <p className="text-[11px] text-slate-300">
+                        من القائمة الجانبية اليسرى: اضغط على <strong className="text-white">Build &gt; Firestore Database</strong> ثم اضغط <strong className="text-white">&quot;Create database&quot;</strong>. اختر أقرب منطقة جغرافية (مثل فرانكفورت <code className="text-emerald-300 font-mono">europe-west3</code> أو <code className="text-emerald-300 font-mono">me-central1</code>) واضغط تم.
+                      </p>
+                    </div>
+
+                    {/* Step 4 */}
+                    <div className="p-3.5 rounded-xl bg-[#064e3b]/50 border border-[#065f46] space-y-2">
+                      <span className="font-bold text-amber-300 flex items-center gap-1.5">
+                        <span className="w-5 h-5 rounded-full bg-amber-400 text-[#064e3b] flex items-center justify-center text-[11px] font-black">4</span>
+                        معرفة مفتاح التطبيق (Web API Key)
+                      </span>
+                      <p className="text-[11px] text-slate-300">
+                        اضغط على أيقونة الترس ⚙️ بجانب Project Overview في أعلى القائمة الجانبية ثم اختر <strong className="text-white">Project settings (إعدادات المشروع)</strong>. في تبويب <strong className="text-white">General (عام)</strong> ستجد:
+                      </p>
+                      <div className="text-[11px] bg-[#022c22] p-2.5 rounded-lg border border-[#065f46] font-mono space-y-1 text-slate-300" dir="ltr">
+                        <div>• <strong>Project ID:</strong> your-project-id</div>
+                        <div>• <strong>Web API Key:</strong> AIzaSy...</div>
+                      </div>
+                    </div>
+
+                    {/* Step 5 */}
+                    <div className="p-3.5 rounded-xl bg-[#064e3b]/50 border border-[#065f46] space-y-2">
+                      <span className="font-bold text-amber-300 flex items-center gap-1.5">
+                        <span className="w-5 h-5 rounded-full bg-amber-400 text-[#064e3b] flex items-center justify-center text-[11px] font-black">5</span>
+                        إضافة النطاق المصرح به (Authorized Domains)
+                      </span>
+                      <p className="text-[11px] text-slate-300">
+                        من القائمة الجانبية: <strong className="text-white">Build &gt; Authentication &gt; Settings &gt; Authorized domains</strong> ثم اضغط <strong className="text-white">Add domain</strong> وأضف رابط موقع المنصة الحالي (مثل نطاق Netlify الخاص بك) لتسمح Google بتسجيل الدخول بأمان وبدون أي قيود.
+                      </p>
+                    </div>
+
+                    {/* Quick tip */}
+                    <div className="p-3 rounded-xl bg-amber-400/10 border border-amber-400/30 text-[11px] text-amber-200">
+                      💡 <strong>ملاحظة للمبرمج:</strong> لست بحاجة لكتابة كود! فقط اضغط على زر <strong className="text-white">&quot;تسجيل الدخول واختيار حساب Google&quot;</strong> في الأعلى وسيتعرف النظام على الحساب ويهيئ المعرفات تلقائياً، ثم اضغط <strong className="text-white">&quot;بدء نقل البيانات&quot;</strong> وسيتولى البرنامج كل شيء.
+                    </div>
+
+                  </div>
+                )}
               </div>
 
               {/* What will happen card */}
