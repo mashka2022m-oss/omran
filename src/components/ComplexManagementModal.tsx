@@ -403,7 +403,7 @@ export const ComplexManagementModal: React.FC<ComplexManagementModalProps> = ({
 
             <button
               onClick={handleOpenAddComplex}
-              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-amber-400 to-amber-500 hover:brightness-110 text-[#064e3b] text-xs font-black shadow-md transition-all cursor-pointer"
+              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-[#fbbf24] hover:bg-[#f59e0b] text-[#064e3b] text-xs font-black shadow-md transition-all cursor-pointer"
             >
               <Plus className="w-3.5 h-3.5 stroke-[3]" />
               <span>إضافة مجمع جديد</span>
@@ -773,7 +773,7 @@ export const ComplexManagementModal: React.FC<ComplexManagementModalProps> = ({
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-amber-400 to-amber-500 hover:brightness-110 text-[#064e3b] text-xs font-black shadow-lg transition-all cursor-pointer disabled:opacity-50"
+                  className="px-6 py-2.5 rounded-xl bg-[#fbbf24] hover:bg-[#f59e0b] text-[#064e3b] text-xs font-black shadow-lg transition-all cursor-pointer disabled:opacity-50"
                 >
                   {isSubmitting ? 'جاري الحفظ...' : isNewComplex ? 'إضافة وتأسيس المجمع' : 'حفظ التعديلات'}
                 </button>

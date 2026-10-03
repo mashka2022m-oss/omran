@@ -9,7 +9,7 @@ import {
   getSurahInfo,
   calculateRealisticQuranAssignment,
   FAMOUS_RECITERS
-} from "./src/data/quranData.js";
+} from "./src/data/quranData.ts";
 
 dotenv.config();
 

@@ -1249,7 +1249,7 @@ export const EvaluationTab: React.FC<EvaluationTabProps> = ({
           <button
             type="button"
             onClick={() => openMushafReader(todayNewSurah, todayNewFromAyah, 'new_today')}
-            className="px-3.5 py-2 rounded-2xl bg-gradient-to-r from-emerald-600/40 via-emerald-700/50 to-emerald-600/40 hover:from-emerald-600/60 hover:to-emerald-700/70 border border-emerald-500/50 text-[#fbbf24] text-xs font-black flex items-center gap-1.5 cursor-pointer transition-all shadow-md"
+            className="px-3.5 py-2 rounded-2xl bg-[#022c22] hover:bg-[#064e3b] border border-[#fbbf24]/40 hover:border-[#fbbf24] text-[#fbbf24] text-xs font-black flex items-center gap-1.5 cursor-pointer transition-all shadow-md"
             title="فتح مصحف مجمع الملك فهد كاملاً"
           >
             <BookOpen className="w-4 h-4 text-[#fbbf24]" />
@@ -1261,10 +1261,10 @@ export const EvaluationTab: React.FC<EvaluationTabProps> = ({
             className={`px-3.5 py-2 rounded-2xl border text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-all ${
               showHistoryDrawer
                 ? 'bg-[#fbbf24] text-[#064e3b] border-[#fbbf24] font-black shadow-md'
-                : 'bg-[#022c22] hover:bg-[#064e3b] text-[#86efac] border-[#065f46]'
+                : 'bg-[#022c22] hover:bg-[#064e3b] text-[#f0f9f6] border-[#fbbf24]/30 hover:border-[#fbbf24]/60'
             }`}
           >
-            <History className="w-4 h-4" />
+            <History className="w-4 h-4 text-[#fbbf24]" />
             <span>أرشيف الأيام السابقة للطالب ({studentEvaluationsHistory.length})</span>
           </button>
 
@@ -1272,7 +1272,7 @@ export const EvaluationTab: React.FC<EvaluationTabProps> = ({
           {isSupervisor && (
             <button
               onClick={() => setIsManageCriteriaListOpen(true)}
-              className="px-3.5 py-2 rounded-2xl bg-[#022c22] hover:bg-[#022c22]/80 border border-[#065f46] text-[#fbbf24] text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-all shadow-md"
+              className="px-3.5 py-2 rounded-2xl bg-[#022c22] hover:bg-[#064e3b] border border-[#fbbf24]/30 hover:border-[#fbbf24]/60 text-[#f0f9f6] text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-all shadow-md"
               title="إدارة معايير التقييم للمجمع (خاص بالمشرفين)"
             >
               <Sliders className="w-4 h-4 text-[#fbbf24]" />
@@ -1343,21 +1343,21 @@ export const EvaluationTab: React.FC<EvaluationTabProps> = ({
           <button
             type="button"
             onClick={() => handleDateShift(-1)}
-            className="px-2.5 py-1.5 rounded-xl bg-[#064e3b] hover:bg-[#065f46] text-[#86efac] hover:text-white text-xs font-bold flex items-center gap-1 border border-[#065f46] cursor-pointer transition-colors"
+            className="px-2.5 py-1.5 rounded-xl bg-[#022c22] hover:bg-[#064e3b] text-[#f0f9f6] text-xs font-bold flex items-center gap-1 border border-[#fbbf24]/30 hover:border-[#fbbf24] cursor-pointer transition-colors shadow-sm"
             title="الانتقال لليوم السابق"
           >
-            <ChevronRight className="w-4 h-4" />
+            <ChevronRight className="w-4 h-4 text-[#fbbf24]" />
             <span>اليوم السابق</span>
           </button>
 
           <button
             type="button"
             onClick={() => handleDateShift(1)}
-            className="px-2.5 py-1.5 rounded-xl bg-[#064e3b] hover:bg-[#065f46] text-[#86efac] hover:text-white text-xs font-bold flex items-center gap-1 border border-[#065f46] cursor-pointer transition-colors"
+            className="px-2.5 py-1.5 rounded-xl bg-[#022c22] hover:bg-[#064e3b] text-[#f0f9f6] text-xs font-bold flex items-center gap-1 border border-[#fbbf24]/30 hover:border-[#fbbf24] cursor-pointer transition-colors shadow-sm"
             title="الانتقال لليوم التالي"
           >
             <span>اليوم التالي</span>
-            <ChevronLeft className="w-4 h-4" />
+            <ChevronLeft className="w-4 h-4 text-[#fbbf24]" />
           </button>
         </div>
       </div>
@@ -1754,7 +1754,7 @@ export const EvaluationTab: React.FC<EvaluationTabProps> = ({
                           <button
                             type="button"
                             onClick={triggerCelebrationConfetti}
-                            className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-amber-400 to-amber-500 hover:brightness-110 text-[#064e3b] text-xs font-black transition-all cursor-pointer shadow-md flex items-center gap-1.5"
+                            className="px-3 py-1.5 rounded-xl bg-[#fbbf24] hover:bg-[#f59e0b] text-[#064e3b] text-xs font-black transition-all cursor-pointer shadow-md flex items-center gap-1.5"
                             title="إطلاق ألعاب نارية احتفالاً بالطالب"
                           >
                             <Sparkles className="w-3.5 h-3.5" />

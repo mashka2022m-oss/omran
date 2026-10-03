@@ -370,7 +370,7 @@ export const YouTubeAyahPlayer: React.FC<YouTubeAyahPlayerProps> = ({
             <button
               type="button"
               onClick={handleTogglePlayPause}
-              className="px-3.5 py-1.5 rounded-lg bg-gradient-to-r from-[#fbbf24] to-amber-500 hover:from-amber-400 hover:to-amber-500 text-[#064e3b] font-black text-xs flex items-center gap-1.5 shadow-md cursor-pointer active:scale-95 transition-all ring-1 ring-amber-300"
+              className="px-3.5 py-1.5 rounded-lg bg-[#fbbf24] hover:bg-[#f59e0b] text-[#064e3b] font-black text-xs flex items-center gap-1.5 shadow-md cursor-pointer active:scale-95 transition-all ring-1 ring-amber-300"
               title={isPlaying ? 'إيقاف مؤقت' : 'تشغيل الاستماع'}
             >
               {isPlaying ? <Pause className="w-4 h-4 fill-current" /> : <Play className="w-4 h-4 fill-current" />}
@@ -450,7 +450,7 @@ export const YouTubeAyahPlayer: React.FC<YouTubeAyahPlayerProps> = ({
                   <button
                     type="button"
                     onClick={handleSetEndAndAdvanceFromCurrent}
-                    className="flex-1 md:flex-initial px-3.5 py-2 rounded-xl bg-gradient-to-r from-[#fbbf24] to-amber-500 hover:from-amber-400 hover:to-amber-500 text-[#064e3b] font-black text-xs flex items-center justify-center gap-1.5 shadow-lg transition-all transform active:scale-95 cursor-pointer ring-2 ring-[#fbbf24]/50"
+                    className="flex-1 md:flex-initial px-3.5 py-2 rounded-xl bg-[#fbbf24] hover:bg-[#f59e0b] text-[#064e3b] font-black text-xs flex items-center justify-center gap-1.5 shadow-lg transition-all transform active:scale-95 cursor-pointer ring-2 ring-[#fbbf24]/50"
                     title="اضغط فور انتهاء القارئ من الآية لاعتماد هذه اللحظة بالمللي ثانية كنهاية والتوقف فوراً عند بداية الآية التالية جاهزة للتشغيل"
                   >
                     <CheckCircle2 className="w-4 h-4 text-[#064e3b] shrink-0" />

@@ -674,7 +674,7 @@ export const DataBackupTab: React.FC<DataBackupTabProps> = ({
         <button
           type="button"
           onClick={() => startAutomatedDatabaseLinking()}
-          className="w-full md:w-auto px-6 py-3.5 rounded-2xl bg-gradient-to-r from-amber-400 via-amber-500 to-emerald-400 hover:brightness-110 text-[#064e3b] text-xs sm:text-sm font-black shadow-[0_0_20px_rgba(251,191,36,0.3)] transition-all cursor-pointer flex items-center justify-center gap-2.5 shrink-0 relative z-10"
+          className="w-full md:w-auto px-6 py-3.5 rounded-2xl bg-[#fbbf24] hover:bg-[#f59e0b] text-[#064e3b] text-xs sm:text-sm font-black shadow-[0_0_20px_rgba(251,191,36,0.3)] transition-all cursor-pointer flex items-center justify-center gap-2.5 shrink-0 relative z-10"
           title="تسجيل الدخول وربط قاعدة البيانات تلقائياً دون إدخال أي كود أو مفاتيح"
         >
           <Sparkles className="w-4 h-4 text-[#064e3b]" />
@@ -794,7 +794,7 @@ export const DataBackupTab: React.FC<DataBackupTabProps> = ({
                 <button
                   type="button"
                   onClick={() => handleCopyText(activePrivacyUrl, 'privacy')}
-                  className="flex-1 py-2.5 px-4 rounded-xl bg-gradient-to-r from-amber-400 to-amber-500 hover:brightness-110 text-[#064e3b] font-black text-xs shadow-md flex items-center justify-center gap-2 transition-all cursor-pointer"
+                  className="flex-1 py-2.5 px-4 rounded-xl bg-[#fbbf24] hover:bg-[#f59e0b] text-[#064e3b] font-black text-xs shadow-md flex items-center justify-center gap-2 transition-all cursor-pointer"
                 >
                   {copiedField === 'privacy' ? (
                     <>
@@ -1144,7 +1144,7 @@ export const DataBackupTab: React.FC<DataBackupTabProps> = ({
                 <button
                   type="button"
                   onClick={() => startAutomatedDatabaseLinking(activeComplex)}
-                  className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-amber-400 via-amber-500 to-emerald-400 hover:brightness-110 text-[#064e3b] text-xs font-black shadow-lg transition-all cursor-pointer flex items-center gap-2"
+                  className="px-4 py-2.5 rounded-xl bg-[#fbbf24] hover:bg-[#f59e0b] text-[#064e3b] text-xs font-black shadow-lg transition-all cursor-pointer flex items-center gap-2"
                   title="تسجيل الدخول والربط التلقائي بقاعدة البيانات دون إدخال يدوي"
                 >
                   <Sparkles className="w-4 h-4 text-[#064e3b]" />
@@ -1202,7 +1202,7 @@ export const DataBackupTab: React.FC<DataBackupTabProps> = ({
                   <button
                     type="button"
                     onClick={() => startAutomatedDatabaseLinking(activeComplex)}
-                    className="px-4 py-2 rounded-xl bg-gradient-to-r from-amber-400 to-amber-500 hover:brightness-110 text-[#064e3b] text-xs font-black shadow transition-all cursor-pointer flex items-center gap-1.5 shrink-0"
+                    className="px-4 py-2 rounded-xl bg-[#fbbf24] hover:bg-[#f59e0b] text-[#064e3b] text-xs font-black shadow transition-all cursor-pointer flex items-center gap-1.5 shrink-0"
                   >
                     <LogIn className="w-4 h-4" />
                     <span>تسجيل الدخول والربط التلقائي فوراً</span>
@@ -1280,7 +1280,7 @@ export const DataBackupTab: React.FC<DataBackupTabProps> = ({
                   <button
                     type="submit"
                     disabled={isSavingDbConfig}
-                    className="px-6 py-2 rounded-xl bg-gradient-to-r from-amber-400 to-amber-500 hover:brightness-110 text-[#064e3b] text-xs font-black shadow-lg cursor-pointer transition-all disabled:opacity-50"
+                    className="px-6 py-2 rounded-xl bg-[#fbbf24] hover:bg-[#f59e0b] text-[#064e3b] text-xs font-black shadow-lg cursor-pointer transition-all disabled:opacity-50"
                   >
                     {isSavingDbConfig ? 'جاري التفعيل والربط...' : 'تفعيل والربط بقاعدة البيانات الخاصة'}
                   </button>
@@ -1998,7 +1998,7 @@ export const DataBackupTab: React.FC<DataBackupTabProps> = ({
                   <button
                     type="button"
                     onClick={() => startAutomatedDatabaseLinking(autoLinkTargetComplex || undefined)}
-                    className="px-5 py-2 rounded-xl bg-gradient-to-r from-amber-400 to-amber-500 hover:brightness-110 text-[#064e3b] text-xs font-black shadow-lg cursor-pointer"
+                    className="px-5 py-2 rounded-xl bg-[#fbbf24] hover:bg-[#f59e0b] text-[#064e3b] text-xs font-black shadow-lg cursor-pointer"
                   >
                     إعادة المحاولة لتسجيل الدخول والربط
                   </button>

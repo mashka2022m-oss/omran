@@ -1071,7 +1071,7 @@ export const RecordingsTab: React.FC<RecordingsTabProps> = ({
                     type="button"
                     onClick={handleTriggerAISegmentation}
                     disabled={isAnalyzingWithAI || !editingRecording.youtubeUrl}
-                    className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-[#064e3b] font-black flex items-center gap-1.5 shadow-md cursor-pointer transition-all disabled:opacity-50 shrink-0"
+                    className="px-3.5 py-2 rounded-xl bg-[#fbbf24] hover:bg-[#f59e0b] text-[#064e3b] font-black flex items-center gap-1.5 shadow-md cursor-pointer transition-all disabled:opacity-50 shrink-0"
                     title="الاستماع للمقطع والتعرف على الآيات وتقسيمها عبر الذكاء الاصطناعي"
                   >
                     <Sparkles className="w-4 h-4 text-[#064e3b]" />
@@ -1398,7 +1398,7 @@ export const RecordingsTab: React.FC<RecordingsTabProps> = ({
                                       setActiveAyahIndex(originalIndex);
                                       handleSetEndAndAdvance(Math.round(currentLiveTime * 100) / 100);
                                     }}
-                                    className="px-2 py-0.5 rounded bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 text-[10px] font-black border border-amber-400 cursor-pointer shadow-sm flex items-center gap-1"
+                                    className="px-2 py-0.5 rounded bg-[#fbbf24] hover:bg-[#f59e0b] text-slate-950 text-[10px] font-black border border-amber-400 cursor-pointer shadow-sm flex items-center gap-1"
                                     title="تعيين وقت المشغل كنهاية لهذه الآية والانتقال التلقائي للآية التالية"
                                   >
                                     <CheckCircle2 className="w-3 h-3 text-slate-950 shrink-0" />
@@ -1420,7 +1420,7 @@ export const RecordingsTab: React.FC<RecordingsTabProps> = ({
                 <button
                   type="submit"
                   disabled={isSubmitting || isAnalyzingWithAI}
-                  className="flex-1 py-3 rounded-xl bg-gradient-to-r from-[#fbbf24] to-amber-500 hover:from-amber-400 hover:to-amber-500 text-[#064e3b] font-black cursor-pointer shadow-lg transition-all text-xs flex items-center justify-center gap-2"
+                  className="flex-1 py-3 rounded-xl bg-[#fbbf24] hover:bg-[#f59e0b] text-[#064e3b] font-black cursor-pointer shadow-lg transition-all text-xs flex items-center justify-center gap-2"
                 >
                   {isSubmitting ? (
                     <>

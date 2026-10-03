@@ -405,7 +405,7 @@ export const LeaderboardTab: React.FC<LeaderboardTabProps> = ({
                           e.stopPropagation();
                           handleOpenPointsModal(item.student, 'award');
                         }}
-                        className="px-3 py-2 rounded-xl bg-gradient-to-r from-amber-400 to-amber-500 hover:brightness-110 text-[#064e3b] font-black text-xs flex items-center justify-center gap-1 shadow-md transition-all cursor-pointer"
+                        className="px-3 py-2 rounded-xl bg-[#fbbf24] hover:bg-[#f59e0b] text-[#064e3b] font-black text-xs flex items-center justify-center gap-1 shadow-md transition-all cursor-pointer"
                         title="إضافة نقاط تشجيعية"
                       >
                         <Plus className="w-3.5 h-3.5" />
@@ -770,7 +770,7 @@ export const LeaderboardTab: React.FC<LeaderboardTabProps> = ({
                       setSelectedStudentForBreakdown(null);
                       handleOpenPointsModal(st, 'award');
                     }}
-                    className="px-4 py-2 rounded-xl bg-gradient-to-r from-amber-400 to-amber-500 hover:brightness-110 text-[#064e3b] font-black text-xs flex items-center gap-1.5 shadow-md cursor-pointer transition-all"
+                    className="px-4 py-2 rounded-xl bg-[#fbbf24] hover:bg-[#f59e0b] text-[#064e3b] font-black text-xs flex items-center gap-1.5 shadow-md cursor-pointer transition-all"
                   >
                     <Plus className="w-4 h-4" />
                     <span>منح نقاط تشجيعية</span>
@@ -847,7 +847,7 @@ export const LeaderboardTab: React.FC<LeaderboardTabProps> = ({
                 }}
                 className={`py-2 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
                   pointsActionType === 'award'
-                    ? 'bg-gradient-to-r from-amber-400 to-amber-500 text-[#064e3b] shadow-md'
+                    ? 'bg-[#fbbf24] text-[#064e3b] shadow-md'
                     : 'text-emerald-300 hover:text-white'
                 }`}
               >
@@ -1012,7 +1012,7 @@ export const LeaderboardTab: React.FC<LeaderboardTabProps> = ({
                     onClick={handleConfirmAwardBonus}
                     className={`px-6 py-2.5 rounded-xl font-black text-xs flex items-center gap-1.5 shadow-lg cursor-pointer transition-all disabled:opacity-50 ${
                       pointsActionType === 'award'
-                        ? 'bg-gradient-to-r from-amber-400 to-amber-500 hover:brightness-110 text-[#064e3b]'
+                        ? 'bg-[#fbbf24] hover:bg-[#f59e0b] text-[#064e3b]'
                         : 'bg-gradient-to-r from-rose-500 to-rose-600 hover:brightness-110 text-white'
                     }`}
                   >

@@ -101,7 +101,7 @@ export const PrivacyPolicyPage: React.FC<PrivacyPolicyPageProps> = ({
               <button
                 type="button"
                 onClick={onGoToLogin}
-                className="px-4 py-1.5 rounded-xl bg-gradient-to-r from-amber-400 to-amber-500 hover:brightness-110 text-[#064e3b] text-xs font-black transition-all cursor-pointer shadow-md"
+                className="px-4 py-1.5 rounded-xl bg-[#fbbf24] hover:bg-[#f59e0b] text-[#064e3b] text-xs font-black transition-all cursor-pointer shadow-md"
               >
                 {activeLang === 'ar' ? 'تسجيل الدخول' : 'Sign In'}
               </button>

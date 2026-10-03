@@ -1055,7 +1055,7 @@ export const ExamsTab: React.FC<ExamsTabProps> = ({
             <button
               onClick={() => handleExportToGoogleSheet()}
               disabled={isExportingSheets}
-              className="px-4 py-2.5 rounded-2xl bg-emerald-800/80 hover:bg-emerald-700 text-emerald-100 font-bold text-xs sm:text-sm flex items-center gap-2 border border-emerald-600/50 shadow-md transition-all cursor-pointer"
+              className="px-4 py-2.5 rounded-2xl bg-[#022c22] hover:bg-[#064e3b] text-[#f0f9f6] font-bold text-xs sm:text-sm flex items-center gap-2 border border-[#fbbf24]/40 hover:border-[#fbbf24] shadow-md transition-all cursor-pointer"
               title="تصدير النتائج إلى جدول Google Sheets"
             >
               <FileSpreadsheet className={`w-4 h-4 text-[#fbbf24] ${isExportingSheets ? 'animate-spin' : ''}`} />
@@ -1064,7 +1064,7 @@ export const ExamsTab: React.FC<ExamsTabProps> = ({
 
             <button
               onClick={() => handleOpenCreateModal()}
-              className="px-5 py-2.5 rounded-2xl bg-[#fbbf24] hover:bg-[#f59e0b] text-[#064e3b] font-black text-sm flex items-center gap-2 shadow-lg shadow-amber-500/20 transition-all cursor-pointer"
+              className="px-5 py-2.5 rounded-2xl bg-[#fbbf24] hover:bg-[#f59e0b] text-[#064e3b] border border-[#fbbf24] font-black text-sm flex items-center gap-2 shadow-lg shadow-amber-500/20 transition-all cursor-pointer"
             >
               <Plus className="w-5 h-5 text-[#064e3b]" />
               <span>إنشاء اختبار جديد</span>
@@ -1073,13 +1073,13 @@ export const ExamsTab: React.FC<ExamsTabProps> = ({
         </div>
 
         {/* Sub-Tabs Selector */}
-        <div className="flex flex-wrap items-center gap-2 mt-6 pt-4 border-t border-emerald-800/60">
+        <div className="flex flex-wrap items-center gap-2 mt-6 pt-4 border-t border-[#fbbf24]/20">
           <button
             onClick={() => setActiveSubTab('exams')}
             className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 transition-all cursor-pointer ${
               activeSubTab === 'exams'
-                ? 'bg-[#fbbf24] text-[#064e3b] shadow-md shadow-amber-500/20'
-                : 'bg-[#022c22] text-emerald-200 hover:text-white hover:bg-emerald-900/60 border border-emerald-800/60'
+                ? 'bg-[#fbbf24] text-[#064e3b] border border-[#fbbf24] shadow-md shadow-amber-500/20'
+                : 'bg-[#022c22] text-[#f0f9f6]/80 hover:text-white hover:bg-[#064e3b] border border-[#fbbf24]/30 hover:border-[#fbbf24]/60'
             }`}
           >
             <FileText className="w-4 h-4" />
@@ -1090,8 +1090,8 @@ export const ExamsTab: React.FC<ExamsTabProps> = ({
             onClick={() => setActiveSubTab('submissions')}
             className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 transition-all cursor-pointer ${
               activeSubTab === 'submissions'
-                ? 'bg-[#fbbf24] text-[#064e3b] shadow-md shadow-amber-500/20'
-                : 'bg-[#022c22] text-emerald-200 hover:text-white hover:bg-emerald-900/60 border border-emerald-800/60'
+                ? 'bg-[#fbbf24] text-[#064e3b] border border-[#fbbf24] shadow-md shadow-amber-500/20'
+                : 'bg-[#022c22] text-[#f0f9f6]/80 hover:text-white hover:bg-[#064e3b] border border-[#fbbf24]/30 hover:border-[#fbbf24]/60'
             }`}
           >
             <CheckSquare className="w-4 h-4" />
@@ -1106,8 +1106,8 @@ export const ExamsTab: React.FC<ExamsTabProps> = ({
             onClick={() => setActiveSubTab('google_sheets')}
             className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 transition-all cursor-pointer ${
               activeSubTab === 'google_sheets'
-                ? 'bg-[#fbbf24] text-[#064e3b] shadow-md shadow-amber-500/20'
-                : 'bg-[#022c22] text-emerald-200 hover:text-white hover:bg-emerald-900/60 border border-emerald-800/60'
+                ? 'bg-[#fbbf24] text-[#064e3b] border border-[#fbbf24] shadow-md shadow-amber-500/20'
+                : 'bg-[#022c22] text-[#f0f9f6]/80 hover:text-white hover:bg-[#064e3b] border border-[#fbbf24]/30 hover:border-[#fbbf24]/60'
             }`}
           >
             <FileSpreadsheet className="w-4 h-4" />
@@ -1340,7 +1340,7 @@ export const ExamsTab: React.FC<ExamsTabProps> = ({
                             <button
                               onClick={() => handleSyncGoogleFormResponses(exam)}
                               disabled={isSyncingFormResponses === exam.id}
-                              className="text-[11px] px-2.5 py-1.5 rounded-xl bg-emerald-800/80 hover:bg-emerald-700 text-white border border-emerald-600/60 flex items-center gap-1 font-bold transition-all cursor-pointer"
+                              className="text-[11px] px-2.5 py-1.5 rounded-xl bg-[#022c22] hover:bg-[#064e3b] text-white border border-[#fbbf24]/40 hover:border-[#fbbf24] flex items-center gap-1 font-bold transition-all cursor-pointer shadow-sm"
                               title="مزامنة ردود الطلاب من نموذج Google Form إلى منصة عُمْرَان سحابياً"
                             >
                               <RefreshCw className={`w-3.5 h-3.5 text-[#fbbf24] ${isSyncingFormResponses === exam.id ? 'animate-spin' : ''}`} />
@@ -1365,7 +1365,7 @@ export const ExamsTab: React.FC<ExamsTabProps> = ({
                           <button
                             onClick={() => handleExportToGoogleSheet(exam)}
                             disabled={isExportingSheets}
-                            className="text-[11px] px-3 py-1.5 rounded-xl bg-emerald-900/60 hover:bg-emerald-800 text-emerald-200 border border-emerald-700/60 flex items-center gap-1.5 transition-all cursor-pointer font-bold"
+                            className="text-[11px] px-3 py-1.5 rounded-xl bg-[#022c22] hover:bg-[#064e3b] text-[#f0f9f6] border border-[#fbbf24]/30 hover:border-[#fbbf24] flex items-center gap-1.5 transition-all cursor-pointer font-bold shadow-sm"
                             title="تصدير نتائج هذا الاختبار إلى Google Sheets"
                           >
                             <FileSpreadsheet className="w-3.5 h-3.5 text-[#fbbf24]" />
@@ -1374,10 +1374,10 @@ export const ExamsTab: React.FC<ExamsTabProps> = ({
 
                           <button
                             onClick={() => handleDownloadCSV(exam)}
-                            className="text-[11px] px-3 py-1.5 rounded-xl bg-[#064e3b] hover:bg-emerald-800 text-emerald-200 border border-emerald-700/60 flex items-center gap-1.5 transition-all cursor-pointer"
+                            className="text-[11px] px-3 py-1.5 rounded-xl bg-[#022c22] hover:bg-[#064e3b] text-[#f0f9f6] border border-[#fbbf24]/30 hover:border-[#fbbf24] flex items-center gap-1.5 transition-all cursor-pointer shadow-sm"
                             title="تحميل النتائج كملف Excel / CSV"
                           >
-                            <Download className="w-3.5 h-3.5 text-emerald-400" />
+                            <Download className="w-3.5 h-3.5 text-[#fbbf24]" />
                             <span>CSV</span>
                           </button>
                         </div>
@@ -1385,11 +1385,11 @@ export const ExamsTab: React.FC<ExamsTabProps> = ({
                     </div>
 
                     {/* Action Buttons */}
-                    <div className="flex items-center justify-between gap-2 pt-3 border-t border-emerald-900/80">
+                    <div className="flex items-center justify-between gap-2 pt-3 border-t border-[#fbbf24]/15">
                       <div className="flex items-center gap-1.5">
                         <button
                           onClick={() => setPreviewingExam(exam)}
-                          className="px-3 py-1.5 rounded-xl bg-emerald-800/60 hover:bg-emerald-700 text-emerald-100 text-xs font-semibold flex items-center gap-1 transition-all cursor-pointer"
+                          className="px-3 py-1.5 rounded-xl bg-[#022c22] hover:bg-[#064e3b] text-[#f0f9f6] border border-[#fbbf24]/30 hover:border-[#fbbf24] text-xs font-semibold flex items-center gap-1 transition-all cursor-pointer shadow-sm"
                         >
                           <Eye className="w-3.5 h-3.5 text-[#fbbf24]" />
                           <span>معاينة وتجربة</span>
@@ -1399,9 +1399,9 @@ export const ExamsTab: React.FC<ExamsTabProps> = ({
                             setSelectedExamForSubmissions(exam.id);
                             setActiveSubTab('submissions');
                           }}
-                          className="px-3 py-1.5 rounded-xl bg-[#064e3b] hover:bg-emerald-800 text-[#fbbf24] text-xs font-semibold flex items-center gap-1 transition-all cursor-pointer"
+                          className="px-3 py-1.5 rounded-xl bg-[#022c22] hover:bg-[#064e3b] text-[#fbbf24] border border-[#fbbf24]/40 hover:border-[#fbbf24] text-xs font-semibold flex items-center gap-1 transition-all cursor-pointer shadow-sm"
                         >
-                          <CheckSquare className="w-3.5 h-3.5" />
+                          <CheckSquare className="w-3.5 h-3.5 text-[#fbbf24]" />
                           <span>التسليمات ({examSubmissions.length})</span>
                         </button>
                       </div>
@@ -1574,7 +1574,7 @@ export const ExamsTab: React.FC<ExamsTabProps> = ({
                                 setSelectedCertSubmission(sub);
                                 setIsCertModalOpen(true);
                               }}
-                              className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-amber-400 to-amber-500 hover:brightness-110 text-[#064e3b] font-black text-xs transition-all cursor-pointer shadow-md flex items-center gap-1.5"
+                              className="px-3 py-1.5 rounded-xl bg-[#fbbf24] hover:bg-[#f59e0b] text-[#064e3b] border border-[#fbbf24] font-black text-xs transition-all cursor-pointer shadow-md flex items-center gap-1.5"
                               title="استخراج شهادة اجتياز ونتيجة الاختبار للطالب"
                             >
                               <Award className="w-3.5 h-3.5" />
@@ -1582,9 +1582,10 @@ export const ExamsTab: React.FC<ExamsTabProps> = ({
                             </button>
                             <button
                               onClick={() => handleOpenGrading(sub)}
-                              className="px-3 py-1.5 rounded-xl bg-[#fbbf24] hover:bg-[#f59e0b] text-[#064e3b] font-black text-xs transition-all cursor-pointer shadow-md"
+                              className="px-3 py-1.5 rounded-xl bg-[#022c22] hover:bg-[#064e3b] text-[#f0f9f6] border border-[#fbbf24]/40 hover:border-[#fbbf24] font-bold text-xs transition-all cursor-pointer shadow-sm flex items-center gap-1"
                             >
-                              تصحيح ومراجعة
+                              <CheckSquare className="w-3.5 h-3.5 text-[#fbbf24]" />
+                              <span>تصحيح ومراجعة</span>
                             </button>
                             <button
                               onClick={() => setSubmissionToDelete(sub)}
@@ -1608,7 +1609,7 @@ export const ExamsTab: React.FC<ExamsTabProps> = ({
 
       {/* SUBTAB 4: GOOGLE SHEETS EXPORT */}
       {activeSubTab === 'google_sheets' && (
-        <div className="p-6 rounded-3xl border border-[#065f46] bg-[#022c22]/90 shadow-2xl space-y-6">
+        <div className="p-6 rounded-3xl border border-[#fbbf24]/20 bg-[#022c22]/90 shadow-2xl space-y-6">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <div>
               <h3 className="text-lg font-bold text-white flex items-center gap-2">
@@ -1624,7 +1625,7 @@ export const ExamsTab: React.FC<ExamsTabProps> = ({
               <button
                 onClick={handleConnectGoogle}
                 disabled={isSaving}
-                className="px-4 py-2.5 rounded-2xl bg-emerald-800 hover:bg-emerald-700 text-white font-bold text-xs sm:text-sm flex items-center gap-2 border border-emerald-600/50 cursor-pointer"
+                className="px-4 py-2.5 rounded-2xl bg-[#022c22] hover:bg-[#064e3b] text-[#f0f9f6] font-bold text-xs sm:text-sm flex items-center gap-2 border border-[#fbbf24]/40 hover:border-[#fbbf24] cursor-pointer shadow-sm transition-all"
               >
                 <ShieldCheck className="w-4 h-4 text-[#fbbf24]" />
                 <span>{googleAuthConfig?.isLinked ? 'تحديث ربط حساب Google' : 'ربط حساب Google'}</span>
@@ -1633,7 +1634,7 @@ export const ExamsTab: React.FC<ExamsTabProps> = ({
               <button
                 onClick={() => handleExportToGoogleSheet()}
                 disabled={isExportingSheets}
-                className="px-5 py-2.5 rounded-2xl bg-[#fbbf24] hover:bg-[#f59e0b] text-[#064e3b] font-black text-xs sm:text-sm flex items-center gap-2 shadow-lg shadow-amber-500/20 transition-all cursor-pointer"
+                className="px-5 py-2.5 rounded-2xl bg-[#fbbf24] hover:bg-[#f59e0b] text-[#064e3b] border border-[#fbbf24] font-black text-xs sm:text-sm flex items-center gap-2 shadow-lg shadow-amber-500/20 transition-all cursor-pointer"
               >
                 <FileSpreadsheet className="w-4 h-4" />
                 <span>تصدير كافة النتائج الآن</span>
@@ -1784,13 +1785,13 @@ export const ExamsTab: React.FC<ExamsTabProps> = ({
                       onClick={() => setFormDeliveryMode('platform')}
                       className={`p-3.5 rounded-xl border text-right transition-all cursor-pointer ${
                         formDeliveryMode === 'platform'
-                          ? 'bg-emerald-900/90 border-[#fbbf24] ring-2 ring-[#fbbf24]/50 text-white'
-                          : 'bg-[#064e3b]/40 border-emerald-800 text-emerald-200 hover:bg-[#064e3b]'
+                          ? 'bg-emerald-900/90 border-[#fbbf24] ring-2 ring-[#fbbf24]/50 text-white shadow-md'
+                          : 'bg-[#022c22] border-[#fbbf24]/30 text-[#f0f9f6]/80 hover:bg-[#064e3b] hover:border-[#fbbf24]/60'
                       }`}
                     >
                       <div className="flex items-center justify-between mb-1.5">
                         <div className="flex items-center gap-2 font-bold text-xs">
-                          <CheckSquare className="w-4 h-4 text-emerald-400" />
+                          <CheckSquare className="w-4 h-4 text-[#fbbf24]" />
                           <span>نظام المنصة التفاعلي الذكي</span>
                         </div>
                         {formDeliveryMode === 'platform' && (
@@ -1808,8 +1809,8 @@ export const ExamsTab: React.FC<ExamsTabProps> = ({
                       onClick={() => setFormDeliveryMode('google_form')}
                       className={`p-3.5 rounded-xl border text-right transition-all cursor-pointer ${
                         formDeliveryMode === 'google_form'
-                          ? 'bg-blue-950/90 border-blue-400 ring-2 ring-blue-500/50 text-white'
-                          : 'bg-[#064e3b]/40 border-emerald-800 text-emerald-200 hover:bg-[#064e3b]'
+                          ? 'bg-blue-950/90 border-blue-400 ring-2 ring-blue-500/50 text-white shadow-md'
+                          : 'bg-[#022c22] border-[#fbbf24]/30 text-[#f0f9f6]/80 hover:bg-[#064e3b] hover:border-[#fbbf24]/60'
                       }`}
                     >
                       <div className="flex items-center justify-between mb-1.5">
@@ -2033,11 +2034,11 @@ export const ExamsTab: React.FC<ExamsTabProps> = ({
                     className={`p-3.5 rounded-xl border text-right transition-all cursor-pointer ${
                       formTimeLimitMode === 'none'
                         ? 'bg-[#fbbf24] text-[#064e3b] border-[#fbbf24] shadow-md font-bold'
-                        : 'bg-[#022c22] border-emerald-800 text-emerald-200 hover:bg-emerald-900/50'
+                        : 'bg-[#022c22] border-[#fbbf24]/30 text-[#f0f9f6]/80 hover:bg-[#064e3b] hover:border-[#fbbf24]/60'
                     }`}
                   >
                     <div className="text-xs font-black mb-1">بدون مؤقت زمني</div>
-                    <div className={`text-[10px] ${formTimeLimitMode === 'none' ? 'text-emerald-950 font-semibold' : 'text-emerald-400/80'}`}>
+                    <div className={`text-[10px] ${formTimeLimitMode === 'none' ? 'text-emerald-950 font-semibold' : 'text-[#86efac]/80'}`}>
                       يحل الطالب الاختبار بأريحية تامة دون عد تنازلي.
                     </div>
                   </button>
@@ -2048,11 +2049,11 @@ export const ExamsTab: React.FC<ExamsTabProps> = ({
                     className={`p-3.5 rounded-xl border text-right transition-all cursor-pointer ${
                       formTimeLimitMode === 'total'
                         ? 'bg-[#fbbf24] text-[#064e3b] border-[#fbbf24] shadow-md font-bold'
-                        : 'bg-[#022c22] border-emerald-800 text-emerald-200 hover:bg-emerald-900/50'
+                        : 'bg-[#022c22] border-[#fbbf24]/30 text-[#f0f9f6]/80 hover:bg-[#064e3b] hover:border-[#fbbf24]/60'
                     }`}
                   >
                     <div className="text-xs font-black mb-1">وقت كلي لكامل الاختبار</div>
-                    <div className={`text-[10px] ${formTimeLimitMode === 'total' ? 'text-emerald-950 font-semibold' : 'text-emerald-400/80'}`}>
+                    <div className={`text-[10px] ${formTimeLimitMode === 'total' ? 'text-emerald-950 font-semibold' : 'text-[#86efac]/80'}`}>
                       مؤقت عام ينتهي عنده الاختبار ويُسلم تلقائياً.
                     </div>
                   </button>
@@ -2063,11 +2064,11 @@ export const ExamsTab: React.FC<ExamsTabProps> = ({
                     className={`p-3.5 rounded-xl border text-right transition-all cursor-pointer ${
                       formTimeLimitMode === 'per_question'
                         ? 'bg-[#fbbf24] text-[#064e3b] border-[#fbbf24] shadow-md font-bold'
-                        : 'bg-[#022c22] border-emerald-800 text-emerald-200 hover:bg-emerald-900/50'
+                        : 'bg-[#022c22] border-[#fbbf24]/30 text-[#f0f9f6]/80 hover:bg-[#064e3b] hover:border-[#fbbf24]/60'
                     }`}
                   >
                     <div className="text-xs font-black mb-1">وقت مخصص لكل سؤال</div>
-                    <div className={`text-[10px] ${formTimeLimitMode === 'per_question' ? 'text-emerald-950 font-semibold' : 'text-emerald-400/80'}`}>
+                    <div className={`text-[10px] ${formTimeLimitMode === 'per_question' ? 'text-emerald-950 font-semibold' : 'text-[#86efac]/80'}`}>
                       عداد ثوانٍ لكل سؤال، ينتقل تلقائياً للسؤال التالي.
                     </div>
                   </button>
@@ -2149,7 +2150,7 @@ export const ExamsTab: React.FC<ExamsTabProps> = ({
               </div>
 
               {/* Target Halaqat Selection */}
-              <div className="p-4 rounded-2xl bg-[#064e3b]/50 border border-[#065f46] space-y-2">
+              <div className="p-4 rounded-2xl bg-[#064e3b]/50 border border-[#fbbf24]/30 space-y-2">
                 <label className="block text-xs font-bold text-[#fbbf24]">
                   تحديد الحلقات المستهدفة للاختبار
                 </label>
@@ -2159,8 +2160,8 @@ export const ExamsTab: React.FC<ExamsTabProps> = ({
                     onClick={() => setFormTargetHalaqat(['all'])}
                     className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                       formTargetHalaqat.includes('all')
-                        ? 'bg-[#fbbf24] text-[#064e3b]'
-                        : 'bg-emerald-900/60 text-emerald-200 border border-emerald-700'
+                        ? 'bg-[#fbbf24] text-[#064e3b] border border-[#fbbf24] shadow-sm font-black'
+                        : 'bg-[#022c22] text-[#f0f9f6]/80 border border-[#fbbf24]/30 hover:border-[#fbbf24]/60'
                     }`}
                   >
                     جميع الحلقات
@@ -2184,8 +2185,8 @@ export const ExamsTab: React.FC<ExamsTabProps> = ({
                         }}
                         className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                           isSelected && !formTargetHalaqat.includes('all')
-                            ? 'bg-[#fbbf24] text-[#064e3b]'
-                            : 'bg-emerald-900/60 text-emerald-200 border border-emerald-700'
+                            ? 'bg-[#fbbf24] text-[#064e3b] border border-[#fbbf24] shadow-sm font-black'
+                            : 'bg-[#022c22] text-[#f0f9f6]/80 border border-[#fbbf24]/30 hover:border-[#fbbf24]/60'
                         }`}
                       >
                         {h.name}
@@ -2647,8 +2648,8 @@ export const ExamsTab: React.FC<ExamsTabProps> = ({
                   onClick={() => setPreviewInteractive(!previewInteractive)}
                   className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                     previewInteractive
-                      ? 'bg-[#fbbf24] text-[#064e3b]'
-                      : 'bg-emerald-900/60 text-emerald-200 border border-emerald-700'
+                      ? 'bg-[#fbbf24] text-[#064e3b] border border-[#fbbf24] shadow-sm font-black'
+                      : 'bg-[#022c22] hover:bg-[#064e3b] text-[#f0f9f6]/80 hover:text-white border border-[#fbbf24]/30 hover:border-[#fbbf24]/60'
                   }`}
                 >
                   {previewInteractive ? 'وضع التصفح السريع' : 'تجربة كطالب في المنصة'}
@@ -3135,7 +3136,7 @@ export const ExamsTab: React.FC<ExamsTabProps> = ({
             </div>
 
             {/* Actions Bar */}
-            <div className="p-4 bg-[#022c22] border-t border-[#065f46] flex flex-wrap items-center justify-between gap-3 shrink-0">
+            <div className="p-4 bg-[#022c22] border-t border-[#fbbf24]/20 flex flex-wrap items-center justify-between gap-3 shrink-0">
               <div className="flex items-center gap-2">
                 <button
                   type="button"
@@ -3231,7 +3232,7 @@ export const ExamsTab: React.FC<ExamsTabProps> = ({
                       window.print();
                     }
                   }}
-                  className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-amber-400 to-amber-500 hover:brightness-110 text-[#064e3b] font-black text-xs flex items-center gap-1.5 cursor-pointer shadow-md transition-all"
+                  className="px-4 py-2.5 rounded-xl bg-[#fbbf24] hover:bg-[#f59e0b] text-[#064e3b] border border-[#fbbf24] font-black text-xs flex items-center gap-1.5 cursor-pointer shadow-md transition-all"
                 >
                   <Printer className="w-4 h-4 text-[#064e3b]" />
                   <span>تنزيل كـ PDF فاخر</span>

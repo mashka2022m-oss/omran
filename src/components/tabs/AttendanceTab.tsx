@@ -428,13 +428,13 @@ export const AttendanceTab: React.FC<AttendanceTabProps> = ({
 
         <div className="flex flex-wrap items-center gap-3">
           {/* Date Picker */}
-          <div className="flex items-center gap-2 bg-[#022c22] border border-[#065f46] px-3.5 py-2 rounded-2xl">
+          <div className="flex items-center gap-2 bg-[#022c22] border border-[#fbbf24]/30 px-3.5 py-2 rounded-2xl shadow-inner">
             <Calendar className="w-4 h-4 text-[#fbbf24]" />
             <input
               type="date"
               value={selectedDate}
               onChange={e => handleDateChange(e.target.value)}
-              className="bg-transparent text-xs sm:text-sm text-[#f0f9f6] outline-none cursor-pointer"
+              className="bg-transparent text-xs sm:text-sm text-[#f0f9f6] outline-none cursor-pointer font-bold"
             />
           </div>
 
@@ -442,7 +442,7 @@ export const AttendanceTab: React.FC<AttendanceTabProps> = ({
           <button
             type="button"
             onClick={() => setShowDailySummaryModal(true)}
-            className="px-4 py-2.5 rounded-2xl bg-[#022c22] hover:bg-[#022c22]/80 border border-[#fbbf24]/50 text-[#fbbf24] text-xs font-bold flex items-center gap-1.5 transition-all shadow-md cursor-pointer"
+            className="px-4 py-2.5 rounded-2xl bg-[#022c22] hover:bg-[#064e3b] border border-[#fbbf24]/40 hover:border-[#fbbf24] text-[#fbbf24] text-xs font-bold flex items-center gap-1.5 transition-all shadow-md cursor-pointer"
             title="إنشاء ونسخ رسالة حضور وغياب اليوم كاملة لمشاركتها في قروب الواتساب"
           >
             <FileText className="w-4 h-4 text-[#fbbf24]" />
@@ -452,7 +452,7 @@ export const AttendanceTab: React.FC<AttendanceTabProps> = ({
           <button
             type="button"
             onClick={() => setShowPrintModal(true)}
-            className="px-4 py-2.5 rounded-2xl bg-gradient-to-r from-amber-400 to-amber-500 hover:brightness-110 text-[#064e3b] text-xs font-black flex items-center gap-1.5 shadow-[0_0_15px_rgba(251,191,36,0.3)] transition-all cursor-pointer"
+            className="px-4 py-2.5 rounded-2xl bg-[#fbbf24] hover:bg-[#f59e0b] text-[#064e3b] border border-[#fbbf24] text-xs font-black flex items-center gap-1.5 shadow-[0_0_15px_rgba(251,191,36,0.35)] transition-all cursor-pointer"
             title="معاينة وطباعة كشف الحضور واستخراج PDF"
           >
             <Printer className="w-4 h-4 text-[#064e3b]" />
@@ -462,9 +462,9 @@ export const AttendanceTab: React.FC<AttendanceTabProps> = ({
           <button
             type="button"
             onClick={() => setShowHistoryModal(true)}
-            className="px-4 py-2.5 rounded-2xl bg-[#022c22] hover:bg-[#022c22]/80 border border-[#065f46] text-[#86efac] text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
+            className="px-4 py-2.5 rounded-2xl bg-[#022c22] hover:bg-[#064e3b] border border-[#fbbf24]/30 hover:border-[#fbbf24] text-[#f0f9f6] text-xs font-bold flex items-center gap-1.5 transition-all shadow-sm cursor-pointer"
           >
-            <History className="w-4 h-4" />
+            <History className="w-4 h-4 text-[#fbbf24]" />
             <span>سجل الأيام السابقة</span>
           </button>
 
@@ -540,7 +540,7 @@ export const AttendanceTab: React.FC<AttendanceTabProps> = ({
           <div className="flex items-center gap-3">
             <button
               onClick={handleMarkAllPresent}
-              className="px-4 py-2 rounded-2xl bg-[#022c22] hover:bg-[#022c22]/80 border border-[#065f46] text-[#86efac] hover:text-white text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
+              className="px-4 py-2 rounded-2xl bg-[#022c22] hover:bg-[#064e3b] border border-[#fbbf24]/30 hover:border-[#fbbf24] text-[#f0f9f6] text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
             >
               <CheckCheck className="w-4 h-4 text-[#fbbf24]" />
               <span>تحديد الجميع حاضر</span>
@@ -549,7 +549,7 @@ export const AttendanceTab: React.FC<AttendanceTabProps> = ({
             <button
               onClick={handleSave}
               disabled={isSaving}
-              className="px-5 py-2 rounded-2xl bg-[#fbbf24] hover:bg-[#f59e0b] disabled:opacity-50 text-[#064e3b] text-xs font-black flex items-center gap-1.5 shadow-[0_0_20px_rgba(251,191,36,0.3)] transition-all cursor-pointer"
+              className="px-5 py-2 rounded-2xl bg-[#fbbf24] hover:bg-[#f59e0b] border border-[#fbbf24] disabled:opacity-50 text-[#064e3b] text-xs font-black flex items-center gap-1.5 shadow-[0_0_20px_rgba(251,191,36,0.3)] transition-all cursor-pointer"
             >
               <Save className="w-4 h-4" />
               <span>{isSaving ? 'جاري الحفظ...' : 'حفظ كشف الحضور'}</span>
@@ -564,7 +564,7 @@ export const AttendanceTab: React.FC<AttendanceTabProps> = ({
         )}
 
         {/* Student Rows */}
-        <div className="divide-y divide-[#065f46]/60">
+        <div className="divide-y divide-[#fbbf24]/15">
           {filteredStudents.length === 0 ? (
             <div className="p-8 text-center text-[#86efac]/60 text-xs">
               لا يوجد طلاب مسجلون لعرض الحضور.
@@ -582,7 +582,7 @@ export const AttendanceTab: React.FC<AttendanceTabProps> = ({
                 >
                   {/* Student Info */}
                   <div className="flex items-center gap-3 min-w-[200px]">
-                    <div className="w-8 h-8 rounded-xl bg-[#022c22] border border-[#065f46] text-[#fbbf24] text-xs font-bold flex items-center justify-center shrink-0">
+                    <div className="w-8 h-8 rounded-xl bg-[#022c22] border border-[#fbbf24]/30 text-[#fbbf24] text-xs font-bold flex items-center justify-center shrink-0">
                       {idx + 1}
                     </div>
                     <div>
@@ -596,7 +596,7 @@ export const AttendanceTab: React.FC<AttendanceTabProps> = ({
 
                   {/* 4 Status Buttons + Send to Absentee button */}
                   <div className="flex items-center gap-2 flex-wrap">
-                    <div className="flex items-center gap-1.5 bg-[#022c22] p-1.5 rounded-2xl border border-[#065f46] shrink-0">
+                    <div className="flex items-center gap-1.5 bg-[#022c22] p-1.5 rounded-2xl border border-[#fbbf24]/30 shrink-0">
                       <button
                         type="button"
                         onClick={() => handleStatusChange(student.id, 'حاضر')}
@@ -739,7 +739,7 @@ export const AttendanceTab: React.FC<AttendanceTabProps> = ({
             </div>
 
             {/* Modal Footer Controls */}
-            <div className="p-4 bg-[#022c22] border-t border-[#065f46] flex flex-wrap items-center justify-between gap-3 shrink-0">
+            <div className="p-4 bg-[#022c22] border-t border-[#fbbf24]/20 flex flex-wrap items-center justify-between gap-3 shrink-0">
               <div className="text-xs text-[#86efac]/80">
                 إجمالي الطلاب: <strong>{students.length}</strong> (حاضر: {counts.present} • غائب: {counts.absent})
               </div>
@@ -748,7 +748,7 @@ export const AttendanceTab: React.FC<AttendanceTabProps> = ({
                 <button
                   type="button"
                   onClick={handleShareSummaryWhatsApp}
-                  className="px-4 py-2.5 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold flex items-center gap-1.5 shadow-md cursor-pointer transition-all"
+                  className="px-4 py-2.5 rounded-2xl bg-[#022c22] hover:bg-[#064e3b] text-[#fbbf24] border border-[#fbbf24]/40 hover:border-[#fbbf24] text-xs font-bold flex items-center gap-1.5 shadow-md cursor-pointer transition-all"
                 >
                   <Share2 className="w-4 h-4" />
                   <span>مشاركة عبر واتساب</span>
@@ -757,7 +757,7 @@ export const AttendanceTab: React.FC<AttendanceTabProps> = ({
                 <button
                   type="button"
                   onClick={handleCopySummary}
-                  className="px-5 py-2.5 rounded-2xl bg-[#fbbf24] hover:bg-[#f59e0b] text-[#064e3b] text-xs font-black flex items-center gap-2 shadow-md cursor-pointer transition-all"
+                  className="px-5 py-2.5 rounded-2xl bg-[#fbbf24] hover:bg-[#f59e0b] border border-[#fbbf24] text-[#064e3b] text-xs font-black flex items-center gap-2 shadow-md cursor-pointer transition-all"
                 >
                   <Copy className="w-4 h-4" />
                   <span>{summaryCopied ? 'تم النسخ!' : 'نسخ الرسالة بالكامل'}</span>
@@ -878,20 +878,20 @@ export const AttendanceTab: React.FC<AttendanceTabProps> = ({
             </div>
 
             {/* Modal Footer Controls */}
-            <div className="p-4 bg-[#022c22] border-t border-[#065f46] flex items-center justify-between gap-3 shrink-0">
+            <div className="p-4 bg-[#022c22] border-t border-[#fbbf24]/20 flex items-center justify-between gap-3 shrink-0">
               <button
                 type="button"
                 onClick={handleCopyAbsentMessage}
-                className="px-4 py-2.5 rounded-2xl bg-[#064e3b] hover:bg-[#064e3b]/80 border border-[#065f46] text-[#86efac] hover:text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-colors"
+                className="px-4 py-2.5 rounded-2xl bg-[#022c22] hover:bg-[#064e3b] border border-[#fbbf24]/40 hover:border-[#fbbf24] text-[#f0f9f6] hover:text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-colors"
               >
-                <Copy className="w-4 h-4" />
+                <Copy className="w-4 h-4 text-[#fbbf24]" />
                 <span>نسخ النص</span>
               </button>
 
               <button
                 type="button"
                 onClick={handleSendAbsentWhatsApp}
-                className="px-5 py-2.5 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black flex items-center gap-2 shadow-lg cursor-pointer transition-all"
+                className="px-5 py-2.5 rounded-2xl bg-emerald-600 hover:bg-emerald-500 border border-emerald-400 text-white text-xs font-black flex items-center gap-2 shadow-lg cursor-pointer transition-all"
               >
                 <Send className="w-4 h-4 rotate-180" />
                 <span>إرسال لولي الأمر عبر واتساب</span>
@@ -1096,14 +1096,14 @@ export const AttendanceTab: React.FC<AttendanceTabProps> = ({
             </div>
 
             {/* Modal Footer */}
-            <div className="p-4 bg-[#022c22] border-t border-[#065f46] flex items-center justify-end shrink-0">
+            <div className="p-4 bg-[#022c22] border-t border-[#fbbf24]/20 flex items-center justify-end shrink-0">
               <button
                 type="button"
                 onClick={() => {
                   setShowMessageSettingsModal(false);
                   setEditingTemplate(null);
                 }}
-                className="px-5 py-2 rounded-xl bg-[#064e3b] text-xs font-bold text-[#86efac] hover:text-white cursor-pointer"
+                className="px-5 py-2 rounded-xl bg-[#022c22] hover:bg-[#064e3b] text-xs font-bold text-[#f0f9f6] border border-[#fbbf24]/30 hover:border-[#fbbf24] cursor-pointer transition-colors"
               >
                 إغلاق
               </button>
@@ -1117,7 +1117,7 @@ export const AttendanceTab: React.FC<AttendanceTabProps> = ({
         <div className="fixed inset-0 z-[9999] bg-black/80 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 md:p-6 overflow-y-auto">
           <div className="relative w-full max-w-3xl bg-[#064e3b] border border-[#fbbf24]/40 rounded-2xl sm:rounded-[32px] shadow-2xl shadow-emerald-950/80 max-h-[90vh] flex flex-col my-auto overflow-hidden animate-fadeIn">
             {/* Header */}
-            <div className="flex items-center justify-between p-4 sm:p-6 border-b border-[#065f46] shrink-0 bg-[#064e3b]">
+            <div className="flex items-center justify-between p-4 sm:p-6 border-b border-[#fbbf24]/20 shrink-0 bg-[#064e3b]">
               <h3 className="text-sm sm:text-base font-bold text-[#fbbf24] flex items-center gap-2 font-heading">
                 <History className="w-5 h-5 text-[#fbbf24] shrink-0" />
                 <span>سجل الحضور والغياب التراكمي لجميع الطلاب</span>
@@ -1125,7 +1125,7 @@ export const AttendanceTab: React.FC<AttendanceTabProps> = ({
               <button
                 type="button"
                 onClick={() => setShowHistoryModal(false)}
-                className="text-xs px-3.5 py-1.5 rounded-xl bg-[#022c22] text-[#86efac] hover:text-white border border-[#065f46] cursor-pointer"
+                className="text-xs px-3.5 py-1.5 rounded-xl bg-[#022c22] hover:bg-[#064e3b] text-[#f0f9f6] border border-[#fbbf24]/30 hover:border-[#fbbf24] cursor-pointer transition-colors"
               >
                 إغلاق
               </button>
@@ -1145,7 +1145,7 @@ export const AttendanceTab: React.FC<AttendanceTabProps> = ({
                 return (
                   <div
                     key={student.id}
-                    className="p-3.5 sm:p-4 bg-[#022c22]/80 border border-[#065f46] rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs"
+                    className="p-3.5 sm:p-4 bg-[#022c22]/80 border border-[#fbbf24]/20 hover:border-[#fbbf24]/40 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs transition-colors"
                   >
                     <div>
                       <h4 className="font-bold text-white text-sm">{student.name}</h4>

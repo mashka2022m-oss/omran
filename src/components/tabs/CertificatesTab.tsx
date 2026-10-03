@@ -1800,7 +1800,7 @@ ${occasionText}
                       className={`p-3 rounded-2xl text-xs font-bold border transition-all text-center cursor-pointer ${
                         isCur
                           ? 'bg-[#fbbf24] text-[#064e3b] border-[#fbbf24] shadow-md font-black'
-                          : 'bg-[#064e3b]/30 border-[#065f46] text-[#86efac] hover:bg-[#064e3b]/60'
+                          : 'bg-[#022c22] border-[#fbbf24]/30 hover:border-[#fbbf24]/60 text-[#f0f9f6]/80 hover:bg-[#064e3b]'
                       }`}
                     >
                       {opt.label}
@@ -2130,19 +2130,19 @@ ${occasionText}
                       <button
                         type="button"
                         onClick={() => handleDownloadArchiveSinglePdf(cert)}
-                        className="p-1.5 rounded-xl bg-[#022c22] hover:bg-[#064e3b] text-[#86efac] hover:text-white border border-[#065f46] cursor-pointer transition-colors"
+                        className="p-1.5 rounded-xl bg-[#022c22] hover:bg-[#064e3b] text-[#fbbf24] hover:text-white border border-[#fbbf24]/30 hover:border-[#fbbf24] cursor-pointer transition-colors shadow-sm"
                         title="تنزيل كـ PDF فاخر"
                       >
-                        <Download className="w-4 h-4 text-emerald-400" />
+                        <Download className="w-4 h-4 text-[#fbbf24]" />
                       </button>
 
                       <button
                         type="button"
                         onClick={() => handleSendWhatsAppForArchive(cert)}
-                        className="p-1.5 rounded-xl bg-emerald-900/60 hover:bg-emerald-800 text-emerald-200 hover:text-white border border-emerald-600/40 cursor-pointer transition-colors"
+                        className="p-1.5 rounded-xl bg-[#022c22] hover:bg-[#064e3b] text-[#fbbf24] hover:text-white border border-[#fbbf24]/30 hover:border-[#fbbf24] cursor-pointer transition-colors shadow-sm"
                         title="إرسال عبر الواتساب لولي الأمر"
                       >
-                        <Send className="w-4 h-4 text-emerald-300" />
+                        <Send className="w-4 h-4 text-[#fbbf24]" />
                       </button>
 
                       <button
@@ -2340,7 +2340,7 @@ ${occasionText}
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
-                  className="px-4 py-2 rounded-xl bg-[#064e3b] hover:bg-[#064e3b]/80 text-[#86efac] hover:text-white border border-[#065f46] text-xs font-bold flex items-center gap-2 cursor-pointer transition-all"
+                  className="px-4 py-2 rounded-xl bg-[#022c22] hover:bg-[#064e3b] text-[#f0f9f6] hover:text-white border border-[#fbbf24]/30 hover:border-[#fbbf24] text-xs font-bold flex items-center gap-2 cursor-pointer transition-all shadow-sm"
                 >
                   <Upload className="w-4 h-4 text-[#fbbf24]" />
                   <span>{builderImage ? 'تغيير صورة النموذج' : 'رفع صورة النموذج (حتى 5MB)'}</span>
@@ -2627,7 +2627,7 @@ ${occasionText}
                       <button
                         type="button"
                         onClick={() => handleEditTemplate(tpl)}
-                        className="p-1.5 rounded-xl bg-[#022c22] text-[#86efac] hover:text-white border border-[#065f46] cursor-pointer"
+                        className="p-1.5 rounded-xl bg-[#022c22] hover:bg-[#064e3b] text-[#fbbf24] hover:text-white border border-[#fbbf24]/30 hover:border-[#fbbf24] cursor-pointer transition-colors shadow-sm"
                         title="تعديل الموضع والخط"
                       >
                         <Edit3 className="w-4 h-4" />
@@ -2657,7 +2657,7 @@ ${occasionText}
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-md p-2 sm:p-4 overflow-y-auto">
           <div className="bg-[#022c22] border-2 border-[#fbbf24]/50 rounded-3xl w-full max-w-5xl max-h-[96vh] flex flex-col shadow-2xl overflow-hidden text-right">
             {/* Modal Top Bar */}
-            <div className="bg-gradient-to-r from-[#064e3b] via-[#022c22] to-[#064e3b] px-6 py-4 border-b border-[#065f46] flex flex-wrap items-center justify-between gap-4 shrink-0">
+            <div className="bg-gradient-to-r from-[#064e3b] via-[#022c22] to-[#064e3b] px-6 py-4 border-b border-[#fbbf24]/20 flex flex-wrap items-center justify-between gap-4 shrink-0">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-[#fbbf24]/20 border border-[#fbbf24]/40 text-[#fbbf24] flex items-center justify-center shadow-sm">
                   <Award className="w-5 h-5" />
@@ -2685,8 +2685,8 @@ ${occasionText}
                   }}
                   className={`px-3.5 py-1.5 rounded-xl font-bold text-xs flex items-center gap-1.5 shadow-md cursor-pointer transition-all active:scale-95 ${
                     isCurrentStudentSaved
-                      ? 'bg-emerald-600 hover:bg-emerald-500 text-white border border-emerald-400'
-                      : 'bg-gradient-to-r from-[#fbbf24] to-amber-500 hover:brightness-110 text-[#064e3b]'
+                      ? 'bg-[#022c22] text-[#fbbf24] border border-[#fbbf24]'
+                      : 'bg-[#fbbf24] hover:bg-[#f59e0b] text-[#064e3b] border border-[#fbbf24]'
                   }`}
                   title="حفظ الشهادة وتوثيقها في الأرشيف"
                 >
@@ -3047,7 +3047,7 @@ ${occasionText}
             )}
 
             {/* Modal Bottom Actions Bar */}
-            <div className="p-4 bg-[#022c22] border-t border-[#065f46] flex flex-wrap items-center justify-between gap-3 shrink-0">
+            <div className="p-4 bg-[#022c22] border-t border-[#fbbf24]/20 flex flex-wrap items-center justify-between gap-3 shrink-0">
               <div className="flex flex-wrap items-center gap-2">
                 {/* Save Certificate Button */}
                 <button
@@ -3061,8 +3061,8 @@ ${occasionText}
                   }}
                   className={`px-4 py-2.5 rounded-xl font-black text-xs flex items-center gap-1.5 shadow-md cursor-pointer transition-all active:scale-95 ${
                     isCurrentStudentSaved
-                      ? 'bg-emerald-600 hover:bg-emerald-500 text-white border border-emerald-400'
-                      : 'bg-gradient-to-r from-[#fbbf24] via-amber-400 to-[#f59e0b] hover:brightness-110 text-[#064e3b]'
+                      ? 'bg-[#022c22] text-[#fbbf24] border border-[#fbbf24]'
+                      : 'bg-[#fbbf24] hover:bg-[#f59e0b] text-[#064e3b] border border-[#fbbf24]'
                   }`}
                   title="حفظ الشهادة وتوثيقها في الأرشيف"
                 >
@@ -3081,10 +3081,10 @@ ${occasionText}
                   type="button"
                   disabled={isExporting}
                   onClick={() => handleDownloadSinglePNG(targetStudents[previewStudentIndex], previewStudentIndex)}
-                  className="px-4 py-2.5 rounded-xl bg-[#064e3b] hover:bg-[#064e3b]/80 disabled:opacity-50 text-[#86efac] hover:text-white border border-[#065f46] font-bold text-xs flex items-center gap-1.5 cursor-pointer transition-all"
+                  className="px-4 py-2.5 rounded-xl bg-[#022c22] hover:bg-[#064e3b] disabled:opacity-50 text-[#f0f9f6] hover:text-white border border-[#fbbf24]/40 hover:border-[#fbbf24] font-bold text-xs flex items-center gap-1.5 cursor-pointer transition-all shadow-sm"
                   title="تنزيل الشهادة كصورة PNG عالية الدقة"
                 >
-                  <Download className="w-4 h-4 text-emerald-400" />
+                  <Download className="w-4 h-4 text-[#fbbf24]" />
                   <span>تحميل كصورة (PNG)</span>
                 </button>
 
@@ -3093,10 +3093,10 @@ ${occasionText}
                   type="button"
                   disabled={isExporting}
                   onClick={() => handleDownloadSinglePDF(targetStudents[previewStudentIndex], previewStudentIndex)}
-                  className="px-4 py-2.5 rounded-xl bg-[#064e3b] hover:bg-[#064e3b]/80 disabled:opacity-50 text-[#86efac] hover:text-white border border-[#065f46] font-bold text-xs flex items-center gap-1.5 cursor-pointer transition-all"
+                  className="px-4 py-2.5 rounded-xl bg-[#022c22] hover:bg-[#064e3b] disabled:opacity-50 text-[#fbbf24] hover:text-white border border-[#fbbf24]/40 hover:border-[#fbbf24] font-bold text-xs flex items-center gap-1.5 cursor-pointer transition-all shadow-sm"
                   title="تنزيل شهادة هذا الطالب كـ PDF منفصل"
                 >
-                  <Printer className="w-4 h-4 text-amber-300" />
+                  <Printer className="w-4 h-4 text-[#fbbf24]" />
                   <span>تنزيل PDF للطالب الحالي</span>
                 </button>
 
@@ -3106,10 +3106,10 @@ ${occasionText}
                     type="button"
                     disabled={isExporting}
                     onClick={handleDownloadAllMergedPDF}
-                    className="px-4 py-2.5 rounded-xl bg-emerald-900/80 hover:bg-emerald-800 disabled:opacity-50 text-emerald-100 border border-emerald-600/50 font-bold text-xs flex items-center gap-1.5 cursor-pointer transition-all"
+                    className="px-4 py-2.5 rounded-xl bg-[#fbbf24] hover:bg-[#f59e0b] disabled:opacity-50 text-[#064e3b] border border-[#fbbf24] font-black text-xs flex items-center gap-1.5 cursor-pointer transition-all shadow-md"
                     title="تنزيل كافة الشهادات في ملف PDF واحد مجمع"
                   >
-                    <FileText className="w-4 h-4 text-[#fbbf24]" />
+                    <FileText className="w-4 h-4 text-[#064e3b]" />
                     <span>تنزيل الكل بملف PDF مجمع ({targetStudents.length})</span>
                   </button>
                 )}
@@ -3121,7 +3121,7 @@ ${occasionText}
                   type="button"
                   disabled={isExporting}
                   onClick={() => handleSendWhatsApp(targetStudents[previewStudentIndex], previewStudentIndex)}
-                  className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-green-600 hover:brightness-110 disabled:opacity-50 text-white font-black text-xs flex items-center gap-1.5 shadow-md cursor-pointer transition-all"
+                  className="px-5 py-2.5 rounded-xl bg-[#25D366] hover:bg-[#20ba59] border border-[#25D366]/40 hover:brightness-105 disabled:opacity-50 text-white font-black text-xs flex items-center gap-1.5 shadow-md cursor-pointer transition-all"
                   title="إرسال ملف الشهادة PDF مباشرة عبر الواتساب لولي الأمر"
                 >
                   <Send className="w-4 h-4" />

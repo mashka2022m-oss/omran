@@ -1046,7 +1046,7 @@ export const TeacherAttendanceTab: React.FC<TeacherAttendanceTabProps> = ({
                     <button
                       type="button"
                       onClick={() => handleOpenAssignTeachersModal(shifts[0])}
-                      className="px-5 py-2.5 rounded-2xl bg-gradient-to-r from-amber-400 to-amber-500 hover:brightness-110 text-[#064e3b] font-black text-xs inline-flex items-center gap-2 shadow-lg cursor-pointer transition-all"
+                      className="px-5 py-2.5 rounded-2xl bg-[#fbbf24] hover:bg-[#f59e0b] text-[#064e3b] font-black text-xs inline-flex items-center gap-2 shadow-lg cursor-pointer transition-all"
                     >
                       <UserCheck className="w-4 h-4" />
                       <span>تعيين فترتي وإدراج اسمي الآن</span>
@@ -1417,7 +1417,7 @@ export const TeacherAttendanceTab: React.FC<TeacherAttendanceTabProps> = ({
                         <button
                           type="button"
                           onClick={() => handleOpenAssignTeachersModal(shift)}
-                          className="px-4 py-2 rounded-xl bg-gradient-to-r from-amber-400 to-amber-500 hover:brightness-110 text-[#064e3b] font-black text-xs inline-flex items-center gap-1.5 shadow-md cursor-pointer transition-all"
+                          className="px-4 py-2 rounded-xl bg-[#fbbf24] hover:bg-[#f59e0b] text-[#064e3b] font-black text-xs inline-flex items-center gap-1.5 shadow-md cursor-pointer transition-all"
                         >
                           <UserPlus className="w-4 h-4" />
                           <span>تعيين وتكليف المعلمين لهذه الفترة الآن</span>
@@ -1612,7 +1612,7 @@ export const TeacherAttendanceTab: React.FC<TeacherAttendanceTabProps> = ({
             <button
               type="button"
               onClick={handleOpenAddMosqueModal}
-              className="px-4 py-2 rounded-2xl bg-gradient-to-r from-amber-400 to-amber-500 hover:brightness-110 text-[#064e3b] font-black text-xs flex items-center gap-1.5 shadow-md cursor-pointer transition-all"
+              className="px-4 py-2 rounded-2xl bg-[#fbbf24] hover:bg-[#f59e0b] text-[#064e3b] font-black text-xs flex items-center gap-1.5 shadow-md cursor-pointer transition-all"
             >
               <Plus className="w-4 h-4" />
               <span>إضافة جامع جديد</span>
@@ -1740,7 +1740,7 @@ export const TeacherAttendanceTab: React.FC<TeacherAttendanceTabProps> = ({
             <button
               type="button"
               onClick={handleOpenAddShiftModal}
-              className="px-4 py-2 rounded-2xl bg-gradient-to-r from-amber-400 to-amber-500 hover:brightness-110 text-[#064e3b] font-black text-xs flex items-center gap-1.5 shadow-md cursor-pointer transition-all"
+              className="px-4 py-2 rounded-2xl bg-[#fbbf24] hover:bg-[#f59e0b] text-[#064e3b] font-black text-xs flex items-center gap-1.5 shadow-md cursor-pointer transition-all"
             >
               <Plus className="w-4 h-4" />
               <span>إضافة فترة دوام</span>
@@ -1821,7 +1821,7 @@ export const TeacherAttendanceTab: React.FC<TeacherAttendanceTabProps> = ({
                     <button
                       type="button"
                       onClick={() => handleOpenAssignTeachersModal(shift)}
-                      className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-amber-400 to-amber-500 hover:brightness-110 text-[#064e3b] font-black text-xs flex items-center gap-1.5 shadow-md cursor-pointer transition-all"
+                      className="px-3.5 py-2 rounded-xl bg-[#fbbf24] hover:bg-[#f59e0b] text-[#064e3b] font-black text-xs flex items-center gap-1.5 shadow-md cursor-pointer transition-all"
                     >
                       <UserCheck className="w-4 h-4" />
                       <span>تعيين المعلمين ({assignedTeachers.length})</span>
@@ -1988,7 +1988,7 @@ export const TeacherAttendanceTab: React.FC<TeacherAttendanceTabProps> = ({
                       };
                       handleOpenMosqueMap(tempMosque, 'picker');
                     }}
-                    className="py-2.5 px-3 rounded-xl bg-gradient-to-r from-amber-400 to-amber-500 hover:brightness-110 text-[#064e3b] font-black text-xs flex items-center justify-center gap-1.5 cursor-pointer transition-all shadow-md"
+                    className="py-2.5 px-3 rounded-xl bg-[#fbbf24] hover:bg-[#f59e0b] text-[#064e3b] font-black text-xs flex items-center justify-center gap-1.5 cursor-pointer transition-all shadow-md"
                   >
                     <MapPin className="w-4 h-4" />
                     <span>تحديد بالخريطة التفاعلية</span>
@@ -2032,7 +2032,7 @@ export const TeacherAttendanceTab: React.FC<TeacherAttendanceTabProps> = ({
                 type="button"
                 disabled={!mosqueNameInput.trim()}
                 onClick={handleSaveMosque}
-                className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-amber-400 to-amber-500 hover:brightness-110 text-[#064e3b] font-black text-xs shadow-md cursor-pointer transition-all disabled:opacity-50"
+                className="px-6 py-2.5 rounded-xl bg-[#fbbf24] hover:bg-[#f59e0b] text-[#064e3b] font-black text-xs shadow-md cursor-pointer transition-all disabled:opacity-50"
               >
                 حفظ الجامع
               </button>
@@ -2226,7 +2226,7 @@ export const TeacherAttendanceTab: React.FC<TeacherAttendanceTabProps> = ({
                 type="button"
                 disabled={!shiftForm.name.trim()}
                 onClick={handleSaveShift}
-                className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-amber-400 to-amber-500 hover:brightness-110 text-[#064e3b] font-black text-xs shadow-md cursor-pointer transition-all disabled:opacity-50"
+                className="px-6 py-2.5 rounded-xl bg-[#fbbf24] hover:bg-[#f59e0b] text-[#064e3b] font-black text-xs shadow-md cursor-pointer transition-all disabled:opacity-50"
               >
                 حفظ الفترة
               </button>
@@ -2302,7 +2302,7 @@ export const TeacherAttendanceTab: React.FC<TeacherAttendanceTabProps> = ({
               <button
                 type="button"
                 onClick={handleApplySupervisorAction}
-                className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-amber-400 to-amber-500 hover:brightness-110 text-[#064e3b] font-black text-xs shadow-md cursor-pointer transition-all"
+                className="px-6 py-2.5 rounded-xl bg-[#fbbf24] hover:bg-[#f59e0b] text-[#064e3b] font-black text-xs shadow-md cursor-pointer transition-all"
               >
                 تأكيد وحفظ
               </button>
@@ -2439,7 +2439,7 @@ export const TeacherAttendanceTab: React.FC<TeacherAttendanceTabProps> = ({
               <button
                 type="button"
                 onClick={handleSaveAssignedTeachers}
-                className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-amber-400 to-amber-500 hover:brightness-110 text-[#064e3b] font-black text-xs shadow-md cursor-pointer transition-all"
+                className="px-6 py-2.5 rounded-xl bg-[#fbbf24] hover:bg-[#f59e0b] text-[#064e3b] font-black text-xs shadow-md cursor-pointer transition-all"
               >
                 حفظ التعيين وتأكيد المناوبة
               </button>

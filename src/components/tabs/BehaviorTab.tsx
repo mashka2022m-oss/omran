@@ -1016,7 +1016,7 @@ export const BehaviorTab: React.FC<BehaviorTabProps> = ({
                     type="button"
                     onClick={handleGenerateAIMessage}
                     disabled={isGeneratingMessage}
-                    className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-[#064e3b] font-black text-[11px] flex items-center gap-1 cursor-pointer transition-all shadow-sm"
+                    className="px-3 py-1.5 rounded-xl bg-[#fbbf24] hover:bg-[#f59e0b] text-[#064e3b] font-black text-[11px] flex items-center gap-1 cursor-pointer transition-all shadow-sm"
                   >
                     <Sparkles className={`w-3.5 h-3.5 ${isGeneratingMessage ? 'animate-spin' : ''}`} />
                     <span>{isGeneratingMessage ? 'جاري الصياغة...' : 'صياغة رسالة تربوية فورية'}</span>

@@ -286,21 +286,21 @@ export const ReportsTab: React.FC<ReportsTabProps> = ({
               setCustomSelectedStudentIds(students.map(s => s.id));
               setIsCustomReportModalOpen(true);
             }}
-            className="px-4 py-2.5 rounded-2xl bg-gradient-to-r from-[#fbbf24] to-[#f59e0b] hover:brightness-110 text-[#064e3b] text-xs font-black flex items-center gap-2 shadow-[0_0_20px_rgba(251,191,36,0.35)] transition-all cursor-pointer"
+            className="px-4 py-2.5 rounded-2xl bg-[#fbbf24] hover:bg-[#f59e0b] text-[#064e3b] border border-[#fbbf24] text-xs font-black flex items-center gap-2 shadow-[0_0_20px_rgba(251,191,36,0.35)] transition-all cursor-pointer"
           >
-            <Printer className="w-4 h-4" />
+            <Printer className="w-4 h-4 text-[#064e3b]" />
             <span>أداة استخراج تقارير PDF مخصصة</span>
           </button>
 
           {/* Schedule Settings: Work Days */}
-          <div className="flex items-center gap-1.5 bg-[#022c22] border border-[#065f46] px-3 py-1.5 rounded-2xl text-xs">
+          <div className="flex items-center gap-1.5 bg-[#022c22] border border-[#fbbf24]/30 px-3 py-1.5 rounded-2xl text-xs shadow-inner">
             <span className="text-[#86efac] font-bold text-[11px]">أيام الحلقة:</span>
             <button
               onClick={() => handleSaveWorkDays(4)}
               className={`px-2.5 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                 workDays === 4
-                  ? 'bg-[#fbbf24] text-[#064e3b] shadow-sm'
-                  : 'text-[#86efac]/60 hover:text-white'
+                  ? 'bg-[#fbbf24] text-[#064e3b] shadow-sm font-black'
+                  : 'text-[#f0f9f6]/70 hover:text-white'
               }`}
             >
               4 أيام
@@ -309,8 +309,8 @@ export const ReportsTab: React.FC<ReportsTabProps> = ({
               onClick={() => handleSaveWorkDays(5)}
               className={`px-2.5 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                 workDays === 5
-                  ? 'bg-[#fbbf24] text-[#064e3b] shadow-sm'
-                  : 'text-[#86efac]/60 hover:text-white'
+                  ? 'bg-[#fbbf24] text-[#064e3b] shadow-sm font-black'
+                  : 'text-[#f0f9f6]/70 hover:text-white'
               }`}
             >
               5 أيام
@@ -490,9 +490,9 @@ export const ReportsTab: React.FC<ReportsTabProps> = ({
                     onClick={() => {
                       handlePrintSingleStudent(student);
                     }}
-                    className="px-3.5 py-2 rounded-xl bg-[#fbbf24] hover:bg-[#f59e0b] text-[#064e3b] text-xs font-black flex items-center gap-1.5 shadow-md cursor-pointer transition-all"
+                    className="px-3.5 py-2 rounded-xl bg-[#fbbf24] hover:bg-[#f59e0b] text-[#064e3b] border border-[#fbbf24] text-xs font-black flex items-center gap-1.5 shadow-md cursor-pointer transition-all"
                   >
-                    <Printer className="w-4 h-4" />
+                    <Printer className="w-4 h-4 text-[#064e3b]" />
                     <span>استخراج PDF فاخر</span>
                   </button>
 
@@ -652,14 +652,14 @@ export const ReportsTab: React.FC<ReportsTabProps> = ({
               </div>
 
               {/* Footer */}
-              <div className="p-4 border-t border-[#065f46] shrink-0 bg-[#022c22]/95 flex flex-wrap justify-between items-center gap-2">
+              <div className="p-4 border-t border-[#fbbf24]/20 shrink-0 bg-[#022c22]/95 flex flex-wrap justify-between items-center gap-2">
                 <div className="flex items-center gap-2 flex-wrap">
                   <button
                     type="button"
                     onClick={() => handlePrintSingleStudent(student)}
-                    className="px-4 py-2.5 rounded-2xl bg-[#fbbf24] hover:bg-[#f59e0b] text-[#064e3b] font-black text-xs flex items-center gap-2 cursor-pointer shadow-md"
+                    className="px-4 py-2.5 rounded-2xl bg-[#fbbf24] hover:bg-[#f59e0b] text-[#064e3b] border border-[#fbbf24] font-black text-xs flex items-center gap-2 cursor-pointer shadow-md"
                   >
-                    <Printer className="w-4 h-4" />
+                    <Printer className="w-4 h-4 text-[#064e3b]" />
                     <span>طباعة تقرير PDF</span>
                   </button>
 
@@ -736,7 +736,7 @@ export const ReportsTab: React.FC<ReportsTabProps> = ({
                     className={`p-2.5 rounded-2xl text-xs font-bold border transition-all cursor-pointer ${
                       customReportTargetMode === 'all'
                         ? 'bg-[#fbbf24] text-[#064e3b] border-[#fbbf24] font-black shadow-sm'
-                        : 'bg-[#022c22] text-[#86efac] border-[#065f46]'
+                        : 'bg-[#022c22] hover:bg-[#064e3b] text-[#f0f9f6]/80 hover:text-white border-[#fbbf24]/30 hover:border-[#fbbf24]'
                     }`}
                   >
                     جميع الطلاب ({students.length})
@@ -748,7 +748,7 @@ export const ReportsTab: React.FC<ReportsTabProps> = ({
                     className={`p-2.5 rounded-2xl text-xs font-bold border transition-all cursor-pointer ${
                       customReportTargetMode === 'multiple'
                         ? 'bg-[#fbbf24] text-[#064e3b] border-[#fbbf24] font-black shadow-sm'
-                        : 'bg-[#022c22] text-[#86efac] border-[#065f46]'
+                        : 'bg-[#022c22] hover:bg-[#064e3b] text-[#f0f9f6]/80 hover:text-white border-[#fbbf24]/30 hover:border-[#fbbf24]'
                     }`}
                   >
                     تحديد طلاب معينين ({customSelectedStudentIds.length})
@@ -760,7 +760,7 @@ export const ReportsTab: React.FC<ReportsTabProps> = ({
                     className={`p-2.5 rounded-2xl text-xs font-bold border transition-all cursor-pointer ${
                       customReportTargetMode === 'single'
                         ? 'bg-[#fbbf24] text-[#064e3b] border-[#fbbf24] font-black shadow-sm'
-                        : 'bg-[#022c22] text-[#86efac] border-[#065f46]'
+                        : 'bg-[#022c22] hover:bg-[#064e3b] text-[#f0f9f6]/80 hover:text-white border-[#fbbf24]/30 hover:border-[#fbbf24]'
                     }`}
                   >
                     طالب واحد فقط
@@ -965,14 +965,14 @@ export const ReportsTab: React.FC<ReportsTabProps> = ({
             </div>
 
             {/* Footer */}
-            <div className="p-4 border-t border-[#065f46] shrink-0 bg-[#022c22]/95 flex flex-wrap justify-between items-center gap-3">
+            <div className="p-4 border-t border-[#fbbf24]/20 shrink-0 bg-[#022c22]/95 flex flex-wrap justify-between items-center gap-3">
               <div className="flex items-center gap-2">
                 <button
                   type="button"
                   onClick={handlePrintCustomReport}
-                  className="px-5 py-2.5 rounded-2xl bg-gradient-to-r from-[#fbbf24] to-[#f59e0b] hover:brightness-110 text-[#064e3b] font-black text-xs sm:text-sm flex items-center gap-2 shadow-lg cursor-pointer transition-all"
+                  className="px-5 py-2.5 rounded-2xl bg-[#fbbf24] hover:bg-[#f59e0b] text-[#064e3b] border border-[#fbbf24] font-black text-xs sm:text-sm flex items-center gap-2 shadow-lg cursor-pointer transition-all"
                 >
-                  <Printer className="w-4 h-4" />
+                  <Printer className="w-4 h-4 text-[#064e3b]" />
                   <span>استخراج PDF فاخر</span>
                 </button>
 
@@ -1047,7 +1047,7 @@ export const ReportsTab: React.FC<ReportsTabProps> = ({
             </div>
 
             {/* Footer Actions */}
-            <div className="p-4 bg-[#022c22]/95 border-t border-[#065f46] flex flex-wrap items-center justify-between gap-3">
+            <div className="p-4 bg-[#022c22]/95 border-t border-[#fbbf24]/20 flex flex-wrap items-center justify-between gap-3">
               <div className="flex items-center gap-2">
                 <button
                   type="button"
@@ -1056,7 +1056,7 @@ export const ReportsTab: React.FC<ReportsTabProps> = ({
                     setTextMessageCopied(true);
                     setTimeout(() => setTextMessageCopied(false), 3000);
                   }}
-                  className="px-4 py-2.5 rounded-xl bg-[#064e3b] hover:bg-[#064e3b]/80 text-[#86efac] hover:text-white border border-[#065f46] font-bold text-xs flex items-center gap-2 cursor-pointer transition-all"
+                  className="px-4 py-2.5 rounded-xl bg-[#022c22] hover:bg-[#064e3b] text-[#f0f9f6] hover:text-white border border-[#fbbf24]/30 hover:border-[#fbbf24] font-bold text-xs flex items-center gap-2 cursor-pointer transition-all"
                 >
                   <Copy className="w-4 h-4 text-[#fbbf24]" />
                   <span>{textMessageCopied ? 'تم النسخ!' : 'نسخ الرسالة بالكامل'}</span>

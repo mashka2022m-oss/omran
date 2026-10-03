@@ -98,44 +98,107 @@
 }
 
 /* 2. BUTTON CONTRAST & HARMONY GUARANTEE: Clear visual hierarchy! */
+/* Universal rule for buttons with amber/gold gradient in ALL modes (natural or themed) to prevent broken gradient rendering */
+button[class*="from-amber"],
+button[class*="from-[#fbbf24]"],
+a[class*="from-amber"],
+a[class*="from-[#fbbf24]"],
+label[class*="from-amber"],
+label[class*="from-[#fbbf24]"] {
+  background-color: #fbbf24;
+  background-image: none;
+  color: #064e3b;
+  border-color: #fbbf24;
+}
+
+button[class*="from-amber"] svg,
+button[class*="from-[#fbbf24]"] svg,
+label[class*="from-amber"] svg,
+label[class*="from-[#fbbf24]"] svg {
+  color: #064e3b;
+  stroke: #064e3b;
+}
+
 /* Elevated dark action buttons (like shortcuts, list items, etc.) */
 [data-complex-themed="true"] button.bg-\[\#022c22\],
-[data-complex-themed="true"] button.bg-\[\#022c22\]\/70,
+[data-complex-themed="true"] button[class*="bg-[#022c22]"],
 [data-complex-themed="true"] button.bg-emerald-950,
-[data-complex-themed="true"] a.bg-\[\#022c22\] {
+[data-complex-themed="true"] button[class*="bg-emerald-950"],
+[data-complex-themed="true"] button.bg-\[\#064e3b\],
+[data-complex-themed="true"] button[class*="bg-[#064e3b]"],
+[data-complex-themed="true"] button.bg-emerald-900,
+[data-complex-themed="true"] button[class*="bg-emerald-900"],
+[data-complex-themed="true"] button.bg-emerald-800,
+[data-complex-themed="true"] button[class*="bg-emerald-800"],
+[data-complex-themed="true"] a.bg-\[\#022c22\],
+[data-complex-themed="true"] a[class*="bg-[#022c22]"],
+[data-complex-themed="true"] a[class*="bg-[#064e3b]"] {
   background-color: var(--complex-card, var(--complex-secondary)) !important;
   border-color: var(--complex-border) !important;
   color: var(--complex-text) !important;
 }
 
 [data-complex-themed="true"] button.bg-\[\#022c22\]:hover,
-[data-complex-themed="true"] button.bg-\[\#022c22\]\/70:hover,
-[data-complex-themed="true"] button.bg-emerald-950:hover {
+[data-complex-themed="true"] button[class*="bg-[#022c22]"]:hover,
+[data-complex-themed="true"] button.bg-emerald-950:hover,
+[data-complex-themed="true"] button[class*="bg-emerald-950"]:hover,
+[data-complex-themed="true"] button.bg-\[\#064e3b\]:hover,
+[data-complex-themed="true"] button[class*="bg-[#064e3b]"]:hover,
+[data-complex-themed="true"] button.bg-emerald-900:hover,
+[data-complex-themed="true"] button[class*="bg-emerald-900"]:hover,
+[data-complex-themed="true"] button.bg-emerald-800:hover {
   background-color: var(--complex-secondary) !important;
   border-color: var(--complex-accent) !important;
 }
 
-/* Primary Prominent CTA Buttons */
+/* Primary Prominent CTA Buttons (Solid, Amber, or Gradient - blended seamlessly) */
 [data-complex-themed="true"] button.bg-\[\#fbbf24\],
+[data-complex-themed="true"] button[class*="bg-[#fbbf24]"],
 [data-complex-themed="true"] button.bg-amber-400,
 [data-complex-themed="true"] button.bg-amber-500,
+[data-complex-themed="true"] button[class*="bg-amber"],
+[data-complex-themed="true"] button[class*="from-amber"],
+[data-complex-themed="true"] button[class*="from-[#fbbf24]"],
+[data-complex-themed="true"] a.bg-\[\#fbbf24\],
+[data-complex-themed="true"] a[class*="bg-[#fbbf24]"],
+[data-complex-themed="true"] a[class*="from-amber"],
+[data-complex-themed="true"] a[class*="from-[#fbbf24]"],
+[data-complex-themed="true"] label[class*="from-amber"],
+[data-complex-themed="true"] label[class*="from-[#fbbf24]"],
 [data-complex-themed="true"] .btn-primary-theme {
   background-color: var(--complex-accent) !important;
+  background-image: none !important;
   color: var(--complex-primary) !important;
+  border-color: var(--complex-accent) !important;
   font-weight: 800 !important;
   box-shadow: 0 0 16px rgba(var(--complex-accent-rgb), 0.3) !important;
 }
 
 [data-complex-themed="true"] button.bg-\[\#fbbf24\]:hover,
+[data-complex-themed="true"] button[class*="bg-[#fbbf24]"]:hover,
 [data-complex-themed="true"] button.bg-amber-400:hover,
-[data-complex-themed="true"] button.bg-amber-500:hover {
+[data-complex-themed="true"] button.bg-amber-500:hover,
+[data-complex-themed="true"] button[class*="bg-amber"]:hover,
+[data-complex-themed="true"] button[class*="from-amber"]:hover,
+[data-complex-themed="true"] button[class*="from-[#fbbf24]"]:hover,
+[data-complex-themed="true"] a[class*="from-amber"]:hover,
+[data-complex-themed="true"] a[class*="from-[#fbbf24]"]:hover,
+[data-complex-themed="true"] label[class*="from-amber"]:hover {
+  background-color: var(--complex-accent) !important;
   filter: brightness(1.1) !important;
   box-shadow: 0 0 20px rgba(var(--complex-accent-rgb), 0.45) !important;
 }
 
 [data-complex-themed="true"] button.bg-\[\#fbbf24\] svg,
+[data-complex-themed="true"] button[class*="bg-[#fbbf24]"] svg,
 [data-complex-themed="true"] button.bg-amber-400 svg,
-[data-complex-themed="true"] button.bg-amber-500 svg {
+[data-complex-themed="true"] button.bg-amber-500 svg,
+[data-complex-themed="true"] button[class*="bg-amber"] svg,
+[data-complex-themed="true"] button[class*="from-amber"] svg,
+[data-complex-themed="true"] button[class*="from-[#fbbf24]"] svg,
+[data-complex-themed="true"] a[class*="from-amber"] svg,
+[data-complex-themed="true"] a[class*="from-[#fbbf24]"] svg,
+[data-complex-themed="true"] label[class*="from-amber"] svg {
   color: var(--complex-primary) !important;
   stroke: var(--complex-primary) !important;
 }
@@ -184,32 +247,42 @@
   color: rgba(var(--complex-subtext-rgb, 134, 239, 172), 0.85) !important;
 }
 
-/* 5. Borders */
-[data-complex-themed="true"] .border-\[\#065f46\],
-[data-complex-themed="true"] .border-\[\#064e3b\],
-[data-complex-themed="true"] .border-emerald-800,
-[data-complex-themed="true"] .border-emerald-700,
-[data-complex-themed="true"] .border-emerald-600 {
+/* 5. Complete Button and Element Borders: fixes all button edges in old theme */
+[data-complex-themed="true"] [class*="border-emerald"],
+[data-complex-themed="true"] [class*="border-[#065f46]"],
+[data-complex-themed="true"] [class*="border-[#064e3b]"],
+[data-complex-themed="true"] [class*="border-[#011a14]"],
+[data-complex-themed="true"] [class*="border-[#03362a]"],
+[data-complex-themed="true"] [class*="border-[#044334]"],
+[data-complex-themed="true"] button[class*="border"] {
   border-color: var(--complex-border) !important;
 }
 
-[data-complex-themed="true"] .border-\[\#065f46\]\/60,
-[data-complex-themed="true"] .border-\[\#065f46\]\/50,
-[data-complex-themed="true"] .border-\[\#065f46\]\/40 {
+[data-complex-themed="true"] [class*="border-emerald-"][class*="/"],
+[data-complex-themed="true"] [class*="border-[#065f46]/"],
+[data-complex-themed="true"] [class*="border-[#064e3b]/"] {
   border-color: rgba(var(--complex-border-rgb), 0.5) !important;
 }
 
-[data-complex-themed="true"] .border-\[\#fbbf24\],
-[data-complex-themed="true"] .border-amber-400,
-[data-complex-themed="true"] .border-amber-500 {
+/* Accent Button and Element Borders */
+[data-complex-themed="true"] [class*="border-[#fbbf24]"],
+[data-complex-themed="true"] [class*="border-amber"],
+[data-complex-themed="true"] button[class*="border-amber"],
+[data-complex-themed="true"] button[class*="border-[#fbbf24]"] {
   border-color: var(--complex-accent) !important;
 }
 
-[data-complex-themed="true"] .border-\[\#fbbf24\]\/50,
-[data-complex-themed="true"] .border-\[\#fbbf24\]\/40,
-[data-complex-themed="true"] .border-\[\#fbbf24\]\/30,
-[data-complex-themed="true"] .border-amber-400\/40 {
-  border-color: rgba(var(--complex-accent-rgb), 0.4) !important;
+[data-complex-themed="true"] [class*="border-[#fbbf24]/"],
+[data-complex-themed="true"] [class*="border-amber-"][class*="/"],
+[data-complex-themed="true"] button[class*="border-[#fbbf24]/"],
+[data-complex-themed="true"] button[class*="border-amber-"][class*="/"] {
+  border-color: rgba(var(--complex-accent-rgb), 0.45) !important;
+}
+
+[data-complex-themed="true"] [class*="hover:border-emerald"]:hover,
+[data-complex-themed="true"] [class*="hover:border-[#065f46]"]:hover,
+[data-complex-themed="true"] button:hover {
+  border-color: var(--complex-accent) !important;
 }
 
 /* 6. Dividers & Rings */

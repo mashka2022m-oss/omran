@@ -866,7 +866,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   </div>
 
                   <div className="flex-1 space-y-2">
-                    <label className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-gradient-to-r from-amber-400 to-amber-500 hover:brightness-110 text-[#064e3b] text-xs font-black cursor-pointer shadow-md transition-all">
+                    <label className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-[#fbbf24] hover:bg-[#f59e0b] text-[#064e3b] text-xs font-black cursor-pointer shadow-md transition-all">
                       <Upload className="w-3.5 h-3.5" />
                       <span>{themeStampUrl ? 'تغيير الختم' : 'رفع ختم المجمع'}</span>
                       <input
