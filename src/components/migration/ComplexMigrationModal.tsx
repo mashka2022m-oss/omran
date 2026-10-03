@@ -315,7 +315,8 @@ export const ComplexMigrationModal: React.FC<ComplexMigrationModalProps> = ({
           targetProjectId: targetProjectId.trim(),
           targetApiKey: targetApiKey.trim() || 'AIzaSyDEzjLSKGT89RkZk_r3PnWooCyuYok4pyc',
           targetGoogleEmail: googleAccount.email,
-          targetDatabaseId: targetDatabaseId.trim() || '(default)'
+          targetDatabaseId: targetDatabaseId.trim() || '(default)',
+          purgeFromCentral: true
         },
         (p) => {
           setProgressPercent(p.percent);

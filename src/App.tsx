@@ -673,8 +673,13 @@ export function App() {
   const scopedHalaqahs = useMemo(() => {
     if (!activeComplex) return halaqahs;
     return halaqahs.filter(h => {
-      const cId = h.complexId || (complexes[0] ? complexes[0].id : '');
-      return cId === activeComplex.id;
+      if (h.complexId) {
+        return h.complexId === activeComplex.id;
+      }
+      if (h.complexName) {
+        return normalizeTeacherText(h.complexName) === normalizeTeacherText(activeComplex.name);
+      }
+      return complexes[0]?.id === activeComplex.id;
     });
   }, [activeComplex, halaqahs, complexes]);
 
@@ -691,13 +696,20 @@ export function App() {
       if (s.complexId) {
         return s.complexId === activeComplex.id;
       }
+      if (s.complexName) {
+        return normalizeTeacherText(s.complexName) === normalizeTeacherText(activeComplex.name);
+      }
       if (s.halaqahId && s.halaqahId !== 'all') {
+        const studentHalaqah = halaqahs.find(h => h.id === s.halaqahId);
+        if (studentHalaqah?.complexId) {
+          return studentHalaqah.complexId === activeComplex.id;
+        }
         return scopedHalaqahIds.has(s.halaqahId);
       }
       // If student has no complexId and no halaqah, anchor to the primary complex
       return complexes[0]?.id === activeComplex.id;
     });
-  }, [isDeveloper, selectedComplexId, students, scopedHalaqahIds, activeComplex, complexes]);
+  }, [isDeveloper, selectedComplexId, students, scopedHalaqahIds, activeComplex, complexes, halaqahs]);
 
   const scopedStudentIds = useMemo(() => {
     return new Set(scopedStudents.map(s => s.id));
@@ -709,8 +721,10 @@ export function App() {
     if (isDeveloper && (!selectedComplexId || selectedComplexId === 'all')) return teachers;
     const matched = teachers.filter(t => {
       if (currentTeacher && t.id === currentTeacher.id) return true;
+      if (t.role === 'developer' || t.id === 'teacher-1') return true;
       if (t.complexId === supervisedComplex.id) return true;
       if (t.complexIds && t.complexIds.includes(supervisedComplex.id)) return true;
+      if (t.complexName && normalizeTeacherText(t.complexName) === normalizeTeacherText(supervisedComplex.name)) return true;
       if (t.halaqahId && scopedHalaqahIds.has(t.halaqahId)) return true;
       if (t.halaqahIds && t.halaqahIds.some(hid => scopedHalaqahIds.has(hid))) return true;
       return false;
@@ -743,6 +757,7 @@ export function App() {
     }
     const targetComplex = complexes.find(c => c.id === newComplexId);
     if (targetComplex) {
+      OmranDataService.setActiveComplex(targetComplex);
       const assignedInTarget = getTeacherHalaqahsInComplex(currentTeacher, targetComplex.id, halaqahs, teachers, false);
       if (isSupervisor || assignedInTarget.length === 0) {
         setActiveHalaqahId('all');
@@ -1916,6 +1931,7 @@ export function App() {
             onRegisterStudent={handleAddStudent}
             students={students}
             teachers={teachers}
+            complexes={complexes}
             settings={settings}
             onBackToLanding={() => navigatePublic('landing')}
             onOpenPrivacyPolicy={() => navigatePublic('privacy')}

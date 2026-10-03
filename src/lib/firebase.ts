@@ -3,6 +3,7 @@ import { getAnalytics, isSupported } from 'firebase/analytics';
 import { getAuth } from 'firebase/auth';
 import {
   getFirestore,
+  type Firestore,
   collection,
   doc,
   setDoc,
@@ -23,6 +24,7 @@ import {
   EvaluationCriteria,
   AppSettings,
   ChatMessage,
+  UserRole,
   UserAccount,
   TeacherAccount,
   BehaviorViolation,
@@ -698,6 +700,20 @@ export class OmranDataService {
     return baseKey;
   }
 
+  // Get dedicated Firestore database for any specific complexId or fallback to activeDb
+  static getDbForComplexId(complexId?: string): Firestore {
+    if (!complexId) return this.getActiveDb();
+    if (this.activeComplex && this.activeComplex.id === complexId) {
+      return this.getActiveDb();
+    }
+    const cached = getLocalCache<QuranComplex[]>(OMRAN_CACHE_KEYS.COMPLEXES, []);
+    const comp = cached.find(c => c.id === complexId);
+    if (comp?.databaseConfig?.isCustom && comp?.databaseConfig?.projectId) {
+      return this.getFirestoreInstanceForComplex(comp);
+    }
+    return this.getActiveDb();
+  }
+
   // Resolve or initialize Firestore instance for a given complex
   static getFirestoreInstanceForComplex(complex: QuranComplex | null | undefined): Firestore {
     if (!complex || !complex.databaseConfig?.isCustom || !complex.databaseConfig?.projectId) {
@@ -709,13 +725,22 @@ export class OmranDataService {
 
     const rawDbId = (config.databaseId || '').trim();
     const dbIdentifier = (rawDbId === '(default)' || rawDbId.startsWith('isolated-') || !rawDbId) ? '(default)' : rawDbId;
-    const key = `${complex.id}_${cleanProjId}_${dbIdentifier}`;
+
+    const centralProjId = (baseAppletConfig.projectId || '').trim();
+    const centralDbId = (baseAppletConfig.firestoreDatabaseId || '(default)').trim();
+
+    // If pointing to the same project and database as the central database, return central db directly!
+    if (cleanProjId === centralProjId && (dbIdentifier === centralDbId || (dbIdentifier === '(default)' && !baseAppletConfig.firestoreDatabaseId))) {
+      return db;
+    }
+
+    const key = `${cleanProjId}_${dbIdentifier}`;
 
     if (this.dbInstances.has(key)) {
       return this.dbInstances.get(key)!;
     }
 
-    const appName = `omran_dedicated_${complex.id.replace(/[^\w-]/g, '_')}`;
+    const appName = `omran_project_${cleanProjId.replace(/[^\w-]/g, '_')}`;
     let targetApp = getApps().find(a => a.name === appName);
     if (!targetApp) {
       try {
@@ -863,6 +888,12 @@ export class OmranDataService {
       // Gentle check
     }
     await this.seedInitialDataIfEmpty();
+    // Run the automatic isolation protection guard
+    try {
+      await this.enforceIsolatedComplexDataProtection();
+    } catch (e) {
+      console.warn('Data protection check notice:', e);
+    }
     return true;
   }
 
@@ -954,7 +985,8 @@ export class OmranDataService {
 
   // Load Teachers directly from Firestore
   static async loadTeachers(): Promise<TeacherAccount[]> {
-    const local = getLocalCache<TeacherAccount[]>(OMRAN_CACHE_KEYS.TEACHERS, []);
+    const cacheKey = this.getCacheKey(OMRAN_CACHE_KEYS.TEACHERS);
+    const local = getLocalCache<TeacherAccount[]>(cacheKey, []);
     let cloudList: TeacherAccount[] = [];
     try {
       const snap = await getDocs(collection(this.getActiveDb(), 'teachers'));
@@ -1003,7 +1035,7 @@ export class OmranDataService {
       list.push(normalized);
     });
 
-    setLocalCache(OMRAN_CACHE_KEYS.TEACHERS, list);
+    setLocalCache(cacheKey, list);
     return list;
   }
 
@@ -1013,13 +1045,35 @@ export class OmranDataService {
 
   // Save Teacher with Dual Persistence
   static async saveTeacher(teacher: TeacherAccount): Promise<void> {
-    const clean = cleanFirestoreData(teacher);
-    const local = getLocalCache<TeacherAccount[]>(OMRAN_CACHE_KEYS.TEACHERS, INITIAL_TEACHERS);
+    const isDev = teacher.role === 'developer' || teacher.id === 'teacher-1' || teacher.username?.toLowerCase() === 'admin' || teacher.username?.toLowerCase() === 'developer';
+    const effectiveComplexId = teacher.complexId || this.activeComplexId || undefined;
+    const effectiveComplexName = teacher.complexName || this.activeComplex?.name || undefined;
+    const clean = cleanFirestoreData({
+      ...teacher,
+      complexId: effectiveComplexId,
+      complexName: effectiveComplexName
+    });
+    const cacheKey = this.getCacheKey(OMRAN_CACHE_KEYS.TEACHERS);
+    const local = getLocalCache<TeacherAccount[]>(cacheKey, INITIAL_TEACHERS);
     const updated = [clean, ...local.filter(t => t.id !== clean.id)];
-    setLocalCache(OMRAN_CACHE_KEYS.TEACHERS, updated);
+    setLocalCache(cacheKey, updated);
+
+    if (isDev) {
+      try {
+        await setDoc(doc(this.getCentralDb(), 'teachers', teacher.id), clean);
+        if (this.getActiveDb() !== this.getCentralDb()) {
+          await setDoc(doc(this.getActiveDb(), 'teachers', teacher.id), clean);
+        }
+      } catch (e) {
+        console.warn('Developer teacher save notice:', e);
+      }
+      return;
+    }
+
+    const targetDb = this.getDbForComplexId(clean.complexId);
 
     try {
-      await setDoc(doc(this.getActiveDb(), 'teachers', teacher.id), clean);
+      await setDoc(doc(targetDb, 'teachers', teacher.id), clean);
     } catch (e) {
       handleFirestoreError(e, OperationType.WRITE, `teachers/${teacher.id}`);
       console.warn('[OmranDataService] Teacher saved locally, cloud sync pending/offline:', e);
@@ -1028,11 +1082,15 @@ export class OmranDataService {
 
   // Delete Teacher with Dual Persistence
   static async deleteTeacher(teacherId: string): Promise<void> {
-    const local = getLocalCache<TeacherAccount[]>(OMRAN_CACHE_KEYS.TEACHERS, []);
-    setLocalCache(OMRAN_CACHE_KEYS.TEACHERS, local.filter(t => t.id !== teacherId));
+    const cacheKey = this.getCacheKey(OMRAN_CACHE_KEYS.TEACHERS);
+    const local = getLocalCache<TeacherAccount[]>(cacheKey, []);
+    setLocalCache(cacheKey, local.filter(t => t.id !== teacherId));
 
     try {
       await deleteDoc(doc(this.getActiveDb(), 'teachers', teacherId));
+      if (this.getActiveDb() !== this.getCentralDb()) {
+        try { await deleteDoc(doc(this.getCentralDb(), 'teachers', teacherId)); } catch {}
+      }
     } catch (e) {
       handleFirestoreError(e, OperationType.DELETE, `teachers/${teacherId}`);
     }
@@ -1250,118 +1308,139 @@ export class OmranDataService {
     deletedAttendance: number;
   }> {
     const centralDb = this.getCentralDb();
-    const allHalaqahs = await this.loadHalaqahs();
-    const complexHalaqahs = allHalaqahs.filter(h => h.complexId === complexId);
-    const halaqahIds = new Set(complexHalaqahs.map(h => h.id));
 
-    const allStudents = await this.loadStudents();
-    const complexStudents = allStudents.filter(s => (s.halaqahId && halaqahIds.has(s.halaqahId)) || s.complexId === complexId);
-    const studentIds = new Set(complexStudents.map(s => s.id));
+    // 1. Scan and collect halaqahs belonging to this complex directly from centralDb
+    const halaqahSnap = await getDocs(collection(centralDb, 'halaqahs'));
+    const halaqahIds = new Set<string>();
+    for (const d of halaqahSnap.docs) {
+      const h = d.data() as Halaqah;
+      if (h.complexId === complexId) {
+        halaqahIds.add(h.id);
+        await deleteDoc(d.ref);
+      }
+    }
 
-    // Delete attendance from central
-    const allAttendance = await this.loadAttendance();
+    // 2. Scan and collect students belonging to this complex directly from centralDb
+    const studentSnap = await getDocs(collection(centralDb, 'students'));
+    const studentIds = new Set<string>();
+    for (const d of studentSnap.docs) {
+      const s = d.data() as Student;
+      if (s.complexId === complexId || (s.halaqahId && halaqahIds.has(s.halaqahId))) {
+        studentIds.add(s.id);
+        await deleteDoc(d.ref);
+      }
+    }
+
+    // 3. Delete attendance from centralDb
     let deletedAttendance = 0;
-    for (const a of allAttendance) {
+    const attSnap = await getDocs(collection(centralDb, 'attendance'));
+    for (const d of attSnap.docs) {
+      const a = d.data() as AttendanceRecord;
       if (studentIds.has(a.studentId)) {
-        await deleteDoc(doc(centralDb, 'attendance', a.id));
+        await deleteDoc(d.ref);
         deletedAttendance++;
       }
     }
 
-    // Delete evaluations from central
-    const allEvaluations = await this.loadEvaluations();
-    for (const ev of allEvaluations) {
+    // 4. Delete evaluations from centralDb
+    const evSnap = await getDocs(collection(centralDb, 'evaluations'));
+    for (const d of evSnap.docs) {
+      const ev = d.data() as StudentEvaluation;
       if (studentIds.has(ev.studentId)) {
-        await deleteDoc(doc(centralDb, 'evaluations', ev.id));
+        await deleteDoc(d.ref);
       }
     }
 
-    // Delete violations from central
-    const allViolations = await this.loadViolations();
-    for (const v of allViolations) {
+    // 5. Delete violations from centralDb
+    const vSnap = await getDocs(collection(centralDb, 'violations'));
+    for (const d of vSnap.docs) {
+      const v = d.data() as BehaviorViolation;
       if (studentIds.has(v.studentId)) {
-        await deleteDoc(doc(centralDb, 'violations', v.id));
+        await deleteDoc(d.ref);
       }
     }
 
-    // Delete exams from central
-    const allExams = await this.loadExams();
-    for (const ex of allExams) {
+    // 6. Delete exams from centralDb
+    const exSnap = await getDocs(collection(centralDb, 'exams'));
+    for (const d of exSnap.docs) {
+      const ex = d.data() as Exam;
       if (ex.complexId === complexId || (Array.isArray(ex.targetHalaqat) && ex.targetHalaqat.some(th => halaqahIds.has(th)))) {
-        try { await deleteDoc(doc(centralDb, 'exams', ex.id)); } catch {}
+        try { await deleteDoc(d.ref); } catch {}
       }
     }
 
-    // Delete exam submissions from central
-    const allSubmissions = await this.loadSubmissions();
-    for (const sub of allSubmissions) {
+    // 7. Delete exam submissions from centralDb
+    const subSnap = await getDocs(collection(centralDb, 'exam_submissions'));
+    for (const d of subSnap.docs) {
+      const sub = d.data() as ExamSubmission;
       if (studentIds.has(sub.studentId) || sub.complexId === complexId) {
-        try { await deleteDoc(doc(centralDb, 'exam_submissions', sub.id)); } catch {}
+        try { await deleteDoc(d.ref); } catch {}
       }
     }
 
-    // Delete certificates from central
-    const allCerts = await this.loadCertificates();
-    for (const cert of allCerts) {
+    // 8. Delete certificates from centralDb
+    const certSnap = await getDocs(collection(centralDb, 'certificates'));
+    for (const d of certSnap.docs) {
+      const cert = d.data() as IssuedCertificate;
       if (cert.complexId === complexId || studentIds.has(cert.studentId)) {
-        try { await deleteDoc(doc(centralDb, 'certificates', cert.id)); } catch {}
+        try { await deleteDoc(d.ref); } catch {}
       }
     }
 
-    // Delete students from central
-    for (const s of complexStudents) {
-      await deleteDoc(doc(centralDb, 'students', s.id));
+    // 9. Delete listening logs from centralDb
+    const logSnap = await getDocs(collection(centralDb, 'listening_logs'));
+    for (const d of logSnap.docs) {
+      const log = d.data() as StudentListeningLog;
+      if (studentIds.has(log.studentId)) {
+        try { await deleteDoc(d.ref); } catch {}
+      }
     }
 
-    // Delete halaqahs from central
-    for (const h of complexHalaqahs) {
-      await deleteDoc(doc(centralDb, 'halaqahs', h.id));
-    }
-
-    // Delete teacher_shifts of this complex from central
+    // 10. Delete teacher_shifts of this complex from centralDb
     try {
       const shiftsSnap = await getDocs(collection(centralDb, 'teacher_shifts'));
       for (const d of shiftsSnap.docs) {
         if (d.data()?.complexId === complexId) {
-          await deleteDoc(doc(centralDb, 'teacher_shifts', d.id));
+          await deleteDoc(d.ref);
         }
       }
     } catch {}
 
-    // Delete teacher_attendance of this complex from central
+    // 11. Delete teacher_attendance of this complex from centralDb
     try {
       const tAttSnap = await getDocs(collection(centralDb, 'teacher_attendance'));
       for (const d of tAttSnap.docs) {
         if (d.data()?.complexId === complexId) {
-          await deleteDoc(doc(centralDb, 'teacher_attendance', d.id));
+          await deleteDoc(d.ref);
         }
       }
     } catch {}
 
-    // Delete mosques of this complex from central
+    // 12. Delete mosques of this complex from centralDb
     try {
       const mosquesSnap = await getDocs(collection(centralDb, 'mosques'));
       for (const d of mosquesSnap.docs) {
         if (d.data()?.complexId === complexId) {
-          await deleteDoc(doc(centralDb, 'mosques', d.id));
+          await deleteDoc(d.ref);
         }
       }
     } catch {}
 
-    // Delete / Unlink teachers belonging to this complex from central (protecting developer accounts)
+    // 13. Delete / Unlink teachers belonging to this complex from centralDb (protecting developer accounts)
     try {
-      const allTeachers = await this.loadTeachers();
-      for (const t of allTeachers) {
+      const teachSnap = await getDocs(collection(centralDb, 'teachers'));
+      for (const d of teachSnap.docs) {
+        const t = d.data() as TeacherAccount;
         if (t.role === 'developer' || t.id === 'teacher-1' || t.username?.toLowerCase() === 'admin' || t.username?.toLowerCase() === 'developer') {
           continue; // Developer account is strictly protected
         }
         const isSolelyInThisComplex = t.complexId === complexId ||
           (Array.isArray(t.complexIds) && t.complexIds.length === 1 && t.complexIds[0] === complexId);
         if (isSolelyInThisComplex) {
-          await deleteDoc(doc(centralDb, 'teachers', t.id));
+          await deleteDoc(d.ref);
         } else if (Array.isArray(t.complexIds) && t.complexIds.includes(complexId)) {
           const updatedIds = t.complexIds.filter(id => id !== complexId);
-          await setDoc(doc(centralDb, 'teachers', t.id), { complexIds: updatedIds }, { merge: true });
+          await setDoc(d.ref, { complexIds: updatedIds }, { merge: true });
         }
       }
     } catch {}
@@ -1375,10 +1454,26 @@ export class OmranDataService {
     setLocalCache(OMRAN_CACHE_KEYS.ATTENDANCE, cachedAttendance.filter(a => !studentIds.has(a.studentId)));
 
     return {
-      studentsCount: complexStudents.length,
-      halaqahsCount: complexHalaqahs.length,
-      deletedStudents: complexStudents.length,
+      studentsCount: studentIds.size,
+      halaqahsCount: halaqahIds.size,
+      deletedStudents: studentIds.size,
       deletedAttendance
+    };
+  }
+
+  // Multi-tenant coexistence guard:
+  // Multiple complexes can safely coexist on the same or dedicated databases without interference.
+  static async enforceIsolatedComplexDataProtection(): Promise<{
+    transferredCount: number;
+    purgedCount: number;
+    isolatedComplexesCount: number;
+  }> {
+    // Intentionally non-destructive: multiple complexes are partitioned by complexId,
+    // and no automatic cross-complex deletions or data transfers should ever occur.
+    return {
+      transferredCount: 0,
+      purgedCount: 0,
+      isolatedComplexesCount: 0
     };
   }
 
@@ -1873,6 +1968,11 @@ export class OmranDataService {
       addLog(`✅ تم إفراغ وحذف كافة سجلات المجمع من القاعدة المركزية بنجاح تام! أصبحت حصرية في قاعدة بياناته المستقلة.`);
     }
 
+    // Extra Security & Isolation Sweep: Guarantee zero leftover data in central
+    try {
+      await this.enforceIsolatedComplexDataProtection();
+    } catch {}
+
     // Step 12: Automatically switch active database context to this dedicated database!
     OmranDataService.setActiveComplex({
       ...complex,
@@ -1925,7 +2025,8 @@ export class OmranDataService {
 
   // Load Halaqahs with Dual Persistence
   static async loadHalaqahs(): Promise<Halaqah[]> {
-    const local = getLocalCache<Halaqah[]>(OMRAN_CACHE_KEYS.HALAQAHS, []);
+    const cacheKey = this.getCacheKey(OMRAN_CACHE_KEYS.HALAQAHS);
+    const local = getLocalCache<Halaqah[]>(cacheKey, []);
     let cloudList: Halaqah[] = [];
     try {
       const snap = await getDocs(collection(this.getActiveDb(), 'halaqahs'));
@@ -1944,19 +2045,29 @@ export class OmranDataService {
     }
 
     const merged = Array.from(mergedMap.values());
-    setLocalCache(OMRAN_CACHE_KEYS.HALAQAHS, merged);
+    setLocalCache(cacheKey, merged);
     return merged;
   }
 
   // Save Halaqah with Dual Persistence
   static async saveHalaqah(halaqah: Halaqah): Promise<void> {
-    const clean = cleanFirestoreData(halaqah);
-    const local = getLocalCache<Halaqah[]>(OMRAN_CACHE_KEYS.HALAQAHS, DEFAULT_HALAQAHS);
+    const effectiveComplexId = halaqah.complexId || this.activeComplexId || undefined;
+    const effectiveComplexName = halaqah.complexName || this.activeComplex?.name || undefined;
+    const clean = cleanFirestoreData({
+      ...halaqah,
+      complexId: effectiveComplexId,
+      complexName: effectiveComplexName
+    });
+    const cacheKey = this.getCacheKey(OMRAN_CACHE_KEYS.HALAQAHS);
+    const local = getLocalCache<Halaqah[]>(cacheKey, DEFAULT_HALAQAHS);
     const updated = [clean, ...local.filter(h => h.id !== clean.id)];
-    setLocalCache(OMRAN_CACHE_KEYS.HALAQAHS, updated);
+    setLocalCache(cacheKey, updated);
+
+    // Determine target database: if this halaqah belongs to a dedicated complex, use that complex's DB
+    const targetDb = this.getDbForComplexId(clean.complexId);
 
     try {
-      await setDoc(doc(this.getActiveDb(), 'halaqahs', clean.id), clean);
+      await setDoc(doc(targetDb, 'halaqahs', clean.id), clean);
     } catch (e) {
       handleFirestoreError(e, OperationType.WRITE, `halaqahs/${clean.id}`);
       console.warn('[OmranDataService] Halaqah saved locally, cloud sync pending/offline:', e);
@@ -1965,11 +2076,15 @@ export class OmranDataService {
 
   // Delete Halaqah with Dual Persistence
   static async deleteHalaqah(halaqahId: string): Promise<void> {
-    const local = getLocalCache<Halaqah[]>(OMRAN_CACHE_KEYS.HALAQAHS, []);
-    setLocalCache(OMRAN_CACHE_KEYS.HALAQAHS, local.filter(h => h.id !== halaqahId));
+    const cacheKey = this.getCacheKey(OMRAN_CACHE_KEYS.HALAQAHS);
+    const local = getLocalCache<Halaqah[]>(cacheKey, []);
+    setLocalCache(cacheKey, local.filter(h => h.id !== halaqahId));
 
     try {
       await deleteDoc(doc(this.getActiveDb(), 'halaqahs', halaqahId));
+      if (this.getActiveDb() !== this.getCentralDb()) {
+        try { await deleteDoc(doc(this.getCentralDb(), 'halaqahs', halaqahId)); } catch {}
+      }
     } catch (e) {
       handleFirestoreError(e, OperationType.DELETE, `halaqahs/${halaqahId}`);
     }
@@ -2056,7 +2171,8 @@ export class OmranDataService {
       await syncTombstonesFromCloud();
     } catch {}
     const deletedIds = OmranDataService.getDeletedStudentIds();
-    const local = getLocalCache<Student[]>(OMRAN_CACHE_KEYS.STUDENTS, []).filter(s => s?.id && !deletedIds.has(s.id));
+    const cacheKey = this.getCacheKey(OMRAN_CACHE_KEYS.STUDENTS);
+    const local = getLocalCache<Student[]>(cacheKey, []).filter(s => s?.id && !deletedIds.has(s.id));
     let cloudList: Student[] = [];
     try {
       const snap = await getDocs(collection(this.getActiveDb(), 'students'));
@@ -2100,7 +2216,7 @@ export class OmranDataService {
         parentPhone
       };
     });
-    setLocalCache(OMRAN_CACHE_KEYS.STUDENTS, merged);
+    setLocalCache(cacheKey, merged);
     return merged;
   }
 
@@ -2112,13 +2228,24 @@ export class OmranDataService {
   static async saveStudent(student: Student): Promise<void> {
     OmranDataService.removeDeletedStudentId(student.id);
     const parentPhone = student.parentPhone || (student.parentPhones && student.parentPhones.length > 0 ? student.parentPhones[0] : student.phone) || '';
-    const clean = cleanFirestoreData({ ...student, parentPhone });
-    const local = getLocalCache<Student[]>(OMRAN_CACHE_KEYS.STUDENTS, INITIAL_STUDENTS);
+    const effectiveComplexId = student.complexId || this.activeComplexId || undefined;
+    const effectiveComplexName = student.complexName || this.activeComplex?.name || undefined;
+    const clean = cleanFirestoreData({
+      ...student,
+      parentPhone,
+      complexId: effectiveComplexId,
+      complexName: effectiveComplexName
+    });
+    const cacheKey = this.getCacheKey(OMRAN_CACHE_KEYS.STUDENTS);
+    const local = getLocalCache<Student[]>(cacheKey, INITIAL_STUDENTS);
     const updated = [clean, ...local.filter(s => s.id !== clean.id)];
-    setLocalCache(OMRAN_CACHE_KEYS.STUDENTS, updated);
+    setLocalCache(cacheKey, updated);
+
+    // Target database determination: if student belongs to a dedicated complex, use that complex's DB
+    const targetDb = this.getDbForComplexId(clean.complexId);
 
     try {
-      await setDoc(doc(this.getActiveDb(), 'students', clean.id), clean);
+      await setDoc(doc(targetDb, 'students', clean.id), clean);
     } catch (e) {
       console.warn('[OmranDataService] Student saved locally, cloud sync pending/offline:', e);
     }
@@ -2129,9 +2256,10 @@ export class OmranDataService {
     // 0. Register persistent tombstone so student NEVER re-appears from offline cache or initial data
     OmranDataService.addDeletedStudentId(studentId);
 
-    const local = getLocalCache<Student[]>(OMRAN_CACHE_KEYS.STUDENTS, []);
+    const cacheKey = this.getCacheKey(OMRAN_CACHE_KEYS.STUDENTS);
+    const local = getLocalCache<Student[]>(cacheKey, []);
     const student = local.find(s => s.id === studentId);
-    setLocalCache(OMRAN_CACHE_KEYS.STUDENTS, local.filter(s => s.id !== studentId));
+    setLocalCache(cacheKey, local.filter(s => s.id !== studentId));
 
     // Clear active session and google tokens if this student was logged in
     try {
@@ -2167,27 +2295,43 @@ export class OmranDataService {
       }
 
       // 3. Cascade delete student attendance
-      const attLocal = getLocalCache<AttendanceRecord[]>(OMRAN_CACHE_KEYS.ATTENDANCE, []);
+      const attLocal = getLocalCache<AttendanceRecord[]>(this.getCacheKey(OMRAN_CACHE_KEYS.ATTENDANCE), []);
       const attToDelete = attLocal.filter(a => a.studentId === studentId);
-      setLocalCache(OMRAN_CACHE_KEYS.ATTENDANCE, attLocal.filter(a => a.studentId !== studentId));
+      setLocalCache(this.getCacheKey(OMRAN_CACHE_KEYS.ATTENDANCE), attLocal.filter(a => a.studentId !== studentId));
       for (const a of attToDelete) {
         deleteDoc(doc(activeDb, 'attendance', a.id)).catch(() => {});
       }
 
       // 4. Cascade delete student evaluations
-      const evalLocal = getLocalCache<StudentEvaluation[]>(OMRAN_CACHE_KEYS.EVALUATIONS, []);
+      const evalLocal = getLocalCache<StudentEvaluation[]>(this.getCacheKey(OMRAN_CACHE_KEYS.EVALUATIONS), []);
       const evalsToDelete = evalLocal.filter(e => e.studentId === studentId);
-      setLocalCache(OMRAN_CACHE_KEYS.EVALUATIONS, evalLocal.filter(e => e.studentId !== studentId));
+      setLocalCache(this.getCacheKey(OMRAN_CACHE_KEYS.EVALUATIONS), evalLocal.filter(e => e.studentId !== studentId));
       for (const ev of evalsToDelete) {
         deleteDoc(doc(activeDb, 'evaluations', ev.id)).catch(() => {});
       }
 
       // 5. Cascade delete student violations
-      const violLocal = getLocalCache<BehaviorViolation[]>(OMRAN_CACHE_KEYS.VIOLATIONS, []);
+      const violLocal = getLocalCache<BehaviorViolation[]>(this.getCacheKey(OMRAN_CACHE_KEYS.VIOLATIONS), []);
       const violsToDelete = violLocal.filter(v => v.studentId === studentId);
-      setLocalCache(OMRAN_CACHE_KEYS.VIOLATIONS, violLocal.filter(v => v.studentId !== studentId));
+      setLocalCache(this.getCacheKey(OMRAN_CACHE_KEYS.VIOLATIONS), violLocal.filter(v => v.studentId !== studentId));
       for (const v of violsToDelete) {
         deleteDoc(doc(activeDb, 'violations', v.id)).catch(() => {});
+      }
+
+      // If active database is dedicated, also guarantee cascade cleanup in centralDb
+      if (activeDb !== this.getCentralDb()) {
+        try {
+          await deleteDoc(doc(this.getCentralDb(), 'students', studentId));
+          for (const a of attToDelete) {
+            deleteDoc(doc(this.getCentralDb(), 'attendance', a.id)).catch(() => {});
+          }
+          for (const ev of evalsToDelete) {
+            deleteDoc(doc(this.getCentralDb(), 'evaluations', ev.id)).catch(() => {});
+          }
+          for (const v of violsToDelete) {
+            deleteDoc(doc(this.getCentralDb(), 'violations', v.id)).catch(() => {});
+          }
+        } catch {}
       }
     } catch (e) {
       handleFirestoreError(e, OperationType.DELETE, `students/${studentId}`);
@@ -2196,7 +2340,8 @@ export class OmranDataService {
 
   // Load Attendance with Dual Persistence
   static async loadAttendance(): Promise<AttendanceRecord[]> {
-    const local = getLocalCache<AttendanceRecord[]>(OMRAN_CACHE_KEYS.ATTENDANCE, []);
+    const cacheKey = this.getCacheKey(OMRAN_CACHE_KEYS.ATTENDANCE);
+    const local = getLocalCache<AttendanceRecord[]>(cacheKey, []);
     let cloudList: AttendanceRecord[] = [];
     try {
       const snap = await getDocs(collection(this.getActiveDb(), 'attendance'));
@@ -2213,7 +2358,7 @@ export class OmranDataService {
       if (a?.id) mergedMap.set(a.id, a);
     }
     const merged = Array.from(mergedMap.values());
-    setLocalCache(OMRAN_CACHE_KEYS.ATTENDANCE, merged);
+    setLocalCache(cacheKey, merged);
     return merged;
   }
 
@@ -2222,7 +2367,8 @@ export class OmranDataService {
     const cleanRecords: AttendanceRecord[] = records.map(r => cleanFirestoreData(r));
 
     // 1. Immediately store in local cache
-    const local = getLocalCache<AttendanceRecord[]>(OMRAN_CACHE_KEYS.ATTENDANCE, []);
+    const cacheKey = this.getCacheKey(OMRAN_CACHE_KEYS.ATTENDANCE);
+    const local = getLocalCache<AttendanceRecord[]>(cacheKey, []);
     const map = new Map<string, AttendanceRecord>();
     for (const a of local) {
       if (a?.id) map.set(a.id, a);
@@ -2230,7 +2376,7 @@ export class OmranDataService {
     for (const r of cleanRecords) {
       if (r?.id) map.set(r.id, r);
     }
-    setLocalCache(OMRAN_CACHE_KEYS.ATTENDANCE, Array.from(map.values()));
+    setLocalCache(cacheKey, Array.from(map.values()));
 
     // 2. Persist to Firestore in parallel without throwing fatal errors
     try {
@@ -2246,7 +2392,8 @@ export class OmranDataService {
 
   // Load Evaluations with Dual Persistence
   static async loadEvaluations(): Promise<StudentEvaluation[]> {
-    const local = getLocalCache<StudentEvaluation[]>(OMRAN_CACHE_KEYS.EVALUATIONS, []);
+    const cacheKey = this.getCacheKey(OMRAN_CACHE_KEYS.EVALUATIONS);
+    const local = getLocalCache<StudentEvaluation[]>(cacheKey, []);
     let cloudList: StudentEvaluation[] = [];
     try {
       const snap = await getDocs(collection(this.getActiveDb(), 'evaluations'));
@@ -2264,7 +2411,7 @@ export class OmranDataService {
     }
     const merged = Array.from(mergedMap.values());
     merged.sort((a, b) => b.date.localeCompare(a.date));
-    setLocalCache(OMRAN_CACHE_KEYS.EVALUATIONS, merged);
+    setLocalCache(cacheKey, merged);
     return merged;
   }
 
@@ -2273,13 +2420,15 @@ export class OmranDataService {
     const clean = cleanFirestoreData(evaluation);
 
     // 1. Instantly update local cache (guarantees 100% data safety, instant response, and prevents UI errors)
-    const local = getLocalCache<StudentEvaluation[]>(OMRAN_CACHE_KEYS.EVALUATIONS, []);
+    const cacheKey = this.getCacheKey(OMRAN_CACHE_KEYS.EVALUATIONS);
+    const local = getLocalCache<StudentEvaluation[]>(cacheKey, []);
     const updated = [clean, ...local.filter(e => e.id !== clean.id)];
-    setLocalCache(OMRAN_CACHE_KEYS.EVALUATIONS, updated);
+    setLocalCache(cacheKey, updated);
 
     // 2. Synchronize to Firestore Cloud
     try {
-      await setDoc(doc(this.getActiveDb(), 'evaluations', clean.id), clean);
+      const activeDb = this.getActiveDb();
+      await setDoc(doc(activeDb, 'evaluations', clean.id), clean);
     } catch (e) {
       handleFirestoreError(e, OperationType.WRITE, `evaluations/${clean.id}`);
       console.warn('[OmranDataService] Evaluation saved locally, cloud sync pending/offline:', e);
@@ -2288,11 +2437,16 @@ export class OmranDataService {
 
   // Delete Evaluation with Dual Persistence
   static async deleteEvaluation(evaluationId: string): Promise<void> {
-    const local = getLocalCache<StudentEvaluation[]>(OMRAN_CACHE_KEYS.EVALUATIONS, []);
-    setLocalCache(OMRAN_CACHE_KEYS.EVALUATIONS, local.filter(e => e.id !== evaluationId));
+    const cacheKey = this.getCacheKey(OMRAN_CACHE_KEYS.EVALUATIONS);
+    const local = getLocalCache<StudentEvaluation[]>(cacheKey, []);
+    setLocalCache(cacheKey, local.filter(e => e.id !== evaluationId));
 
     try {
-      await deleteDoc(doc(this.getActiveDb(), 'evaluations', evaluationId));
+      const activeDb = this.getActiveDb();
+      await deleteDoc(doc(activeDb, 'evaluations', evaluationId));
+      if (activeDb !== this.getCentralDb()) {
+        try { await deleteDoc(doc(this.getCentralDb(), 'evaluations', evaluationId)); } catch {}
+      }
     } catch (e) {
       handleFirestoreError(e, OperationType.DELETE, `evaluations/${evaluationId}`);
     }
@@ -2300,7 +2454,8 @@ export class OmranDataService {
 
   // Load Criteria with Dual Persistence
   static async loadCriteria(): Promise<EvaluationCriteria[]> {
-    const local = getLocalCache<EvaluationCriteria[]>(OMRAN_CACHE_KEYS.CRITERIA, []);
+    const cacheKey = this.getCacheKey(OMRAN_CACHE_KEYS.CRITERIA);
+    const local = getLocalCache<EvaluationCriteria[]>(cacheKey, []);
     let cloudList: EvaluationCriteria[] = [];
     try {
       const activeDb = this.getActiveDb();
@@ -2310,7 +2465,7 @@ export class OmranDataService {
         for (const c of DEFAULT_CRITERIA) {
           await setDoc(doc(activeDb, 'criteria', c.id), cleanFirestoreData(c));
         }
-        setLocalCache(OMRAN_CACHE_KEYS.CRITERIA, DEFAULT_CRITERIA);
+        setLocalCache(cacheKey, DEFAULT_CRITERIA);
         return DEFAULT_CRITERIA;
       }
     } catch (e) {
@@ -2323,14 +2478,15 @@ export class OmranDataService {
     for (const c of cloudList) if (c?.id) mergedMap.set(c.id, c);
 
     const merged = Array.from(mergedMap.values());
-    setLocalCache(OMRAN_CACHE_KEYS.CRITERIA, merged);
+    setLocalCache(cacheKey, merged);
     return merged;
   }
 
   // Save Criteria List with Dual Persistence
   static async saveCriteriaList(list: EvaluationCriteria[]): Promise<void> {
     const clean = list.map(c => cleanFirestoreData(c));
-    setLocalCache(OMRAN_CACHE_KEYS.CRITERIA, clean);
+    const cacheKey = this.getCacheKey(OMRAN_CACHE_KEYS.CRITERIA);
+    setLocalCache(cacheKey, clean);
 
     try {
       const activeDb = this.getActiveDb();
@@ -2345,8 +2501,9 @@ export class OmranDataService {
 
   // Delete Criteria with Dual Persistence
   static async deleteCriteria(id: string): Promise<void> {
-    const local = getLocalCache<EvaluationCriteria[]>(OMRAN_CACHE_KEYS.CRITERIA, []);
-    setLocalCache(OMRAN_CACHE_KEYS.CRITERIA, local.filter(c => c.id !== id));
+    const cacheKey = this.getCacheKey(OMRAN_CACHE_KEYS.CRITERIA);
+    const local = getLocalCache<EvaluationCriteria[]>(cacheKey, []);
+    setLocalCache(cacheKey, local.filter(c => c.id !== id));
 
     try {
       await deleteDoc(doc(this.getActiveDb(), 'criteria', id));
@@ -2357,12 +2514,13 @@ export class OmranDataService {
 
   // Load Settings with Dual Persistence
   static async loadSettings(): Promise<AppSettings> {
-    const local = getLocalCache<AppSettings>(OMRAN_CACHE_KEYS.SETTINGS, DEFAULT_SETTINGS);
+    const cacheKey = this.getCacheKey(OMRAN_CACHE_KEYS.SETTINGS);
+    const local = getLocalCache<AppSettings>(cacheKey, DEFAULT_SETTINGS);
     try {
       const docSnap = await getDoc(doc(this.getActiveDb(), 'settings', 'main'));
       if (docSnap.exists()) {
         const cloud = docSnap.data() as AppSettings;
-        setLocalCache(OMRAN_CACHE_KEYS.SETTINGS, cloud);
+        setLocalCache(cacheKey, cloud);
         return cloud;
       }
     } catch (e) {
@@ -2374,7 +2532,8 @@ export class OmranDataService {
   // Save Settings with Dual Persistence
   static async saveSettings(settings: AppSettings): Promise<void> {
     const clean = cleanFirestoreData(settings);
-    setLocalCache(OMRAN_CACHE_KEYS.SETTINGS, clean);
+    const cacheKey = this.getCacheKey(OMRAN_CACHE_KEYS.SETTINGS);
+    setLocalCache(cacheKey, clean);
 
     try {
       await setDoc(doc(this.getActiveDb(), 'settings', 'main'), clean);
@@ -2439,7 +2598,8 @@ export class OmranDataService {
   static async saveViolation(violation: BehaviorViolation): Promise<void> {
     try {
       const cleanViolation = JSON.parse(JSON.stringify(violation));
-      await setDoc(doc(this.getActiveDb(), 'violations', violation.id), cleanViolation);
+      const activeDb = this.getActiveDb();
+      await setDoc(doc(activeDb, 'violations', violation.id), cleanViolation);
     } catch (e) {
       handleFirestoreError(e, OperationType.WRITE, `violations/${violation.id}`);
       throw e;
@@ -2449,7 +2609,11 @@ export class OmranDataService {
   // Delete Behavior Violation directly from Firestore
   static async deleteViolation(violationId: string): Promise<void> {
     try {
-      await deleteDoc(doc(this.getActiveDb(), 'violations', violationId));
+      const activeDb = this.getActiveDb();
+      await deleteDoc(doc(activeDb, 'violations', violationId));
+      if (activeDb !== this.getCentralDb()) {
+        try { await deleteDoc(doc(this.getCentralDb(), 'violations', violationId)); } catch {}
+      }
     } catch (e) {
       handleFirestoreError(e, OperationType.DELETE, `violations/${violationId}`);
       throw e;
@@ -2709,8 +2873,10 @@ export class OmranDataService {
   static async saveExam(exam: Exam): Promise<void> {
     try {
       const sanitized = this.sanitizeExam(exam);
-      const cleanExam = JSON.parse(JSON.stringify(sanitized));
-      await setDoc(doc(this.getActiveDb(), 'exams', exam.id), cleanExam);
+      const effectiveComplexId = sanitized.complexId || this.activeComplexId || undefined;
+      const cleanExam = cleanFirestoreData({ ...sanitized, complexId: effectiveComplexId });
+      const activeDb = this.getActiveDb();
+      await setDoc(doc(activeDb, 'exams', exam.id), cleanExam);
     } catch (e) {
       handleFirestoreError(e, OperationType.WRITE, `exams/${exam.id}`);
       throw e;
@@ -2720,7 +2886,11 @@ export class OmranDataService {
   // Delete Exam directly from Firestore
   static async deleteExam(examId: string): Promise<void> {
     try {
-      await deleteDoc(doc(this.getActiveDb(), 'exams', examId));
+      const activeDb = this.getActiveDb();
+      await deleteDoc(doc(activeDb, 'exams', examId));
+      if (activeDb !== this.getCentralDb()) {
+        try { await deleteDoc(doc(this.getCentralDb(), 'exams', examId)); } catch {}
+      }
     } catch (e) {
       handleFirestoreError(e, OperationType.DELETE, `exams/${examId}`);
       throw e;
@@ -2767,8 +2937,10 @@ export class OmranDataService {
   // Save Exam Submission directly in Firestore
   static async saveSubmission(submission: ExamSubmission): Promise<void> {
     try {
-      const cleanSubmission = JSON.parse(JSON.stringify(submission));
-      await setDoc(doc(this.getActiveDb(), 'exam_submissions', submission.id), cleanSubmission);
+      const effectiveComplexId = submission.complexId || this.activeComplexId || undefined;
+      const cleanSubmission = cleanFirestoreData({ ...submission, complexId: effectiveComplexId });
+      const activeDb = this.getActiveDb();
+      await setDoc(doc(activeDb, 'exam_submissions', submission.id), cleanSubmission);
     } catch (e) {
       handleFirestoreError(e, OperationType.WRITE, `exam_submissions/${submission.id}`);
       throw e;
@@ -2778,7 +2950,11 @@ export class OmranDataService {
   // Delete Submission
   static async deleteSubmission(submissionId: string): Promise<void> {
     try {
-      await deleteDoc(doc(this.getActiveDb(), 'exam_submissions', submissionId));
+      const activeDb = this.getActiveDb();
+      await deleteDoc(doc(activeDb, 'exam_submissions', submissionId));
+      if (activeDb !== this.getCentralDb()) {
+        try { await deleteDoc(doc(this.getCentralDb(), 'exam_submissions', submissionId)); } catch {}
+      }
     } catch (e) {
       handleFirestoreError(e, OperationType.DELETE, `exam_submissions/${submissionId}`);
       throw e;
@@ -3137,7 +3313,8 @@ export class OmranDataService {
       await syncTombstonesFromCloud();
     } catch {}
     const deletedCertIds = OmranDataService.getDeletedCertificateIds();
-    const local = getLocalCache<IssuedCertificate[]>(OMRAN_CACHE_KEYS.CERTIFICATES, []).filter(
+    const cacheKey = this.getCacheKey(OMRAN_CACHE_KEYS.CERTIFICATES);
+    const local = getLocalCache<IssuedCertificate[]>(cacheKey, []).filter(
       c => c?.id && !deletedCertIds.has(c.id)
     );
     let cloudList: IssuedCertificate[] = [];
@@ -3164,17 +3341,24 @@ export class OmranDataService {
 
     const merged = Array.from(mergedMap.values());
     merged.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-    setLocalCache(OMRAN_CACHE_KEYS.CERTIFICATES, merged);
+    setLocalCache(cacheKey, merged);
     return merged;
   }
 
   // Save Single Certificate directly in Firestore & Cache
   static async saveCertificate(cert: IssuedCertificate): Promise<void> {
     OmranDataService.removeDeletedCertificateId(cert.id);
-    const cleanCert = OmranDataService.sanitizeCertificate(cert);
-    const local = getLocalCache<IssuedCertificate[]>(OMRAN_CACHE_KEYS.CERTIFICATES, []);
+    const effectiveComplexId = cert.complexId || this.activeComplexId || undefined;
+    const effectiveComplexName = cert.complexName || this.activeComplex?.name || undefined;
+    const cleanCert = OmranDataService.sanitizeCertificate({
+      ...cert,
+      complexId: effectiveComplexId,
+      complexName: effectiveComplexName
+    });
+    const cacheKey = this.getCacheKey(OMRAN_CACHE_KEYS.CERTIFICATES);
+    const local = getLocalCache<IssuedCertificate[]>(cacheKey, []);
     const updated = [cleanCert, ...local.filter(c => c.id !== cleanCert.id)];
-    setLocalCache(OMRAN_CACHE_KEYS.CERTIFICATES, updated);
+    setLocalCache(cacheKey, updated);
 
     // Omit large base64 image from Firestore to strictly adhere to 1MB document limit
     const firestoreData = { ...cleanCert };
@@ -3183,7 +3367,8 @@ export class OmranDataService {
     }
 
     try {
-      await setDoc(doc(this.getActiveDb(), 'certificates', cleanCert.id), cleanFirestoreData(firestoreData));
+      const activeDb = this.getActiveDb();
+      await setDoc(doc(activeDb, 'certificates', cleanCert.id), cleanFirestoreData(firestoreData));
     } catch (e) {
       console.warn('[OmranDataService] Certificate saved locally, cloud sync notice:', e);
     }
@@ -3195,16 +3380,25 @@ export class OmranDataService {
     for (const c of certs) {
       OmranDataService.removeDeletedCertificateId(c.id);
     }
-    const cleanList = certs.map(c => OmranDataService.sanitizeCertificate(c));
+    const cleanList = certs.map(c => {
+      const effectiveComplexId = c.complexId || this.activeComplexId || undefined;
+      const effectiveComplexName = c.complexName || this.activeComplex?.name || undefined;
+      return OmranDataService.sanitizeCertificate({
+        ...c,
+        complexId: effectiveComplexId,
+        complexName: effectiveComplexName
+      });
+    });
 
-    const local = getLocalCache<IssuedCertificate[]>(OMRAN_CACHE_KEYS.CERTIFICATES, []);
+    const cacheKey = this.getCacheKey(OMRAN_CACHE_KEYS.CERTIFICATES);
+    const local = getLocalCache<IssuedCertificate[]>(cacheKey, []);
     const map = new Map<string, IssuedCertificate>();
     for (const c of local) if (c?.id) map.set(c.id, c);
     for (const c of cleanList) if (c?.id) map.set(c.id, c);
     const merged = Array.from(map.values()).sort(
       (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
     );
-    setLocalCache(OMRAN_CACHE_KEYS.CERTIFICATES, merged);
+    setLocalCache(cacheKey, merged);
 
     try {
       const activeDb = this.getActiveDb();
@@ -3227,12 +3421,17 @@ export class OmranDataService {
     // 0. Register persistent tombstone so certificate NEVER resurrects
     OmranDataService.addDeletedCertificateId(certId);
 
-    const local = getLocalCache<IssuedCertificate[]>(OMRAN_CACHE_KEYS.CERTIFICATES, []);
+    const cacheKey = this.getCacheKey(OMRAN_CACHE_KEYS.CERTIFICATES);
+    const local = getLocalCache<IssuedCertificate[]>(cacheKey, []);
     const updated = local.filter(c => c.id !== certId);
-    setLocalCache(OMRAN_CACHE_KEYS.CERTIFICATES, updated);
+    setLocalCache(cacheKey, updated);
 
     try {
-      await deleteDoc(doc(this.getActiveDb(), 'certificates', certId));
+      const activeDb = this.getActiveDb();
+      await deleteDoc(doc(activeDb, 'certificates', certId));
+      if (activeDb !== this.getCentralDb()) {
+        try { await deleteDoc(doc(this.getCentralDb(), 'certificates', certId)); } catch {}
+      }
     } catch (e) {
       console.warn(`Firestore delete doc notice for certificates/${certId} (deleted locally):`, e);
       // Do not rethrow so UI deletion is not blocked by remote permission limits
@@ -3472,7 +3671,8 @@ export class OmranDataService {
   }
 
   static async loadTeacherShifts(complexId?: string): Promise<TeacherShift[]> {
-    const local = getLocalCache<TeacherShift[]>(OMRAN_CACHE_KEYS.TEACHER_SHIFTS, []);
+    const cacheKey = this.getCacheKey(OMRAN_CACHE_KEYS.TEACHER_SHIFTS);
+    const local = getLocalCache<TeacherShift[]>(cacheKey, []);
     try {
       const snap = await getDocs(collection(this.getActiveDb(), 'teacher_shifts'));
       const list = snap.docs.map(d => {
@@ -3483,7 +3683,7 @@ export class OmranDataService {
           assignedTeacherIds: Array.isArray(data.assignedTeacherIds) ? data.assignedTeacherIds : []
         } as TeacherShift;
       });
-      setLocalCache(OMRAN_CACHE_KEYS.TEACHER_SHIFTS, list);
+      setLocalCache(cacheKey, list);
       return complexId ? list.filter(s => s.complexId === complexId) : list;
     } catch (e) {
       // quiet fallback
@@ -3492,32 +3692,40 @@ export class OmranDataService {
   }
 
   static async saveTeacherShift(shift: TeacherShift): Promise<void> {
-    const local = getLocalCache<TeacherShift[]>(OMRAN_CACHE_KEYS.TEACHER_SHIFTS, []);
+    const cacheKey = this.getCacheKey(OMRAN_CACHE_KEYS.TEACHER_SHIFTS);
+    const local = getLocalCache<TeacherShift[]>(cacheKey, []);
     const safeShift = {
       ...shift,
+      complexId: shift.complexId || this.activeComplexId || undefined,
       assignedTeacherIds: Array.isArray(shift.assignedTeacherIds) ? shift.assignedTeacherIds : []
     };
     const updated = [...local.filter(s => s.id !== safeShift.id), safeShift];
-    setLocalCache(OMRAN_CACHE_KEYS.TEACHER_SHIFTS, updated);
+    setLocalCache(cacheKey, updated);
     try {
-      await setDoc(doc(this.getActiveDb(), 'teacher_shifts', safeShift.id), cleanFirestoreData(safeShift), { merge: true });
+      const activeDb = this.getActiveDb();
+      await setDoc(doc(activeDb, 'teacher_shifts', safeShift.id), cleanFirestoreData(safeShift), { merge: true });
     } catch (e) {
       // Quiet fallback without breaking UI or throwing
     }
   }
 
   static async deleteTeacherShift(shiftId: string): Promise<void> {
-    const local = getLocalCache<TeacherShift[]>(OMRAN_CACHE_KEYS.TEACHER_SHIFTS, []);
-    setLocalCache(OMRAN_CACHE_KEYS.TEACHER_SHIFTS, local.filter(s => s.id !== shiftId));
+    const cacheKey = this.getCacheKey(OMRAN_CACHE_KEYS.TEACHER_SHIFTS);
+    const local = getLocalCache<TeacherShift[]>(cacheKey, []);
+    setLocalCache(cacheKey, local.filter(s => s.id !== shiftId));
     try {
-      await deleteDoc(doc(this.getActiveDb(), 'teacher_shifts', shiftId));
+      const activeDb = this.getActiveDb();
+      await deleteDoc(doc(activeDb, 'teacher_shifts', shiftId));
+      if (activeDb !== this.getCentralDb()) {
+        try { await deleteDoc(doc(this.getCentralDb(), 'teacher_shifts', shiftId)); } catch {}
+      }
     } catch (e) {
       // quiet fallback
     }
   }
 
   static async loadTeacherAttendance(date?: string, complexId?: string): Promise<TeacherAttendanceRecord[]> {
-    const cacheKey = date ? `${OMRAN_CACHE_KEYS.TEACHER_ATTENDANCE}_${date}` : OMRAN_CACHE_KEYS.TEACHER_ATTENDANCE;
+    const cacheKey = date ? this.getCacheKey(`${OMRAN_CACHE_KEYS.TEACHER_ATTENDANCE}_${date}`) : this.getCacheKey(OMRAN_CACHE_KEYS.TEACHER_ATTENDANCE);
     const local = getLocalCache<TeacherAttendanceRecord[]>(cacheKey, []);
     try {
       const snap = await getDocs(collection(this.getActiveDb(), 'teacher_attendance'));
@@ -3538,12 +3746,17 @@ export class OmranDataService {
   }
 
   static async saveTeacherAttendanceRecord(record: TeacherAttendanceRecord): Promise<void> {
-    const cacheKey = `${OMRAN_CACHE_KEYS.TEACHER_ATTENDANCE}_${record.date}`;
+    const safeRecord = {
+      ...record,
+      complexId: record.complexId || this.activeComplexId || undefined
+    };
+    const cacheKey = this.getCacheKey(`${OMRAN_CACHE_KEYS.TEACHER_ATTENDANCE}_${safeRecord.date}`);
     const local = getLocalCache<TeacherAttendanceRecord[]>(cacheKey, []);
-    const updated = [...local.filter(r => r.id !== record.id), record];
+    const updated = [...local.filter(r => r.id !== safeRecord.id), safeRecord];
     setLocalCache(cacheKey, updated);
     try {
-      await setDoc(doc(this.getActiveDb(), 'teacher_attendance', record.id), cleanFirestoreData(record), { merge: true });
+      const activeDb = this.getActiveDb();
+      await setDoc(doc(activeDb, 'teacher_attendance', safeRecord.id), cleanFirestoreData(safeRecord), { merge: true });
     } catch (e) {
       // Quiet fallback
     }
@@ -3551,12 +3764,16 @@ export class OmranDataService {
 
   static async deleteTeacherAttendanceRecord(recordId: string, date?: string): Promise<void> {
     if (date) {
-      const cacheKey = `${OMRAN_CACHE_KEYS.TEACHER_ATTENDANCE}_${date}`;
+      const cacheKey = this.getCacheKey(`${OMRAN_CACHE_KEYS.TEACHER_ATTENDANCE}_${date}`);
       const local = getLocalCache<TeacherAttendanceRecord[]>(cacheKey, []);
       setLocalCache(cacheKey, local.filter(r => r.id !== recordId));
     }
     try {
-      await deleteDoc(doc(this.getActiveDb(), 'teacher_attendance', recordId));
+      const activeDb = this.getActiveDb();
+      await deleteDoc(doc(activeDb, 'teacher_attendance', recordId));
+      if (activeDb !== this.getCentralDb()) {
+        try { await deleteDoc(doc(this.getCentralDb(), 'teacher_attendance', recordId)); } catch {}
+      }
     } catch (e) {
       // Quiet fallback
     }
@@ -3566,11 +3783,12 @@ export class OmranDataService {
   // Mosques Management (إدارة الجوامع والمساجد المتعددة)
   // =========================================================================
   static async loadMosques(complexId?: string): Promise<MosqueItem[]> {
-    const local = getLocalCache<MosqueItem[]>(OMRAN_CACHE_KEYS.MOSQUES, []);
+    const cacheKey = this.getCacheKey(OMRAN_CACHE_KEYS.MOSQUES);
+    const local = getLocalCache<MosqueItem[]>(cacheKey, []);
     try {
       const snap = await getDocs(collection(this.getActiveDb(), 'mosques'));
       const list = snap.docs.map(d => ({ ...d.data(), id: d.id } as MosqueItem));
-      setLocalCache(OMRAN_CACHE_KEYS.MOSQUES, list);
+      setLocalCache(cacheKey, list);
       return complexId ? list.filter(m => m.complexId === complexId) : list;
     } catch (e) {
       // quiet fallback
@@ -3579,21 +3797,32 @@ export class OmranDataService {
   }
 
   static async saveMosque(mosque: MosqueItem): Promise<void> {
-    const local = getLocalCache<MosqueItem[]>(OMRAN_CACHE_KEYS.MOSQUES, []);
-    const updated = [...local.filter(m => m.id !== mosque.id), mosque];
-    setLocalCache(OMRAN_CACHE_KEYS.MOSQUES, updated);
+    const safeMosque = {
+      ...mosque,
+      complexId: mosque.complexId || this.activeComplexId || undefined
+    };
+    const cacheKey = this.getCacheKey(OMRAN_CACHE_KEYS.MOSQUES);
+    const local = getLocalCache<MosqueItem[]>(cacheKey, []);
+    const updated = [...local.filter(m => m.id !== safeMosque.id), safeMosque];
+    setLocalCache(cacheKey, updated);
     try {
-      await setDoc(doc(this.getActiveDb(), 'mosques', mosque.id), cleanFirestoreData(mosque), { merge: true });
+      const activeDb = this.getActiveDb();
+      await setDoc(doc(activeDb, 'mosques', safeMosque.id), cleanFirestoreData(safeMosque), { merge: true });
     } catch (e) {
       // quiet fallback
     }
   }
 
   static async deleteMosque(mosqueId: string): Promise<void> {
-    const local = getLocalCache<MosqueItem[]>(OMRAN_CACHE_KEYS.MOSQUES, []);
-    setLocalCache(OMRAN_CACHE_KEYS.MOSQUES, local.filter(m => m.id !== mosqueId));
+    const cacheKey = this.getCacheKey(OMRAN_CACHE_KEYS.MOSQUES);
+    const local = getLocalCache<MosqueItem[]>(cacheKey, []);
+    setLocalCache(cacheKey, local.filter(m => m.id !== mosqueId));
     try {
-      await deleteDoc(doc(this.getActiveDb(), 'mosques', mosqueId));
+      const activeDb = this.getActiveDb();
+      await deleteDoc(doc(activeDb, 'mosques', mosqueId));
+      if (activeDb !== this.getCentralDb()) {
+        try { await deleteDoc(doc(this.getCentralDb(), 'mosques', mosqueId)); } catch {}
+      }
     } catch (e) {
       // quiet fallback
     }

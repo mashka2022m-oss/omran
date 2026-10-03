@@ -102,7 +102,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
     }
   };
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoginError('');
 
@@ -204,10 +204,17 @@ export const LoginModal: React.FC<LoginModalProps> = ({
     }
 
     // 4. Check dedicated/isolated databases for migrated complexes
-    const customComplexes = complexes.filter(c => c.databaseConfig?.isCustom && c.databaseConfig?.projectId);
-    if (customComplexes.length > 0) {
+    let targetComplexes = complexes.filter(c => c.databaseConfig?.isCustom && c.databaseConfig?.projectId);
+    if (targetComplexes.length === 0) {
+      try {
+        const loaded = await OmranDataService.loadComplexes();
+        targetComplexes = loaded.filter(c => c.databaseConfig?.isCustom && c.databaseConfig?.projectId);
+      } catch {}
+    }
+
+    if (targetComplexes.length > 0) {
       setIsSubmitting(true);
-      OmranDataService.authenticateUserAcrossDatabases(cleanUser, cleanPass, customComplexes)
+      OmranDataService.authenticateUserAcrossDatabases(cleanUser, cleanPass, targetComplexes)
         .then(result => {
           if (result) {
             onLoginSuccess({
