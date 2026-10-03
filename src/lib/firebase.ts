@@ -1107,13 +1107,106 @@ export class OmranDataService {
     };
   }
 
-  // Developer Feature: Migrate Complex and all its entities to an Isolated Dedicated Firebase Database
+  // Developer Feature: Test Live Real Connection to Any External Firebase Project
+  static async testRealFirebaseConnection(config: {
+    projectId: string;
+    apiKey: string;
+    databaseId?: string;
+    authDomain?: string;
+    storageBucket?: string;
+    appId?: string;
+  }): Promise<{ success: boolean; message: string; details?: any }> {
+    const cleanProjId = (config.projectId || '').trim();
+    const cleanApiKey = (config.apiKey || '').trim();
+
+    if (!cleanProjId) {
+      return { success: false, message: 'معرف المشروع (Project ID) مطلوب.' };
+    }
+    if (!cleanApiKey) {
+      return { success: false, message: 'مفتاح الويب (Web API Key) مطلوب للاتصال بمشروع فايربيس.' };
+    }
+
+    const testAppName = `omran_test_${cleanProjId.replace(/[^\w]/g, '_')}_${Date.now()}`;
+    let testApp: any = null;
+
+    try {
+      testApp = initializeApp(
+        {
+          apiKey: cleanApiKey,
+          projectId: cleanProjId,
+          authDomain: config.authDomain || `${cleanProjId}.firebaseapp.com`,
+          storageBucket: config.storageBucket || `${cleanProjId}.firebasestorage.app`,
+          appId: config.appId || ''
+        },
+        testAppName
+      );
+
+      const targetDb = config.databaseId && config.databaseId !== '(default)'
+        ? getFirestore(testApp, config.databaseId)
+        : getFirestore(testApp);
+
+      // Perform a real write test in the target project
+      const testDocRef = doc(targetDb, 'settings', 'omran_connection_test');
+      await setDoc(testDocRef, {
+        status: 'ok',
+        verifiedAt: new Date().toISOString(),
+        testedBy: 'منظومة عمران القرآنية',
+        note: 'تم اختبار وتأكيد الاتصال وقراءة/كتابة البيانات بنجاح.'
+      });
+
+      // Verify read test
+      const snap = await getDoc(testDocRef);
+      if (!snap.exists()) {
+        throw new Error('تمت الكتابة ولكن تعذرت قراءة وثيقة الاختبار.');
+      }
+
+      return {
+        success: true,
+        message: `تم الاتصال بنجاح بمشروع Firebase (${cleanProjId})، وتمت تجربة القراءة والكتابة الحقيقية بنجاح!`
+      };
+    } catch (err: any) {
+      console.error('Firebase test connection error:', err);
+      const msg = err?.message || String(err);
+      if (msg.includes('permission-denied') || msg.includes('insufficient permissions')) {
+        return {
+          success: false,
+          message: `المشروع (${cleanProjId}) يرفض إذن الكتابة بسبب قواعد الأمان (Firestore Rules). يرجى التوجه إلى كونسول فايربيس -> Firestore Database -> Rules وتعديل القواعد لتسمح بالقراءة والكتابة (Test Mode).`,
+          details: { code: 'PERMISSION_DENIED', raw: msg }
+        };
+      }
+      if (msg.includes('not-found') || msg.includes('database does not exist') || msg.includes('Database not found')) {
+        return {
+          success: false,
+          message: `قاعدة بيانات Firestore غير مفعلة بعد في مشروع (${cleanProjId}). يرجى الدخول إلى كونسول فايربيس -> Firestore Database والضغط على Create database أولاً.`,
+          details: { code: 'DATABASE_NOT_FOUND', raw: msg }
+        };
+      }
+      if (msg.includes('API key not valid')) {
+        return {
+          success: false,
+          message: `مفتاح API Key غير صحيح أو غير مصرح له بمشروع (${cleanProjId}). يرجى التحقق من المفتاح في إعدادات المشروع (Project Settings).`,
+          details: { code: 'INVALID_API_KEY', raw: msg }
+        };
+      }
+      return {
+        success: false,
+        message: `تعذر الاتصال بمشروع (${cleanProjId}): ${msg}`,
+        details: { raw: msg }
+      };
+    }
+  }
+
+  // Developer Feature: Migrate Complex and all its entities to a REAL Dedicated Firebase Database
   static async migrateComplexToDedicatedDatabase(
     options: {
       complexId: string;
-      targetGoogleEmail: string;
-      targetProjectId?: string;
+      targetProjectId: string;
+      targetApiKey: string;
+      targetGoogleEmail?: string;
       targetDatabaseId?: string;
+      targetAuthDomain?: string;
+      targetStorageBucket?: string;
+      targetAppId?: string;
       purgeFromCentral?: boolean;
     },
     onProgress?: (progress: ComplexMigrationProgress) => void
@@ -1124,35 +1217,86 @@ export class OmranDataService {
       logs.push(`[${time}] ${msg}`);
     };
 
-    // Step 1: Validate Complex and Google Account
-    addLog(`بدء تفويض ونقل مجمع تعليمي إلى قاعدة بيانات مستقلة بحساب Google (${options.targetGoogleEmail})...`);
+    const targetProjId = (options.targetProjectId || '').trim();
+    const targetApiKey = (options.targetApiKey || '').trim();
+    const cleanEmail = (options.targetGoogleEmail || '').trim();
+    const targetDbId = (options.targetDatabaseId || '(default)').trim();
+
+    if (!targetProjId) {
+      throw new Error('معرف مشروع فايربيس (Project ID) مطلوب لبدء النقل الفعلي.');
+    }
+    if (!targetApiKey) {
+      throw new Error('مفتاح Web API Key الخاص بمشروع فايربيس مطلوب للاتصال وكتابة البيانات في مشروعك.');
+    }
+
+    // Step 1: Validate Complex
+    addLog(`بدء جلسة النقل الفعلي لمجمع تعليمي إلى مشروع Firebase المستقل (${targetProjId})...`);
     const allComplexes = await this.loadComplexes();
     const complex = allComplexes.find(c => c.id === options.complexId);
     if (!complex) {
       throw new Error('المجمع القرآني المطلوب نقله غير موجود في النظام.');
     }
-    if (!options.targetGoogleEmail || !options.targetGoogleEmail.trim()) {
-      throw new Error('يرجى تحديد أو تسجيل الدخول بحساب Google المعتمد للمجمع.');
-    }
-
-    const cleanEmail = options.targetGoogleEmail.trim();
-    const targetProjId = (options.targetProjectId || firebaseConfig.projectId || 'omran-ffbad').trim();
-    const targetDbId = (options.targetDatabaseId || `isolated-${complex.id}`).trim();
 
     onProgress?.({
       step: 1,
       totalSteps: 10,
-      percent: 10,
-      title: 'المصادقة والتحقق من حساب Google',
-      detail: `تم توثيق واعتماد حساب Google المالك: ${cleanEmail}`,
+      percent: 5,
+      title: 'تهيئة الاتصال بمشروع Firebase المستهدف',
+      detail: `جاري الاتصال بمشروع (${targetProjId}) والتحقق من مفتاح API...`,
       logs: [...logs]
     });
 
-    // Artificial delay for smooth, human-friendly real-time observation
-    await new Promise(r => setTimeout(r, 600));
+    // Step 2: Initialize REAL Target Firebase App
+    const targetAppName = `omran_mig_${targetProjId.replace(/[^\w]/g, '_')}_${Date.now()}`;
+    let targetApp: any = null;
+    let targetDb: any = null;
 
-    // Step 2: Extract all complex records
-    addLog(`جاري فحص واستخراج كافة البيانات التابعة لمجمع (${complex.name})...`);
+    try {
+      targetApp = initializeApp(
+        {
+          apiKey: targetApiKey,
+          projectId: targetProjId,
+          authDomain: options.targetAuthDomain || `${targetProjId}.firebaseapp.com`,
+          storageBucket: options.targetStorageBucket || `${targetProjId}.firebasestorage.app`,
+          appId: options.targetAppId || ''
+        },
+        targetAppName
+      );
+
+      targetDb = targetDbId && targetDbId !== '(default)'
+        ? getFirestore(targetApp, targetDbId)
+        : getFirestore(targetApp);
+
+      // Real Handshake Write to guarantee database is live and permissions exist
+      await setDoc(doc(targetDb, 'settings', 'omran_migration_init'), {
+        initializedAt: new Date().toISOString(),
+        complexName: complex.name,
+        targetEmail: cleanEmail,
+        platform: 'منظومة عمران لإدارة الحلقات والمجمعات القرآنية'
+      });
+      addLog(`تم الاتصال الفعلي بنجاح بمشروع فايربيس (${targetProjId}) وتأكيد صلاحيات الكتابة الحقيقية.`);
+    } catch (connErr: any) {
+      const errM = connErr?.message || String(connErr);
+      if (errM.includes('permission-denied') || errM.includes('insufficient permissions')) {
+        throw new Error(`مشروع فايربيس (${targetProjId}) يرفض إذن الكتابة بسبب قواعد الأمان (Firestore Rules). يرجى فتح كونسول فايربيس -> Firestore -> Rules وتعديل القواعد لتسمح بالكتابة مؤقتاً أثناء النقل.`);
+      }
+      if (errM.includes('not-found') || errM.includes('database does not exist')) {
+        throw new Error(`قاعدة بيانات Firestore غير مفعلة بعد في مشروع (${targetProjId}). يرجى الدخول إلى كونسول فايربيس وإنشاء قاعدة البيانات (Create database) أولاً.`);
+      }
+      throw new Error(`تعذر الاتصال بمشروع فايربيس المستهدف (${targetProjId}): ${errM}`);
+    }
+
+    onProgress?.({
+      step: 2,
+      totalSteps: 10,
+      percent: 15,
+      title: 'تم الاتصال الفعلي بقاعدة بيانات المشروع المستقل',
+      detail: `قاعدة بيانات Firestore في مشروع (${targetProjId}) جاهزة لاستقبال البيانات الحقيقية`,
+      logs: [...logs]
+    });
+
+    // Step 3: Extract all complex records from source
+    addLog(`جاري قراءة واستخراج كافة سجلات مجمع (${complex.name}) من القاعدة الحالية...`);
     const allHalaqahs = await this.loadHalaqahs();
     const complexHalaqahs = allHalaqahs.filter(h => h.complexId === complex.id);
     const halaqahIds = new Set(complexHalaqahs.map(h => h.id));
@@ -1179,164 +1323,162 @@ export class OmranDataService {
     const allCertificates = await this.loadCertificates();
     const complexCertificates = allCertificates.filter(cert => studentIds.has(cert.studentId) || cert.complexId === complex.id);
 
+    const allTeachers = await this.loadTeachers();
+    const complexTeachers = allTeachers.filter(t => t.complexId === complex.id || (Array.isArray(t.complexIds) && t.complexIds.includes(complex.id)));
+
     const totalRecords = complexHalaqahs.length + complexStudents.length + complexAttendance.length +
       complexEvaluations.length + complexViolations.length + complexExams.length +
-      complexSubmissions.length + complexCertificates.length + 1; // +1 for complex
+      complexSubmissions.length + complexCertificates.length + complexTeachers.length + 1; // +1 for complex itself
 
-    addLog(`تم حزم البيانات المستهدفة: (${complexHalaqahs.length}) حلقة، (${complexStudents.length}) طالب، (${complexAttendance.length}) سجل حضور، (${complexEvaluations.length}) تقييم، (${complexExams.length}) اختبار.`);
-    onProgress?.({
-      step: 2,
-      totalSteps: 10,
-      percent: 22,
-      title: 'حزم وتجهيز سجلات المجمع التعليمي',
-      detail: `تم تجهيز إجمالي (${totalRecords}) سجلاً متكاملاً لنقلها بالكامل`,
-      logs: [...logs]
-    });
+    addLog(`تم حزم البيانات: (${complexHalaqahs.length}) حلقة، (${complexStudents.length}) طالب، (${complexAttendance.length}) سجل حضور، (${complexEvaluations.length}) تقييم، (${complexTeachers.length}) معلم.`);
 
-    await new Promise(r => setTimeout(r, 600));
+    // Step 4: Write Complex document to targetDb
+    addLog(`كتابة وثيقة المجمع الأساسية في مشروع (${targetProjId}) -> مجموعة complexes...`);
+    const complexDataForTarget = {
+      ...complex,
+      databaseConfig: {
+        isCustom: true,
+        isIsolated: true,
+        projectId: targetProjId,
+        apiKey: targetApiKey,
+        authDomain: options.targetAuthDomain || `${targetProjId}.firebaseapp.com`,
+        storageBucket: options.targetStorageBucket || `${targetProjId}.firebasestorage.app`,
+        appId: options.targetAppId || '',
+        databaseId: targetDbId,
+        connectedEmail: cleanEmail,
+        migratedAt: new Date().toISOString()
+      }
+    };
+    await setDoc(doc(targetDb, 'complexes', complex.id), cleanFirestoreData(complexDataForTarget));
+    addLog(`✅ تم إنشاء وثيقة المجمع [${complex.name}] في قاعدة البيانات المستقلة.`);
 
-    // Step 3: Provision isolated Firebase / Firestore partition
-    addLog(`إنشاء وتهيئة مساحة قاعدة بيانات سحابية مستقلة للمشروع (${targetProjId})، المعرف: (${targetDbId})...`);
     onProgress?.({
       step: 3,
       totalSteps: 10,
-      percent: 34,
-      title: 'إنشاء وتهيئة قاعدة البيانات السحابية المنفصلة',
-      detail: `جاري تخصيص مجموعات التخزين السحابية لقاعدة البيانات (${targetDbId})`,
+      percent: 25,
+      title: 'تم إنشاء وثيقة المجمع في فايربيس المستقل',
+      detail: `تمت كتابة بيانات مجمع (${complex.name}) في مجموعة complexes`,
       logs: [...logs]
     });
 
-    await new Promise(r => setTimeout(r, 700));
-
-    // Step 4: Write Complex configuration and metadata to the isolated storage
-    addLog(`تثبيت بيانات تعريف مجمع (${complex.name}) وهوية الحساب السحابي...`);
-    const isolatedMeta = {
-      ...complex,
-      isIsolated: true,
-      databaseId: targetDbId,
-      projectId: targetProjId,
-      connectedEmail: cleanEmail,
-      migratedAt: new Date().toISOString()
-    };
-    try {
-      await setDoc(doc(db, 'isolated_complex_databases', complex.id), cleanFirestoreData(isolatedMeta));
-    } catch (e) {
-      console.warn('Isolated partition root save notice:', e);
+    // Step 5: Write Halaqahs to targetDb
+    addLog(`جاري نقل (${complexHalaqahs.length}) حلقة تحفيظ إلى مجموعة halaqahs في فايربيس...`);
+    for (let i = 0; i < complexHalaqahs.length; i++) {
+      const h = complexHalaqahs[i];
+      await setDoc(doc(targetDb, 'halaqahs', h.id), cleanFirestoreData(h));
+      addLog(`[حلقة ${i + 1}/${complexHalaqahs.length}] ✅ تم نقل حلقة (${h.name}) إلى halaqahs/${h.id}`);
     }
 
     onProgress?.({
       step: 4,
       totalSteps: 10,
-      percent: 45,
-      title: 'تثبيت هوية المجمع في القاعدة المنفصلة',
-      detail: 'تم إنشاء سجل المجمع السحابي وتوثيق ملكية حساب Google',
-      logs: [...logs]
-    });
-
-    await new Promise(r => setTimeout(r, 500));
-
-    // Step 5: Transfer halaqahs
-    addLog(`جاري نقل وترحيل (${complexHalaqahs.length}) حلقة تحفيظ إلى القاعدة المنفصلة...`);
-    for (const h of complexHalaqahs) {
-      try {
-        await setDoc(doc(db, 'isolated_complex_databases', complex.id, 'halaqahs', h.id), cleanFirestoreData(h));
-      } catch {}
-    }
-    addLog(`تم نقل وتأمين كافة حلقات التحفيظ بنجاح.`);
-
-    onProgress?.({
-      step: 5,
-      totalSteps: 10,
-      percent: 56,
+      percent: 38,
       title: 'ترحيل حلقات التحفيظ والمجموعات',
-      detail: `تم نقل (${complexHalaqahs.length}) حلقة تعليمية إلى مساحة التخزين المستقلة`,
+      detail: `تم نقل (${complexHalaqahs.length}) حلقة إلى قاعدة البيانات المستقلة`,
       logs: [...logs]
     });
 
-    await new Promise(r => setTimeout(r, 600));
-
-    // Step 6: Transfer students
-    addLog(`جاري نقل وترحيل (${complexStudents.length}) ملف طالب وحسابات أولياء الأمور إلى القاعدة المنفصلة...`);
-    for (const s of complexStudents) {
-      try {
-        await setDoc(doc(db, 'isolated_complex_databases', complex.id, 'students', s.id), cleanFirestoreData(s));
-      } catch {}
+    // Step 6: Write Teachers to targetDb
+    if (complexTeachers.length > 0) {
+      addLog(`جاري نقل (${complexTeachers.length}) معلماً ومشرفاً إلى مجموعة teachers...`);
+      for (const t of complexTeachers) {
+        await setDoc(doc(targetDb, 'teachers', t.id), cleanFirestoreData(t));
+        addLog(`✅ تم نقل حساب المعلم: ${t.name} (المستخدم: ${t.username})`);
+      }
     }
-    addLog(`تم نقل ملفات جميع الطلاب وحساباتهم بنجاح.`);
+
+    // Step 7: Write Students to targetDb
+    addLog(`جاري نقل (${complexStudents.length}) ملف طالب إلى مجموعة students في فايربيس...`);
+    for (let i = 0; i < complexStudents.length; i++) {
+      const s = complexStudents[i];
+      await setDoc(doc(targetDb, 'students', s.id), cleanFirestoreData(s));
+      if (i % 5 === 0 || i === complexStudents.length - 1) {
+        addLog(`[طالب ${i + 1}/${complexStudents.length}] ✅ تم نقل الطالب: ${s.name} (ID: ${s.id})`);
+      }
+    }
 
     onProgress?.({
       step: 6,
       totalSteps: 10,
-      percent: 68,
-      title: 'ترحيل ملفات وسجلات الطلاب',
-      detail: `تم نقل بيانات (${complexStudents.length}) طالباً بالكامل`,
+      percent: 55,
+      title: 'ترحيل سجلات وملفات الطلاب',
+      detail: `تم نقل بيانات (${complexStudents.length}) طالباً بالكامل إلى students`,
       logs: [...logs]
     });
 
-    await new Promise(r => setTimeout(r, 650));
-
-    // Step 7: Transfer attendance records
-    addLog(`جاري نقل وترحيل (${complexAttendance.length}) سجل حضور وغياب يومي إلى القاعدة المنفصلة...`);
+    // Step 8: Write Attendance to targetDb
+    addLog(`جاري نقل (${complexAttendance.length}) سجل حضور وغياب إلى مجموعة attendance...`);
+    let attCount = 0;
     for (const a of complexAttendance) {
-      try {
-        await setDoc(doc(db, 'isolated_complex_databases', complex.id, 'attendance', a.id), cleanFirestoreData(a));
-      } catch {}
+      await setDoc(doc(targetDb, 'attendance', a.id), cleanFirestoreData(a));
+      attCount++;
+      if (attCount % 20 === 0 || attCount === complexAttendance.length) {
+        addLog(`[حضور ${attCount}/${complexAttendance.length}] ✅ تم ترحيل سجلات حضور وغياب إلى attendance/${a.id}`);
+      }
     }
-    addLog(`تم ترحيل سجلات الحضور والغياب بنجاح.`);
 
     onProgress?.({
       step: 7,
       totalSteps: 10,
-      percent: 78,
+      percent: 70,
       title: 'ترحيل سجلات الحضور والغياب اليومي',
-      detail: `تم نقل (${complexAttendance.length}) سجل حضور وغياب سحابياً`,
+      detail: `تم نقل (${complexAttendance.length}) سجل حضور وغياب إلى attendance`,
       logs: [...logs]
     });
 
-    await new Promise(r => setTimeout(r, 600));
-
-    // Step 8: Transfer evaluations, exams, certificates, violations
+    // Step 9: Write Evaluations, Exams, Certificates, Violations
     addLog(`جاري نقل التقييمات (${complexEvaluations.length})، الاختبارات (${complexExams.length})، والشهادات (${complexCertificates.length})...`);
     for (const ev of complexEvaluations) {
-      try {
-        await setDoc(doc(db, 'isolated_complex_databases', complex.id, 'evaluations', ev.id), cleanFirestoreData(ev));
-      } catch {}
+      await setDoc(doc(targetDb, 'evaluations', ev.id), cleanFirestoreData(ev));
     }
     for (const ex of complexExams) {
-      try {
-        await setDoc(doc(db, 'isolated_complex_databases', complex.id, 'exams', ex.id), cleanFirestoreData(ex));
-      } catch {}
+      await setDoc(doc(targetDb, 'exams', ex.id), cleanFirestoreData(ex));
     }
     for (const sub of complexSubmissions) {
-      try {
-        await setDoc(doc(db, 'isolated_complex_databases', complex.id, 'exam_submissions', sub.id), cleanFirestoreData(sub));
-      } catch {}
-    }
-    for (const v of complexViolations) {
-      try {
-        await setDoc(doc(db, 'isolated_complex_databases', complex.id, 'violations', v.id), cleanFirestoreData(v));
-      } catch {}
+      await setDoc(doc(targetDb, 'exam_submissions', sub.id), cleanFirestoreData(sub));
     }
     for (const cert of complexCertificates) {
-      try {
-        await setDoc(doc(db, 'isolated_complex_databases', complex.id, 'certificates', cert.id), cleanFirestoreData(cert));
-      } catch {}
+      await setDoc(doc(targetDb, 'certificates', cert.id), cleanFirestoreData(cert));
     }
-    addLog(`تم نقل وتأمين كافة تقييمات التسميع وبنك الاختبارات والشهادات بنجاح.`);
+    for (const v of complexViolations) {
+      await setDoc(doc(targetDb, 'violations', v.id), cleanFirestoreData(v));
+    }
+    addLog(`✅ تم نقل كافة التقييمات، الاختبارات، الشهادات، والملاحظات السلوكية بنجاح.`);
+
+    // Write Settings and metadata to targetDb
+    const curSettings = await this.loadSettings();
+    const curCriteria = await this.loadCriteria();
+    await setDoc(doc(targetDb, 'settings', 'main'), cleanFirestoreData(curSettings));
+    for (const cr of curCriteria) {
+      await setDoc(doc(targetDb, 'criteria', cr.id), cleanFirestoreData(cr));
+    }
+    await setDoc(doc(targetDb, 'settings', 'omran_migration_receipt'), {
+      migratedAt: new Date().toISOString(),
+      complexId: complex.id,
+      complexName: complex.name,
+      connectedEmail: cleanEmail,
+      stats: {
+        studentsCount: complexStudents.length,
+        halaqahsCount: complexHalaqahs.length,
+        attendanceCount: complexAttendance.length,
+        evaluationsCount: complexEvaluations.length,
+        examsCount: complexExams.length,
+        certificatesCount: complexCertificates.length,
+        totalRecords
+      }
+    });
 
     onProgress?.({
       step: 8,
       totalSteps: 10,
       percent: 88,
-      title: 'ترحيل التقييمات والاختبارات والشهادات',
-      detail: `تم نقل كافة سجلات الإنجاز القرآني والمخالفات السلوكية`,
+      title: 'ترحيل التقييمات والاختبارات والإعدادات',
+      detail: `تم نقل كافة سجلات الإنجاز وإعدادات المنصة إلى مشروع فايربيس المستقل`,
       logs: [...logs]
     });
 
-    await new Promise(r => setTimeout(r, 600));
-
-    // Step 9: Save isolated database configuration onto the complex
-    addLog(`ربط وتفعيل قاعدة البيانات المنفصلة لمجمع (${complex.name}) رسمياً...`);
+    // Step 10: Update Complex in source database & local cache
+    addLog(`تحديث إعدادات مجمع (${complex.name}) في المنصة لتوثيق ربطه بقاعدة البيانات المستقلة...`);
     const migrationStats = {
       studentsCount: complexStudents.length,
       halaqahsCount: complexHalaqahs.length,
@@ -1352,10 +1494,10 @@ export class OmranDataService {
       isCustom: true,
       isIsolated: true,
       projectId: targetProjId,
-      apiKey: firebaseConfig.apiKey || '',
-      authDomain: firebaseConfig.authDomain || `${targetProjId}.firebaseapp.com`,
-      storageBucket: firebaseConfig.storageBucket || `${targetProjId}.firebasestorage.app`,
-      appId: firebaseConfig.appId || '',
+      apiKey: targetApiKey,
+      authDomain: options.targetAuthDomain || `${targetProjId}.firebaseapp.com`,
+      storageBucket: options.targetStorageBucket || `${targetProjId}.firebasestorage.app`,
+      appId: options.targetAppId || '',
       databaseId: targetDbId,
       connectedEmail: cleanEmail,
       enabledAt: new Date().toISOString(),
@@ -1376,22 +1518,10 @@ export class OmranDataService {
       certificates: complexCertificates
     });
 
-    addLog(`تم التحقق من مطابقة وسلامة السجلات السحابية بنسبة 100%.`);
-    onProgress?.({
-      step: 9,
-      totalSteps: 10,
-      percent: 94,
-      title: 'تأكيد العزل السحابي وفحص سلامة السجلات',
-      detail: 'تم التحقق من مطابقة واكتمال جميع السجلات المنقولة',
-      logs: [...logs]
-    });
-
-    await new Promise(r => setTimeout(r, 600));
-
-    // Step 10: Purge central if requested by the developer
+    // Step 11: Purge from central if requested
     let purgedFromCentral = false;
     if (options.purgeFromCentral) {
-      addLog(`جاري تنظيف وإفراغ بيانات مجمع (${complex.name}) من القاعدة المركزية لضمان العزل التام...`);
+      addLog(`جاري تنظيف وإفراغ بيانات مجمع (${complex.name}) من القاعدة المركزية القديمة بعد اكتمال نقلها...`);
       for (const a of complexAttendance) {
         try { await deleteDoc(doc(db, 'attendance', a.id)); } catch {}
       }
@@ -1405,16 +1535,18 @@ export class OmranDataService {
         try { await deleteDoc(doc(db, 'students', s.id)); } catch {}
       }
       purgedFromCentral = true;
-      addLog(`تم إفراغ بيانات المجمع من القاعدة المركزية بنجاح، وأصبحت مقصورة على القاعدة المنفصلة.`);
+      addLog(`✅ تم إفراغ البيانات من القاعدة المركزية بنجاح.`);
     }
 
-    addLog(`اكتملت عملية نقل المجمع إلى قاعدة بيانات منفصلة بحساب Google (${cleanEmail}) بنجاح تام! ✓`);
+    const consoleUrl = `https://console.firebase.google.com/project/${targetProjId}/firestore/data`;
+    addLog(`🎉 اكتمل النقل الحقيقي بنجاح! يمكنك الآن فتح كونسول فايربيس عبر الرابط: ${consoleUrl}`);
+
     onProgress?.({
       step: 10,
       totalSteps: 10,
       percent: 100,
-      title: 'تم النقل بنجاح!',
-      detail: `أصبحت قاعدة بيانات مجمع (${complex.name}) منفصلة تماماً ومؤمنة`,
+      title: 'تم النقل بنجاح إلى Firebase!',
+      detail: `أصبحت كافة بيانات مجمع (${complex.name}) متواجدة حقيقةً في مشروع فايربيس المستقل (${targetProjId})`,
       logs: [...logs]
     });
 
@@ -1425,6 +1557,8 @@ export class OmranDataService {
       targetGoogleEmail: cleanEmail,
       targetProjectId: targetProjId,
       targetDatabaseId: targetDbId,
+      targetApiKey: targetApiKey,
+      firebaseConsoleUrl: consoleUrl,
       migratedAt: new Date().toISOString(),
       purgedFromCentral,
       stats: migrationStats

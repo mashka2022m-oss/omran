@@ -311,65 +311,24 @@ export const ComplexMigrationModal: React.FC<ComplexMigrationModalProps> = ({
     setStatusMessage('جارٍ فحص واستخراج بيانات المجمع وتحزيمها سحابياً...');
 
     try {
-      // Step 1: Inspect & Export Complex Data
-      await new Promise(r => setTimeout(r, 600));
-      setProgressPercent(15);
-      setActiveStepIndex(1);
-      setStatusMessage('جارٍ الاتصال بحساب Google وتأسيس مشروع وقاعدة بيانات Firebase المنفصلة...');
+      const res = await OmranDataService.migrateComplexToDedicatedDatabase(
+        {
+          complexId: activeComplex.id,
+          targetProjectId: targetProjectId.trim(),
+          targetApiKey: targetApiKey.trim() || 'AIzaSyDEzjLSKGT89RkZk_r3PnWooCyuYok4pyc',
+          targetGoogleEmail: googleAccount.email,
+          targetDatabaseId: targetDatabaseId.trim() || '(default)'
+        },
+        (p) => {
+          setProgressPercent(p.percent);
+          setStatusMessage(p.detail || p.title);
+        }
+      );
 
-      // Step 2: Establish connection to Target Database
-      await new Promise(r => setTimeout(r, 700));
-      setProgressPercent(28);
-      setActiveStepIndex(2);
-      setStatusMessage(`جارٍ تأسيس وثيقة المجمع الأساسية (${activeComplex.name}) في القاعدة المنفصلة...`);
-
-      // Step 3: Write Complex Document & Theme
-      await new Promise(r => setTimeout(r, 600));
-      setProgressPercent(40);
-      setActiveStepIndex(3);
-      setStatusMessage(`جارٍ ترحيل الحلقات القرآنية (${complexStats.halaqahs} حلقة)...`);
-
-      // Step 4: Migrate Halaqahs
-      await new Promise(r => setTimeout(r, 700));
-      setProgressPercent(52);
-      setActiveStepIndex(4);
-      setStatusMessage(`جارٍ ترحيل حسابات المعلمين والمشرفين (${complexStats.teachers} معلماً)...`);
-
-      // Step 5: Migrate Teachers
-      await new Promise(r => setTimeout(r, 650));
-      setProgressPercent(64);
-      setActiveStepIndex(5);
-      setStatusMessage(`جارٍ ترحيل سجلات الطلاب ومواضع الحفظ (${complexStats.students} طالباً)...`);
-
-      // Step 6: Migrate Students
-      await new Promise(r => setTimeout(r, 800));
-      setProgressPercent(76);
-      setActiveStepIndex(6);
-      setStatusMessage(`جارٍ ترحيل سجلات الحضور والغياب اليومية (${complexStats.attendance} سجلاً)...`);
-
-      // Step 7: Migrate Attendance
-      await new Promise(r => setTimeout(r, 750));
-      setProgressPercent(85);
-      setActiveStepIndex(7);
-      setStatusMessage(`جارٍ ترحيل تقييمات التسميع والدرجات (${complexStats.evaluations} تقييماً)...`);
-
-      // Step 8: Migrate Evaluations
-      await new Promise(r => setTimeout(r, 700));
-      setProgressPercent(93);
-      setActiveStepIndex(8);
-      setStatusMessage('جارٍ ترحيل الاختبارات القرآنية والشهادات وسجلات الاستماع...');
-
-      // Step 9: Migrate Exams, Certs, Violations
-      await new Promise(r => setTimeout(r, 650));
-      setProgressPercent(98);
-      setActiveStepIndex(9);
-      setStatusMessage('جارٍ توثيق الانفصال واعتماد قاعدة البيانات المنفصلة للمجمع...');
-
-      // Finalize: Update Complex in OmranDataService with the new isolated database configuration
       const isolatedConfig = {
         isCustom: true,
         projectId: targetProjectId.trim(),
-        databaseId: targetDatabaseId.trim() || targetProjectId.trim(),
+        databaseId: targetDatabaseId.trim() || '(default)',
         apiKey: targetApiKey.trim() || 'AIzaSyDEzjLSKGT89RkZk_r3PnWooCyuYok4pyc',
         authDomain: `${targetProjectId.trim()}.firebaseapp.com`,
         storageBucket: `${targetProjectId.trim()}.firebasestorage.app`,
@@ -381,9 +340,6 @@ export const ComplexMigrationModal: React.FC<ComplexMigrationModalProps> = ({
         ...activeComplex,
         databaseConfig: isolatedConfig
       };
-
-      await OmranDataService.updateComplexDatabaseConfig(activeComplex.id, isolatedConfig);
-      await OmranDataService.saveComplex(updatedComplex);
 
       if (onComplexUpdated) {
         await onComplexUpdated(updatedComplex);

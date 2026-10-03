@@ -586,6 +586,8 @@ export interface ComplexMigrationResult {
   targetGoogleEmail: string;
   targetProjectId: string;
   targetDatabaseId: string;
+  targetApiKey?: string;
+  firebaseConsoleUrl?: string;
   migratedAt: string;
   purgedFromCentral: boolean;
   stats: {

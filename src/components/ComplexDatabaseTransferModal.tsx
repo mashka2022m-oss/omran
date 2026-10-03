@@ -23,10 +23,27 @@ import {
   ChevronDown,
   Globe,
   User,
-  UserCheck
+  UserCheck,
+  Key,
+  Copy,
+  CheckCheck,
+  FileText,
+  Download,
+  Terminal,
+  Shield
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
-import { QuranComplex, Halaqah, Student, AttendanceRecord, StudentEvaluation, Exam, GoogleOAuthConfig, ComplexMigrationProgress, ComplexMigrationResult } from '../types';
+import {
+  QuranComplex,
+  Halaqah,
+  Student,
+  AttendanceRecord,
+  StudentEvaluation,
+  Exam,
+  GoogleOAuthConfig,
+  ComplexMigrationProgress,
+  ComplexMigrationResult
+} from '../types';
 import { OmranDataService, firebaseConfig, TARGET_FIRESTORE_DATABASE_ID } from '../lib/firebase';
 import { GoogleWorkspaceService } from '../lib/googleWorkspace';
 
@@ -70,28 +87,45 @@ export const ComplexDatabaseTransferModal: React.FC<ComplexDatabaseTransferModal
   // Developer email from platform settings
   const developerEmail = (googleAuthConfig?.connectedEmail || '').trim();
 
-  // Mode: 'different_account' (default - client or different account) vs 'developer_account'
-  const [accountMode, setAccountMode] = useState<'different_account' | 'developer_account'>('different_account');
-
-  // Target Google Account state (defaults to existing complex config if any, otherwise empty so developer can choose freely)
+  // Target Google Account state
   const [targetGoogleEmail, setTargetGoogleEmail] = useState<string>(() => {
-    if (targetComplex?.databaseConfig?.connectedEmail) {
-      return targetComplex.databaseConfig.connectedEmail;
-    }
-    return '';
+    return targetComplex?.databaseConfig?.connectedEmail || developerEmail || '';
   });
 
-  // Database settings
-  const [targetDatabaseId, setTargetDatabaseId] = useState<string>(() => {
-    return targetComplex?.databaseConfig?.databaseId || `isolated-${targetComplex?.id || 'complex'}`;
-  });
-
+  // Target Firebase Credentials
   const [targetProjectId, setTargetProjectId] = useState<string>(() => {
-    return targetComplex?.databaseConfig?.projectId || firebaseConfig.projectId || 'omran-ffbad';
+    return targetComplex?.databaseConfig?.projectId || '';
   });
 
-  const [purgeFromCentral, setPurgeFromCentral] = useState<boolean>(true);
-  const [showDeveloperGuide, setShowDeveloperGuide] = useState<boolean>(false);
+  const [targetApiKey, setTargetApiKey] = useState<string>(() => {
+    return targetComplex?.databaseConfig?.apiKey || '';
+  });
+
+  const [targetDatabaseId, setTargetDatabaseId] = useState<string>(() => {
+    return targetComplex?.databaseConfig?.databaseId || '(default)';
+  });
+
+  const [targetAuthDomain, setTargetAuthDomain] = useState<string>('');
+  const [targetStorageBucket, setTargetStorageBucket] = useState<string>('');
+  const [targetAppId, setTargetAppId] = useState<string>('');
+
+  // Raw Config Paste Box (Developer can paste full firebaseConfig snippet or JSON)
+  const [rawConfigSnippet, setRawConfigSnippet] = useState<string>('');
+  const [isRawSnippetParsed, setIsRawSnippetParsed] = useState<boolean>(false);
+
+  // Options
+  const [purgeFromCentral, setPurgeFromCentral] = useState<boolean>(false);
+  const [showDeveloperGuide, setShowDeveloperGuide] = useState<boolean>(true);
+  const [copiedRules, setCopiedRules] = useState<boolean>(false);
+
+  // Test Connection State
+  const [isTestingConnection, setIsTestingConnection] = useState<boolean>(false);
+  const [connectionTestResult, setConnectionTestResult] = useState<{
+    tested: boolean;
+    success: boolean;
+    message: string;
+    details?: any;
+  } | null>(null);
 
   // Flow State: 'configure' | 'transferring' | 'completed' | 'error'
   const [migrationState, setMigrationState] = useState<'configure' | 'transferring' | 'completed' | 'error'>('configure');
@@ -121,8 +155,16 @@ export const ComplexDatabaseTransferModal: React.FC<ComplexDatabaseTransferModal
       if (targetComplex.databaseConfig?.connectedEmail) {
         setTargetGoogleEmail(targetComplex.databaseConfig.connectedEmail);
       }
-      setTargetDatabaseId(targetComplex.databaseConfig?.databaseId || `isolated-${targetComplex.id}`);
-      setTargetProjectId(targetComplex.databaseConfig?.projectId || firebaseConfig.projectId || 'omran-ffbad');
+      if (targetComplex.databaseConfig?.projectId) {
+        setTargetProjectId(targetComplex.databaseConfig.projectId);
+      }
+      if (targetComplex.databaseConfig?.apiKey) {
+        setTargetApiKey(targetComplex.databaseConfig.apiKey);
+      }
+      if (targetComplex.databaseConfig?.databaseId) {
+        setTargetDatabaseId(targetComplex.databaseConfig.databaseId);
+      }
+      setConnectionTestResult(null);
     }
   }, [targetComplex?.id]);
 
@@ -133,10 +175,67 @@ export const ComplexDatabaseTransferModal: React.FC<ComplexDatabaseTransferModal
   const complexHalaqahIds = new Set(complexHalaqahs.map(h => h.id));
   const complexStudents = students.filter(s => (s.halaqahId && complexHalaqahIds.has(s.halaqahId)) || s.complexId === targetComplex?.id);
 
-  // Is target email different from developer's current email?
-  const isDifferentAccount = !developerEmail || (targetGoogleEmail && targetGoogleEmail.trim().toLowerCase() !== developerEmail.toLowerCase());
+  // Handle parsing of pasted firebaseConfig string
+  const handleParseRawConfig = (text: string) => {
+    setRawConfigSnippet(text);
+    if (!text.trim()) return;
 
-  // Google sign in / account chooser handler (Forces Google Account Chooser so developer can pick ANY account)
+    try {
+      // 1. Try JSON parse first
+      let cleanText = text.trim();
+      if (cleanText.includes('{') && cleanText.includes('}')) {
+        const jsonMatch = cleanText.substring(cleanText.indexOf('{'), cleanText.lastIndexOf('}') + 1);
+        try {
+          const parsed = JSON.parse(jsonMatch);
+          if (parsed.projectId || parsed.apiKey) {
+            if (parsed.projectId) setTargetProjectId(parsed.projectId);
+            if (parsed.apiKey) setTargetApiKey(parsed.apiKey);
+            if (parsed.authDomain) setTargetAuthDomain(parsed.authDomain);
+            if (parsed.storageBucket) setTargetStorageBucket(parsed.storageBucket);
+            if (parsed.appId) setTargetAppId(parsed.appId);
+            setIsRawSnippetParsed(true);
+            setConnectionTestResult(null);
+            return;
+          }
+        } catch {}
+      }
+
+      // 2. Regex fallback for JS object style (apiKey: "...", projectId: '...')
+      const apiKeyMatch = text.match(/apiKey\s*[:=]\s*["']([^"']+)["']/i);
+      const projectIdMatch = text.match(/projectId\s*[:=]\s*["']([^"']+)["']/i);
+      const authDomainMatch = text.match(/authDomain\s*[:=]\s*["']([^"']+)["']/i);
+      const storageBucketMatch = text.match(/storageBucket\s*[:=]\s*["']([^"']+)["']/i);
+      const appIdMatch = text.match(/appId\s*[:=]\s*["']([^"']+)["']/i);
+
+      let found = false;
+      if (projectIdMatch && projectIdMatch[1]) {
+        setTargetProjectId(projectIdMatch[1].trim());
+        found = true;
+      }
+      if (apiKeyMatch && apiKeyMatch[1]) {
+        setTargetApiKey(apiKeyMatch[1].trim());
+        found = true;
+      }
+      if (authDomainMatch && authDomainMatch[1]) {
+        setTargetAuthDomain(authDomainMatch[1].trim());
+      }
+      if (storageBucketMatch && storageBucketMatch[1]) {
+        setTargetStorageBucket(storageBucketMatch[1].trim());
+      }
+      if (appIdMatch && appIdMatch[1]) {
+        setTargetAppId(appIdMatch[1].trim());
+      }
+
+      if (found) {
+        setIsRawSnippetParsed(true);
+        setConnectionTestResult(null);
+      }
+    } catch (e) {
+      console.warn('Error parsing firebase config snippet:', e);
+    }
+  };
+
+  // Google sign in / account chooser handler
   const handleSelectGoogleAccount = async () => {
     setIsSigningInGoogle(true);
     setErrorMessage(null);
@@ -144,15 +243,10 @@ export const ComplexDatabaseTransferModal: React.FC<ComplexDatabaseTransferModal
       const res = await GoogleWorkspaceService.selectAnyGoogleAccountForMigration();
       if (res?.email) {
         setTargetGoogleEmail(res.email.trim());
-        setAccountMode('different_account');
       }
     } catch (err: any) {
       if (err?.isPopupClosed) {
-        setErrorMessage('تم إغلاق نافذة اختيار الحساب من Google قبل الاختيار. يمكنك المحاولة مجدداً أو كتابة البريد يدوياً.');
-      } else if (err?.isPopupBlocked) {
-        setErrorMessage('قام المتصفح بحظر نافذة Google المنبثقة. يمكنك كتابة بريد الحساب يدوياً بالأسفل.');
-      } else if (err?.isUnauthorizedDomain) {
-        setErrorMessage(err.message || 'النطاق الحالي غير مصرح له بالنوافذ المنبثقة، يمكنك إدخال بريد الحساب يدوياً بالأسفل.');
+        setErrorMessage('تم إغلاق نافذة اختيار الحساب قبل الاختيار.');
       } else {
         setErrorMessage(err?.message || 'تعذر استكمال اختيار حساب Google.');
       }
@@ -161,40 +255,78 @@ export const ComplexDatabaseTransferModal: React.FC<ComplexDatabaseTransferModal
     }
   };
 
-  // Start Transfer Handler
-  const handleStartMigration = async (overrideEmail?: string) => {
-    if (!targetComplex) return;
-
-    let activeEmail = (overrideEmail || targetGoogleEmail || '').trim();
-
-    // If no email selected yet, open Google Account selector right now!
-    if (!activeEmail) {
-      setIsSigningInGoogle(true);
-      setErrorMessage(null);
-      try {
-        const res = await GoogleWorkspaceService.selectAnyGoogleAccountForMigration();
-        if (res?.email) {
-          activeEmail = res.email.trim();
-          setTargetGoogleEmail(res.email.trim());
-        } else {
-          throw new Error('لم يتم تحديد بريد حساب Google.');
-        }
-      } catch (err: any) {
-        setErrorMessage(err?.message || 'يرجى اختيار أو كتابة حساب Google المستهدف للمجمع قبل بدء النقل.');
-        setIsSigningInGoogle(false);
-        return;
-      } finally {
-        setIsSigningInGoogle(false);
-      }
+  // Test Real Connection to Target Firebase Project
+  const handleTestRealConnection = async () => {
+    if (!targetProjectId.trim()) {
+      setErrorMessage('يرجى إدخال معرف المشروع (Project ID) لفحص الاتصال.');
+      return;
     }
-
-    if (!activeEmail) {
-      setErrorMessage('يرجى تحديد أو اختيار حساب Google المستهدف لنقل المجمع إليه.');
+    if (!targetApiKey.trim()) {
+      setErrorMessage('يرجى إدخال مفتاح الويب (API Key) لفحص الاتصال بمشروعك.');
       return;
     }
 
-    const cleanProjId = (targetProjectId || `omran-${targetComplex.id}`).trim();
-    const cleanDbId = (targetDatabaseId || `isolated-${targetComplex.id}`).trim();
+    setIsTestingConnection(true);
+    setErrorMessage(null);
+    setConnectionTestResult(null);
+
+    try {
+      const res = await OmranDataService.testRealFirebaseConnection({
+        projectId: targetProjectId.trim(),
+        apiKey: targetApiKey.trim(),
+        databaseId: targetDatabaseId.trim() || '(default)',
+        authDomain: targetAuthDomain.trim() || undefined,
+        storageBucket: targetStorageBucket.trim() || undefined,
+        appId: targetAppId.trim() || undefined
+      });
+
+      setConnectionTestResult({
+        tested: true,
+        success: res.success,
+        message: res.message,
+        details: res.details
+      });
+    } catch (err: any) {
+      setConnectionTestResult({
+        tested: true,
+        success: false,
+        message: err?.message || 'حدث خطأ أثناء فحص الاتصال بـ Firebase.'
+      });
+    } finally {
+      setIsTestingConnection(false);
+    }
+  };
+
+  // Copy Recommended Security Rules to Clipboard
+  const handleCopySecurityRules = () => {
+    const rules = `rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if true;
+    }
+  }
+}`;
+    navigator.clipboard.writeText(rules);
+    setCopiedRules(true);
+    setTimeout(() => setCopiedRules(false), 3000);
+  };
+
+  // Start Real Migration Handler
+  const handleStartRealMigration = async () => {
+    if (!targetComplex) return;
+
+    const cleanProjId = targetProjectId.trim();
+    const cleanApiKey = targetApiKey.trim();
+
+    if (!cleanProjId) {
+      setErrorMessage('يرجى إدخال معرف مشروع Firebase (Project ID) للبدء.');
+      return;
+    }
+    if (!cleanApiKey) {
+      setErrorMessage('يرجى إدخال مفتاح الويب (Web API Key) الخاص بمشروع فايربيس للاتصال بالسيرفر وكتابة البيانات.');
+      return;
+    }
 
     setErrorMessage(null);
     setMigrationState('transferring');
@@ -202,11 +334,12 @@ export const ComplexDatabaseTransferModal: React.FC<ComplexDatabaseTransferModal
       step: 1,
       totalSteps: 10,
       percent: 5,
-      title: 'تهيئة جلسة الترحيل السحابي التلقائي...',
-      detail: `جاري الاتصال بحساب Google (${activeEmail}) وتجهيز المشروع وقاعدة البيانات...`,
+      title: 'بدء الاتصال الفعلي بمشروع Firebase المستهدف...',
+      detail: `جاري الاتصال بمشروع (${cleanProjId}) والتحقق من صلاحية مفتاح API...`,
       logs: [
-        `[${new Date().toLocaleTimeString('ar-SA')}] بدء جلسة نقل بيانات مجمع (${targetComplex.name})...`,
-        `[${new Date().toLocaleTimeString('ar-SA')}] تم تأكيد هوية حساب Google: (${activeEmail})`
+        `[${new Date().toLocaleTimeString('ar-SA')}] بدء جلسة النقل الفعلي لبيانات مجمع (${targetComplex.name})...`,
+        `[${new Date().toLocaleTimeString('ar-SA')}] مشروع Firebase المستهدف: (${cleanProjId})`,
+        `[${new Date().toLocaleTimeString('ar-SA')}] جاري فحص الاتصال وقراءة/كتابة وثيقة الاختبار...`
       ]
     });
 
@@ -214,9 +347,13 @@ export const ComplexDatabaseTransferModal: React.FC<ComplexDatabaseTransferModal
       const res = await OmranDataService.migrateComplexToDedicatedDatabase(
         {
           complexId: targetComplex.id,
-          targetGoogleEmail: activeEmail,
           targetProjectId: cleanProjId,
-          targetDatabaseId: cleanDbId,
+          targetApiKey: cleanApiKey,
+          targetGoogleEmail: targetGoogleEmail.trim() || undefined,
+          targetDatabaseId: targetDatabaseId.trim() || '(default)',
+          targetAuthDomain: targetAuthDomain.trim() || undefined,
+          targetStorageBucket: targetStorageBucket.trim() || undefined,
+          targetAppId: targetAppId.trim() || undefined,
           purgeFromCentral: purgeFromCentral
         },
         (p) => {
@@ -230,8 +367,8 @@ export const ComplexDatabaseTransferModal: React.FC<ComplexDatabaseTransferModal
       // Trigger celebration confetti
       try {
         confetti({
-          particleCount: 120,
-          spread: 70,
+          particleCount: 130,
+          spread: 80,
           origin: { y: 0.6 }
         });
       } catch {}
@@ -240,46 +377,84 @@ export const ComplexDatabaseTransferModal: React.FC<ComplexDatabaseTransferModal
       await onSuccessRefresh();
     } catch (err: any) {
       console.error('Migration error:', err);
-      setErrorMessage(err?.message || 'حدث خطأ غير متوقع أثناء ترحيل بيانات المجمع.');
+      setErrorMessage(err?.message || 'حدث خطأ أثناء نقل بيانات المجمع إلى فايربيس.');
       setMigrationState('error');
+    }
+  };
+
+  // Download JSON backup of the transferred data
+  const handleDownloadBackupJson = async () => {
+    if (!targetComplex) return;
+    try {
+      const backup = await OmranDataService.exportFullBackup();
+      const complexData = {
+        complex: targetComplex,
+        databaseConfig: targetComplex.databaseConfig,
+        migratedAt: new Date().toISOString(),
+        halaqahs: complexHalaqahs,
+        students: complexStudents,
+        stats: migrationResult?.stats
+      };
+      const blob = new Blob([JSON.stringify(complexData, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `omran_migrated_${targetComplex.id}_${Date.now()}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e: any) {
+      alert('تعذر تنزيل الملف: ' + e.message);
     }
   };
 
   // Purge now handler (if developer didn't check purge earlier, but wants to purge after migration)
   const handlePurgeNow = async () => {
     if (!targetComplex) return;
+    if (!window.confirm(`هل أنت متأكد من حذف بيانات مجمع (${targetComplex.name}) من القاعدة المركزية بعد التأكد من وجودها في فايربيس الجديد؟`)) {
+      return;
+    }
     try {
       await OmranDataService.purgeComplexData(targetComplex.id);
       if (migrationResult) {
         setMigrationResult({ ...migrationResult, purgedFromCentral: true });
       }
       await onSuccessRefresh();
+      alert('تم إفراغ البيانات من القاعدة المركزية بنجاح.');
     } catch (err: any) {
       setErrorMessage('تعذر إفراغ البيانات المركزية: ' + (err.message || 'خطأ غير معروف'));
     }
   };
 
+  const firebaseConsoleDataUrl = targetProjectId.trim()
+    ? `https://console.firebase.google.com/project/${targetProjectId.trim()}/firestore/data`
+    : 'https://console.firebase.google.com/';
+
+  const firebaseConsoleRulesUrl = targetProjectId.trim()
+    ? `https://console.firebase.google.com/project/${targetProjectId.trim()}/firestore/rules`
+    : 'https://console.firebase.google.com/';
+
   return (
     <div className="fixed inset-0 z-[9999] bg-black/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 text-right" dir="rtl">
-      <div className="w-full max-w-2xl bg-[#022c22] border-2 border-amber-500/70 rounded-[32px] shadow-2xl overflow-hidden flex flex-col max-h-[92vh] animate-in fade-in zoom-in-95 duration-200">
+      <div className="w-full max-w-3xl bg-[#022c22] border-2 border-amber-500/70 rounded-[32px] shadow-2xl overflow-hidden flex flex-col max-h-[94vh] animate-in fade-in zoom-in-95 duration-200">
         
         {/* Header */}
         <div className="p-5 sm:p-6 bg-gradient-to-r from-[#064e3b] via-[#022c22] to-[#064e3b] border-b border-[#065f46] flex items-center justify-between gap-4 shrink-0">
           <div className="flex items-center gap-3.5">
             <div className="w-12 h-12 rounded-2xl bg-amber-400 text-[#064e3b] flex items-center justify-center shadow-lg shadow-amber-400/20 shrink-0">
-              <ArrowRightLeft className="w-6 h-6 stroke-[2.5]" />
+              <Database className="w-6 h-6 stroke-[2.5]" />
             </div>
             <div>
               <div className="flex items-center gap-2 flex-wrap">
                 <h3 className="text-lg sm:text-xl font-black font-heading text-white">
-                  نقل المجمع إلى قاعدة بيانات منفصلة (Firebase)
+                  النقل الفعلي للمجمع إلى مشروع Firebase مستقل
                 </h3>
-                <span className="text-[10px] px-2.5 py-0.5 rounded-full bg-amber-400 text-[#064e3b] font-black shadow-sm">
-                  ميزة حصرية للمبرمج
+                <span className="text-[10px] px-2.5 py-0.5 rounded-full bg-emerald-400 text-[#064e3b] font-black shadow-sm flex items-center gap-1">
+                  <CheckCircle2 className="w-3 h-3" />
+                  اتصال ونقل حقيقي 100%
                 </span>
               </div>
               <p className="text-xs text-[#86efac] mt-1 leading-relaxed">
-                ترحيل كامل بيانات المجمع وإنشاء قاعدة بيانات مستقلة مرتبطة بحساب Google المعتمد
+                ترحيل كامل بيانات المجمع (حلقات، طلاب، كشوفات، تقييمات) إلى مشروعك السحابي في Firebase ومتابعتها مباشرة
               </p>
             </div>
           </div>
@@ -307,8 +482,8 @@ export const ComplexDatabaseTransferModal: React.FC<ComplexDatabaseTransferModal
                   <div className="flex items-center gap-2.5">
                     <Building2 className="w-5 h-5 text-amber-400 shrink-0" />
                     <div>
-                      <span className="text-xs font-bold text-white block">المجمع التعليمي المستهدف بالنقل:</span>
-                      <span className="text-[11px] text-[#86efac]">اختر المجمع الذي ترغب في نقله وتخصيص قاعدة بيانات له:</span>
+                      <span className="text-xs font-bold text-white block">المجمع التعليمي المراد نقله:</span>
+                      <span className="text-[11px] text-[#86efac]">اختر المجمع الذي ترغب في نقله وتخصيص قاعدة بيانات مستقلة له:</span>
                     </div>
                   </div>
 
@@ -319,7 +494,7 @@ export const ComplexDatabaseTransferModal: React.FC<ComplexDatabaseTransferModal
                   >
                     {complexes.map(c => (
                       <option key={c.id} value={c.id}>
-                        {c.name} {c.databaseConfig?.isCustom ? '[منفصلة مسبقاً]' : '[مركزية]'}
+                        {c.name} {c.databaseConfig?.isCustom ? '[منفصل مسبقاً]' : '[قاعدة مركزية]'}
                       </option>
                     ))}
                   </select>
@@ -343,57 +518,71 @@ export const ComplexDatabaseTransferModal: React.FC<ComplexDatabaseTransferModal
                     <div className="p-2.5 rounded-xl bg-[#022c22]/80 border border-[#065f46] text-center">
                       <span className="text-[10px] text-slate-300 block">الحالة الحالية</span>
                       <strong className="text-amber-400 font-bold text-[11px]">
-                        {targetComplex.databaseConfig?.isCustom ? 'منفصلة' : 'قاعدة مركزية'}
+                        {targetComplex.databaseConfig?.isCustom ? 'قاعدة منفصلة' : 'قاعدة مركزية'}
                       </strong>
                     </div>
                   </div>
                 )}
               </div>
 
-              {/* PRIMARY 1-CLICK AUTOMATED LAUNCH BANNER */}
-              <div className="bg-gradient-to-r from-amber-500/25 via-emerald-500/20 to-teal-500/25 border-2 border-amber-400 rounded-3xl p-5 sm:p-6 space-y-4 shadow-2xl relative overflow-hidden">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                  <div className="space-y-1.5">
+              {/* REAL EXPLANATION & FIREBASE CONSOLE ACCESS BANNER */}
+              <div className="bg-gradient-to-r from-amber-500/20 via-emerald-500/15 to-teal-500/20 border-2 border-amber-400 rounded-3xl p-5 sm:p-6 space-y-4 shadow-xl">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="space-y-1">
                     <span className="text-[10px] px-3 py-0.5 rounded-full bg-amber-400 text-[#064e3b] font-black inline-flex items-center gap-1 shadow-sm">
                       <Sparkles className="w-3.5 h-3.5" />
-                      الإنشاء والربط السحابي التلقائي الكامل (1-Click Automated)
+                      آلية العمل الحقيقية لفايربيس (Real Firebase Project)
                     </span>
-                    <h4 className="text-base sm:text-lg font-black text-white font-heading">
-                      ترحيل المجمع وإنشاء قاعدة البيانات سحابياً بالكامل
+                    <h4 className="text-sm sm:text-base font-black text-white font-heading">
+                      كيف يعمل نقل البيانات الحقيقي إلى حسابك في Firebase؟
                     </h4>
-                    <p className="text-xs text-[#86efac] leading-relaxed">
-                      اختر الحساب المستهدف (حساب عميل مستقل أو حساب مجمع آخر)، وبضغطة زر واحدة سيتولى النظام إنشاء المشروع وقاعدة بيانات Firestore المستقلة ونقل الحلقات والطلاب وسجلات المجمع كاملة من أولها لآخرها!
+                  </div>
+
+                  <a
+                    href="https://console.firebase.google.com/"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-4 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-[#064e3b] font-black text-xs shadow transition-all cursor-pointer flex items-center justify-center gap-1.5 shrink-0"
+                  >
+                    <span>فتح Firebase Console لإنشاء مشروع ↗</span>
+                    <ExternalLink className="w-3.5 h-3.5" />
+                  </a>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1 text-[11px]">
+                  <div className="bg-[#022c22]/90 border border-[#065f46] p-3 rounded-xl space-y-1">
+                    <div className="font-bold text-amber-300 flex items-center gap-1.5">
+                      <span className="w-5 h-5 rounded-full bg-amber-400 text-[#064e3b] flex items-center justify-center text-[10px] font-black">1</span>
+                      أنشئ مشروعاً مجاناً
+                    </div>
+                    <p className="text-slate-300 leading-relaxed">
+                      في كونسول فايربيس اضغط <strong>Add project</strong> واختر أي اسم (مثلاً: <span className="text-emerald-300 font-mono">omran-complex</span>) في ثوانٍ بدون بطاقة بنكية.
+                    </p>
+                  </div>
+
+                  <div className="bg-[#022c22]/90 border border-[#065f46] p-3 rounded-xl space-y-1">
+                    <div className="font-bold text-amber-300 flex items-center gap-1.5">
+                      <span className="w-5 h-5 rounded-full bg-amber-400 text-[#064e3b] flex items-center justify-center text-[10px] font-black">2</span>
+                      فعّل Firestore Database
+                    </div>
+                    <p className="text-slate-300 leading-relaxed">
+                      من القائمة اليسرى اضغط <strong>Build &gt; Firestore Database</strong> ثم <strong>Create database</strong> واختر (Start in test mode).
+                    </p>
+                  </div>
+
+                  <div className="bg-[#022c22]/90 border border-[#065f46] p-3 rounded-xl space-y-1">
+                    <div className="font-bold text-amber-300 flex items-center gap-1.5">
+                      <span className="w-5 h-5 rounded-full bg-amber-400 text-[#064e3b] flex items-center justify-center text-[10px] font-black">3</span>
+                      انسخ الكود وضعه هنا
+                    </div>
+                    <p className="text-slate-300 leading-relaxed">
+                      من إعدادات المشروع (Project Settings ⚙️) انسخ <strong>Project ID</strong> و <strong>Web API Key</strong> أو الصق كود التكوين كاملاً بالأسفل.
                     </p>
                   </div>
                 </div>
-
-                <div className="pt-1">
-                  <button
-                    type="button"
-                    onClick={() => handleStartMigration()}
-                    disabled={isSigningInGoogle}
-                    className="w-full py-4 px-6 rounded-2xl bg-gradient-to-r from-amber-400 via-amber-300 to-yellow-400 hover:brightness-110 text-[#064e3b] font-black text-xs sm:text-sm shadow-[0_0_25px_rgba(251,191,36,0.4)] transition-all cursor-pointer flex items-center justify-center gap-2.5"
-                  >
-                    {isSigningInGoogle ? (
-                      <>
-                        <Loader2 className="w-5 h-5 animate-spin text-[#064e3b]" />
-                        <span>جاري فتح نافذة Google والمصادقة والبدء...</span>
-                      </>
-                    ) : (
-                      <>
-                        <LogIn className="w-5 h-5 text-[#064e3b]" />
-                        <span>
-                          {targetGoogleEmail
-                            ? `بدء الترحيل التلقائي الآن إلى قاعدة بيانات حساب (${targetGoogleEmail}) 🚀`
-                            : 'اختر أو اكتب حساب Google المستهدف واضغط للبدء التلقائي في نقل المجمع 🚀'}
-                        </span>
-                      </>
-                    )}
-                  </button>
-                </div>
               </div>
 
-              {/* Step 1: Target Google Account Selection (اختيار حساب Google المستهدف للمجمع - خيار لحساب آخر أو حساب المبرمج) */}
+              {/* SMART CONFIGURATION INPUT (لصق الكود كاملاً أو إدخال الحقول) */}
               <div className="bg-[#022c22] border-2 border-emerald-500/50 rounded-2xl p-4 sm:p-5 space-y-4 shadow-xl">
                 <div className="flex items-center justify-between pb-2 border-b border-[#065f46]">
                   <div className="flex items-center gap-2">
@@ -401,178 +590,227 @@ export const ComplexDatabaseTransferModal: React.FC<ComplexDatabaseTransferModal
                       1
                     </div>
                     <h4 className="text-sm font-bold text-white">
-                      اختيار حساب Google المستهدف (حساب العميل أو حساب مستقل)
+                      بيانات مشروع Firebase المستهدف (Project Credentials)
                     </h4>
                   </div>
                   <span className="text-[10px] bg-emerald-500/20 text-emerald-300 font-bold px-2 py-0.5 rounded-full border border-emerald-400/30">
-                    ميزة حصرية للمبرمج
+                    مطلوبة للاتصال الفعلي
                   </span>
                 </div>
 
-                {/* Account Choice Toggle (خيار حساب آخر أو حساب المبرمج) */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 bg-[#064e3b]/40 p-1.5 rounded-xl border border-[#065f46]">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setAccountMode('different_account');
-                      if (targetGoogleEmail && developerEmail && targetGoogleEmail.toLowerCase() === developerEmail.toLowerCase()) {
-                        setTargetGoogleEmail('');
-                      }
-                    }}
-                    className={`py-2.5 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer ${
-                      accountMode === 'different_account'
-                        ? 'bg-amber-400 text-[#064e3b] shadow-md font-black'
-                        : 'text-[#86efac] hover:text-white hover:bg-white/5'
-                    }`}
-                  >
-                    <Globe className="w-4 h-4" />
-                    <span>حساب Google آخر (عميل / مجمع مستقل)</span>
-                  </button>
+                {/* Quick Paste Area */}
+                <div className="space-y-1.5 bg-[#064e3b]/40 p-3 rounded-xl border border-[#065f46]">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[11px] font-bold text-amber-300 flex items-center gap-1">
+                      <Key className="w-3.5 h-3.5 text-amber-400" />
+                      الصق كود إعدادات فايربيس كاملاً (firebaseConfig) للاستخراج التلقائي السريع:
+                    </label>
+                    {isRawSnippetParsed && (
+                      <span className="text-[10px] text-emerald-300 font-bold flex items-center gap-1">
+                        <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                        تم استخراج المعرفات بنجاح
+                      </span>
+                    )}
+                  </div>
+                  <textarea
+                    rows={2}
+                    value={rawConfigSnippet}
+                    onChange={e => handleParseRawConfig(e.target.value)}
+                    placeholder={`مثال: const firebaseConfig = { apiKey: "AIzaSy...", projectId: "my-complex-project", ... };`}
+                    className="w-full bg-[#022c22] border border-[#065f46] rounded-lg p-2.5 text-xs text-white font-mono placeholder:text-slate-500 outline-none focus:border-amber-400"
+                    dir="ltr"
+                  />
+                  <span className="text-[10px] text-slate-400 block">
+                    يمكنك لصق كود Web SDK كاملاً كما نسخه من Firebase Console، أو تعبئة الحقول أدناه يدوياً.
+                  </span>
+                </div>
+
+                {/* Individual Form Fields */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 pt-1">
+                  <div>
+                    <label className="block text-[11px] font-bold text-emerald-200 mb-1">
+                      معرف مشروع Firebase (Project ID) <span className="text-rose-400">*</span>:
+                    </label>
+                    <input
+                      type="text"
+                      value={targetProjectId}
+                      onChange={e => {
+                        setTargetProjectId(e.target.value);
+                        setConnectionTestResult(null);
+                      }}
+                      placeholder="مثال: my-quran-complex-123"
+                      className="w-full bg-[#064e3b] border border-[#065f46] rounded-xl px-3 py-2.5 text-xs text-white font-mono outline-none focus:border-amber-400"
+                      dir="ltr"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-emerald-200 mb-1">
+                      مفتاح الويب (Web API Key) <span className="text-rose-400">*</span>:
+                    </label>
+                    <input
+                      type="text"
+                      value={targetApiKey}
+                      onChange={e => {
+                        setTargetApiKey(e.target.value);
+                        setConnectionTestResult(null);
+                      }}
+                      placeholder="مثال: AIzaSyDEzjLSKGT89RkZk..."
+                      className="w-full bg-[#064e3b] border border-[#065f46] rounded-xl px-3 py-2.5 text-xs text-white font-mono outline-none focus:border-amber-400"
+                      dir="ltr"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-emerald-200 mb-1">
+                      معرف قاعدة البيانات (Database ID):
+                    </label>
+                    <input
+                      type="text"
+                      value={targetDatabaseId}
+                      onChange={e => setTargetDatabaseId(e.target.value)}
+                      placeholder="(default)"
+                      className="w-full bg-[#064e3b] border border-[#065f46] rounded-xl px-3 py-2 text-xs text-white font-mono outline-none focus:border-amber-400"
+                      dir="ltr"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-emerald-200 mb-1">
+                      بريد حساب Google المالك (اختياري / للتوثيق):
+                    </label>
+                    <div className="flex gap-2">
+                      <input
+                        type="email"
+                        value={targetGoogleEmail}
+                        onChange={e => setTargetGoogleEmail(e.target.value)}
+                        placeholder="client.complex@gmail.com"
+                        className="w-full bg-[#064e3b] border border-[#065f46] rounded-xl px-3 py-2 text-xs text-white font-mono outline-none focus:border-amber-400"
+                        dir="ltr"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleSelectGoogleAccount}
+                        disabled={isSigningInGoogle}
+                        className="px-3 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-bold shrink-0 cursor-pointer flex items-center gap-1"
+                        title="اختيار حساب Google"
+                      >
+                        <Globe className="w-3.5 h-3.5" />
+                        <span>اختيار</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Step 2: Real Connection Test Action */}
+                <div className="pt-2 border-t border-[#065f46] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="space-y-0.5">
+                    <span className="text-xs font-bold text-white block">فحص الاتصال الفعلي بقاعدة بيانات المشروع:</span>
+                    <span className="text-[11px] text-[#86efac]">
+                      يختبر صلاحية القراءة والكتابة في خوادم Google للتأكد قبل بدء النقل.
+                    </span>
+                  </div>
 
                   <button
                     type="button"
-                    onClick={() => {
-                      setAccountMode('developer_account');
-                      if (developerEmail) {
-                        setTargetGoogleEmail(developerEmail);
-                      }
-                    }}
-                    className={`py-2.5 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer ${
-                      accountMode === 'developer_account'
-                        ? 'bg-emerald-500 text-white shadow-md font-black'
-                        : 'text-[#86efac] hover:text-white hover:bg-white/5'
-                    }`}
+                    onClick={handleTestRealConnection}
+                    disabled={isTestingConnection || !targetProjectId.trim() || !targetApiKey.trim()}
+                    className="px-5 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-white font-black text-xs shadow-md transition-all cursor-pointer flex items-center justify-center gap-2 disabled:opacity-40 shrink-0"
                   >
-                    <User className="w-4 h-4" />
-                    <span>حساب المبرمج الحالي {developerEmail ? `(${developerEmail.split('@')[0]})` : ''}</span>
+                    {isTestingConnection ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin text-white" />
+                        <span>جاري فحص الاتصال بالخادم...</span>
+                      </>
+                    ) : (
+                      <>
+                        <RefreshCw className="w-4 h-4 text-white" />
+                        <span>اختبار الاتصال الفعلي بـ Firebase الآن ⚡</span>
+                      </>
+                    )}
                   </button>
                 </div>
 
-                {/* DIFFERENT ACCOUNT MODE: Official Google Account Chooser Popup + Direct Email Input */}
-                {accountMode === 'different_account' && (
-                  <div className="space-y-4 pt-1">
-                    <p className="text-[11px] text-[#86efac]/90 leading-relaxed">
-                      يمكنك اختيار أي حساب Google مختلف تملكه أو يملكه العميل؛ ستفتح لك نافذة Google الرسمية متضمنة خيار <strong className="text-amber-300">&quot;استخدام حساب آخر&quot;</strong> لتسجيل الدخول بحساب العميل مباشرة، أو يمكنك كتابة بريده الإلكتروني يدوياً:
-                    </p>
-
-                    {/* Official Google Account Picker Button */}
-                    <button
-                      type="button"
-                      onClick={handleSelectGoogleAccount}
-                      disabled={isSigningInGoogle}
-                      className="w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-amber-400 via-amber-300 to-yellow-400 hover:brightness-110 text-[#064e3b] font-black text-xs sm:text-sm shadow-md transition-all cursor-pointer flex items-center justify-center gap-2.5 disabled:opacity-50"
-                    >
-                      {isSigningInGoogle ? (
-                        <>
-                          <Loader2 className="w-4 h-4 animate-spin text-[#064e3b]" />
-                          <span>جاري فتح نافذة Google الرسمية لاختيار الحساب...</span>
-                        </>
-                      ) : (
-                        <>
-                          <Globe className="w-4 h-4 text-[#064e3b]" />
-                          <span>فتح نافذة Google الرسمية لاختيار أو تبديل الحساب (Google Account Chooser) 🌐</span>
-                        </>
-                      )}
-                    </button>
-
-                    {/* Manual Email Input Alternative */}
-                    <div className="space-y-1.5 pt-1">
-                      <div className="flex items-center justify-between text-[11px]">
-                        <label className="text-[#86efac] font-bold">
-                          أو كتابة / لصق بريد حساب Google المستهدف يدوياً:
-                        </label>
-                        <span className="text-[10px] text-amber-300/80">يدعم أي بريد Google</span>
-                      </div>
-                      <div className="relative">
-                        <Mail className="w-4 h-4 text-emerald-400 absolute right-3 top-3" />
-                        <input
-                          type="email"
-                          value={targetGoogleEmail}
-                          onChange={e => {
-                            setTargetGoogleEmail(e.target.value);
-                            setAccountMode('different_account');
-                          }}
-                          placeholder="مثال: client.complex@gmail.com أو supervisor@gmail.com"
-                          className="w-full bg-[#064e3b] border border-amber-400/50 rounded-xl pr-9 pl-3 py-2.5 text-xs text-white font-mono placeholder:text-emerald-300/40 outline-none focus:border-amber-400 shadow-inner"
-                          dir="ltr"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* DEVELOPER ACCOUNT MODE */}
-                {accountMode === 'developer_account' && (
-                  <div className="p-3.5 rounded-xl bg-[#064e3b]/60 border border-emerald-500/40 space-y-2">
-                    <div className="flex items-center gap-2 text-emerald-300 font-bold text-xs">
-                      <UserCheck className="w-4 h-4 text-emerald-400" />
-                      <span>حساب المبرمج الشخصي المعتمد في المنصة:</span>
-                    </div>
-                    <div className="font-mono text-sm text-white font-bold bg-[#022c22] p-2.5 rounded-lg border border-[#065f46]" dir="ltr">
-                      {developerEmail || 'لم يتم تسجيل بريد المبرمج في إعدادات المنصة'}
-                    </div>
-                    <p className="text-[11px] text-amber-200/90 leading-relaxed">
-                      💡 <strong>ملاحظة للمبرمج:</strong> عند اختيار حسابك الشخصي سيتم إنشاء قاعدة البيانات المستقلة للمجمع على نفس حسابك. إذا كنت تقوم بتسليم النظام لعميل أو مجمع مستقل، نوصي بالضغط على تبويب <span className="text-amber-300 underline font-bold cursor-pointer" onClick={() => setAccountMode('different_account')}>&quot;حساب Google آخر&quot;</span> بالأعلى لاختيار حساب العميل.
-                    </p>
-                  </div>
-                )}
-
-                {/* Active Target Account Confirmation Card */}
-                {targetGoogleEmail && (
-                  <div className={`p-3.5 rounded-xl border-2 transition-all space-y-2 ${
-                    isDifferentAccount
-                      ? 'bg-emerald-950/70 border-emerald-400 text-emerald-200 shadow-lg'
-                      : 'bg-amber-950/70 border-amber-400 text-amber-200 shadow-lg'
+                {/* Connection Test Status Banner */}
+                {connectionTestResult && (
+                  <div className={`p-4 rounded-xl border-2 transition-all space-y-2 ${
+                    connectionTestResult.success
+                      ? 'bg-emerald-950/80 border-emerald-400 text-emerald-200'
+                      : 'bg-rose-950/80 border-rose-500 text-rose-200'
                   }`}>
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
-                      <div className="flex items-center gap-2.5">
-                        <CheckCircle2 className={`w-5 h-5 shrink-0 ${isDifferentAccount ? 'text-emerald-400' : 'text-amber-400'}`} />
-                        <div>
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="font-bold text-white text-xs">الحساب المعتمد لنقل قاعدة البيانات:</span>
-                            {isDifferentAccount ? (
-                              <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-400 text-[#064e3b] font-black">
-                                ✨ حساب مستقل للعميل / المجمع (غير حساب المبرمج)
-                              </span>
-                            ) : (
-                              <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-400 text-[#064e3b] font-black">
-                                👤 حساب المبرمج الشخصي
-                              </span>
-                            )}
-                          </div>
-                          <div className="font-mono text-white text-sm font-bold mt-1" dir="ltr">
-                            {targetGoogleEmail}
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-2 self-end sm:self-center">
-                        <button
-                          type="button"
-                          onClick={handleSelectGoogleAccount}
-                          disabled={isSigningInGoogle}
-                          className="px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white text-[11px] font-bold flex items-center gap-1.5 transition-all cursor-pointer"
-                          title="فتح نافذة Google لاختيار حساب آخر"
-                        >
-                          <RefreshCw className="w-3.5 h-3.5" />
-                          <span>تبديل الحساب</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setTargetGoogleEmail('')}
-                          className="px-2.5 py-1.5 rounded-lg bg-red-500/20 hover:bg-red-500/30 text-red-300 text-[11px] font-bold flex items-center gap-1 transition-all cursor-pointer"
-                          title="مسح الحساب لاختيار حساب آخر"
-                        >
-                          <X className="w-3.5 h-3.5" />
-                          <span>مسح</span>
-                        </button>
+                    <div className="flex items-start gap-2.5">
+                      {connectionTestResult.success ? (
+                        <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
+                      ) : (
+                        <AlertTriangle className="w-5 h-5 text-rose-400 shrink-0 mt-0.5" />
+                      )}
+                      <div className="space-y-1">
+                        <strong className="font-bold text-xs block text-white">
+                          {connectionTestResult.success ? 'الاتصال جاهز وسليم 100%!' : 'فشل اختبار الاتصال بمشروعك'}
+                        </strong>
+                        <p className="text-[11px] leading-relaxed">
+                          {connectionTestResult.message}
+                        </p>
                       </div>
                     </div>
+
+                    {/* Security Rules Helper if permission-denied */}
+                    {!connectionTestResult.success && (
+                      <div className="bg-[#022c22] p-3 rounded-lg border border-rose-500/40 space-y-2 mt-2">
+                        <div className="flex items-center justify-between">
+                          <span className="font-bold text-amber-300 text-[11px] flex items-center gap-1.5">
+                            <Shield className="w-3.5 h-3.5 text-amber-400" />
+                            حل مشكلة قواعد الأمان (Firestore Security Rules):
+                          </span>
+                          <button
+                            type="button"
+                            onClick={handleCopySecurityRules}
+                            className="px-2.5 py-1 rounded bg-amber-400/20 hover:bg-amber-400/30 text-amber-300 text-[10px] font-bold border border-amber-400/30 flex items-center gap-1 cursor-pointer"
+                          >
+                            {copiedRules ? (
+                              <>
+                                <CheckCheck className="w-3 h-3 text-emerald-400" />
+                                <span>تم النسخ!</span>
+                              </>
+                            ) : (
+                              <>
+                                <Copy className="w-3 h-3" />
+                                <span>نسخ القواعد</span>
+                              </>
+                            )}
+                          </button>
+                        </div>
+                        <p className="text-[10px] text-slate-300">
+                          ادخل إلى <strong>Firestore Database &gt; Rules</strong> في كونسول فايربيس والصق القواعد التالية لتسمح بنقل البيانات:
+                        </p>
+                        <pre className="p-2 rounded bg-black/50 text-[10px] font-mono text-emerald-300 overflow-x-auto" dir="ltr">
+{`rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if true;
+    }
+  }
+}`}
+                        </pre>
+                        {targetProjectId && (
+                          <a
+                            href={firebaseConsoleRulesUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-[10px] text-amber-300 underline font-bold flex items-center gap-1"
+                          >
+                            <span>فتح صفحة Rules في مشروعك مباشرة ↗</span>
+                            <ExternalLink className="w-3 h-3" />
+                          </a>
+                        )}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
 
-              {/* Step 2: Target Database ID & Project Settings */}
+              {/* Step 3: Purge Options & Migration Launch */}
               <div className="bg-[#022c22] border border-[#065f46] rounded-2xl p-4 sm:p-5 space-y-4">
                 <div className="flex items-center justify-between pb-2 border-b border-[#065f46]">
                   <div className="flex items-center gap-2">
@@ -580,182 +818,45 @@ export const ComplexDatabaseTransferModal: React.FC<ComplexDatabaseTransferModal
                       2
                     </div>
                     <h4 className="text-sm font-bold text-white">
-                      إعدادات قاعدة البيانات المنفصلة (Firestore Partition)
+                      خيارات الترحيل وإفراغ البيانات المركزية
                     </h4>
-                  </div>
-                  <span className="text-[10px] bg-amber-400/20 text-amber-300 font-bold px-2 py-0.5 rounded-full">
-                    مضبوطة تلقائياً
-                  </span>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                  <div>
-                    <label className="block text-[11px] font-bold text-emerald-200 mb-1">
-                      معرف قاعدة البيانات المنفصلة (Database ID):
-                    </label>
-                    <input
-                      type="text"
-                      value={targetDatabaseId}
-                      onChange={e => setTargetDatabaseId(e.target.value)}
-                      placeholder="isolated-complex-db"
-                      className="w-full bg-[#064e3b] border border-[#065f46] rounded-xl px-3 py-2 text-xs text-white font-mono outline-none focus:border-amber-400"
-                      dir="ltr"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-[11px] font-bold text-emerald-200 mb-1">
-                      مشروع Firebase المستهدف (Project ID):
-                    </label>
-                    <input
-                      type="text"
-                      value={targetProjectId}
-                      onChange={e => setTargetProjectId(e.target.value)}
-                      placeholder="omran-ffbad"
-                      className="w-full bg-[#064e3b] border border-[#065f46] rounded-xl px-3 py-2 text-xs text-white font-mono outline-none focus:border-amber-400"
-                      dir="ltr"
-                    />
                   </div>
                 </div>
 
                 {/* Purge option toggle */}
+                <label className="flex items-start gap-3 p-3 rounded-xl bg-black/30 border border-[#065f46] cursor-pointer hover:border-amber-400/40 transition-colors">
+                  <input
+                    type="checkbox"
+                    checked={purgeFromCentral}
+                    onChange={e => setPurgeFromCentral(e.target.checked)}
+                    className="mt-0.5 accent-amber-400 w-4 h-4 cursor-pointer"
+                  />
+                  <div>
+                    <span className="font-bold text-white block">
+                      إفراغ بيانات هذا المجمع من القاعدة المركزية القديمة بعد نجاح نقله إلى مشروعه المستقل
+                    </span>
+                    <p className="text-[11px] text-[#86efac]/80 mt-0.5">
+                      يضمن استقلال المجمع التام وعدم تكرار سجلاته في القاعدة المركزية (يمكنك الاحتفاظ بنسخة وعدم الحذف).
+                    </p>
+                  </div>
+                </label>
+
+                {/* Primary Launch Action */}
                 <div className="pt-2">
-                  <label className="flex items-start gap-3 p-3 rounded-xl bg-black/30 border border-[#065f46] cursor-pointer hover:border-amber-400/40 transition-colors">
-                    <input
-                      type="checkbox"
-                      checked={purgeFromCentral}
-                      onChange={e => setPurgeFromCentral(e.target.checked)}
-                      className="mt-0.5 accent-amber-400 w-4 h-4 cursor-pointer"
-                    />
-                    <div>
-                      <span className="font-bold text-white block">
-                        إفراغ بيانات هذا المجمع من القاعدة المركزية تلقائياً بعد اكتمال النقل
-                      </span>
-                      <p className="text-[11px] text-[#86efac]/80 mt-0.5">
-                        يوصى به لضمان العزل التام للمجمع في قاعدته المنفصلة وعدم وجود بيانات مكررة في القاعدة المركزية المشتركة.
-                      </p>
-                    </div>
-                  </label>
-                </div>
-              </div>
-
-              {/* Developer Step-by-Step Guide Accordion (دليل المبرمج التفصيلي) */}
-              <div className="bg-[#064e3b]/40 border-2 border-amber-400/40 rounded-2xl overflow-hidden shadow-lg transition-all">
-                <button
-                  type="button"
-                  onClick={() => setShowDeveloperGuide(!showDeveloperGuide)}
-                  className="w-full p-4 flex items-center justify-between text-right hover:bg-white/5 transition-colors cursor-pointer"
-                >
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-8 h-8 rounded-xl bg-amber-400/20 text-amber-300 flex items-center justify-center border border-amber-400/40 shrink-0 font-bold">
-                      <BookOpen className="w-4 h-4 text-amber-400" />
-                    </div>
-                    <div>
-                      <h5 className="text-xs sm:text-sm font-black text-white">
-                        دليل المبرمج التفصيلي: كيف تجلب بيانات Firebase لحساب Google خطوة بخطوة؟
-                      </h5>
-                      <span className="text-[11px] text-[#86efac]">
-                        اضغط هنا لعرض الخطوات المشروحة بالتفصيل لتجهيز مشروع Firebase والحصول على المعرفات
-                      </span>
-                    </div>
-                  </div>
-
-                  <ChevronDown className={`w-5 h-5 text-amber-400 transition-transform duration-200 shrink-0 ${showDeveloperGuide ? 'rotate-180' : ''}`} />
-                </button>
-
-                {showDeveloperGuide && (
-                  <div className="p-4 sm:p-5 border-t border-[#065f46] bg-[#022c22]/90 space-y-4 text-xs leading-relaxed text-[#f0f9f6]">
-                    
-                    {/* Step 1 */}
-                    <div className="p-3.5 rounded-xl bg-[#064e3b]/50 border border-[#065f46] space-y-2">
-                      <div className="flex items-center justify-between">
-                        <span className="font-bold text-amber-300 flex items-center gap-1.5">
-                          <span className="w-5 h-5 rounded-full bg-amber-400 text-[#064e3b] flex items-center justify-center text-[11px] font-black">1</span>
-                          الدخول إلى منصة Firebase بحساب Google المطلوب
-                        </span>
-                        <a
-                          href="https://console.firebase.google.com/"
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="px-2.5 py-1 rounded-lg bg-amber-400/20 hover:bg-amber-400/30 text-amber-300 text-[10px] font-bold border border-amber-400/30 flex items-center gap-1 cursor-pointer"
-                        >
-                          <span>فتح Firebase Console ↗</span>
-                        </a>
-                      </div>
-                      <p className="text-[11px] text-slate-300">
-                        افتح الرابط <code className="text-amber-300 font-mono" dir="ltr">console.firebase.google.com</code> وسجل الدخول بنفس حساب Google الذي تريد جعل المجمع ملكاً له.
-                      </p>
-                    </div>
-
-                    {/* Step 2 */}
-                    <div className="p-3.5 rounded-xl bg-[#064e3b]/50 border border-[#065f46] space-y-2">
-                      <span className="font-bold text-amber-300 flex items-center gap-1.5">
-                        <span className="w-5 h-5 rounded-full bg-amber-400 text-[#064e3b] flex items-center justify-center text-[11px] font-black">2</span>
-                        إنشاء مشروع جديد (Create / Add Project)
-                      </span>
-                      <p className="text-[11px] text-slate-300">
-                        اضغط على زر <strong className="text-white">&quot;Add project&quot;</strong>، اكتب اسم المشروع (مثلاً: <span className="font-mono text-emerald-300">quran-complex-1</span>). ستلاحظ ظهور <strong className="text-amber-300">معرف المشروع (Project ID)</strong> تلقائياً أسفل الاسم — هذا هو المعرف الذي تحتاجه في خانة Project ID.
-                      </p>
-                    </div>
-
-                    {/* Step 3 */}
-                    <div className="p-3.5 rounded-xl bg-[#064e3b]/50 border border-[#065f46] space-y-2">
-                      <span className="font-bold text-amber-300 flex items-center gap-1.5">
-                        <span className="w-5 h-5 rounded-full bg-amber-400 text-[#064e3b] flex items-center justify-center text-[11px] font-black">3</span>
-                        إنشاء قاعدة بيانات Cloud Firestore
-                      </span>
-                      <p className="text-[11px] text-slate-300">
-                        من القائمة الجانبية اليسرى: اضغط على <strong className="text-white">Build &gt; Firestore Database</strong> ثم اضغط <strong className="text-white">&quot;Create database&quot;</strong>. اختر أقرب منطقة جغرافية (مثل فرانكفورت <code className="text-emerald-300 font-mono">europe-west3</code> أو <code className="text-emerald-300 font-mono">me-central1</code>) واضغط تم.
-                      </p>
-                    </div>
-
-                    {/* Step 4 */}
-                    <div className="p-3.5 rounded-xl bg-[#064e3b]/50 border border-[#065f46] space-y-2">
-                      <span className="font-bold text-amber-300 flex items-center gap-1.5">
-                        <span className="w-5 h-5 rounded-full bg-amber-400 text-[#064e3b] flex items-center justify-center text-[11px] font-black">4</span>
-                        معرفة مفتاح التطبيق (Web API Key)
-                      </span>
-                      <p className="text-[11px] text-slate-300">
-                        اضغط على أيقونة الترس ⚙️ بجانب Project Overview في أعلى القائمة الجانبية ثم اختر <strong className="text-white">Project settings (إعدادات المشروع)</strong>. في تبويب <strong className="text-white">General (عام)</strong> ستجد:
-                      </p>
-                      <div className="text-[11px] bg-[#022c22] p-2.5 rounded-lg border border-[#065f46] font-mono space-y-1 text-slate-300" dir="ltr">
-                        <div>• <strong>Project ID:</strong> your-project-id</div>
-                        <div>• <strong>Web API Key:</strong> AIzaSy...</div>
-                      </div>
-                    </div>
-
-                    {/* Step 5 */}
-                    <div className="p-3.5 rounded-xl bg-[#064e3b]/50 border border-[#065f46] space-y-2">
-                      <span className="font-bold text-amber-300 flex items-center gap-1.5">
-                        <span className="w-5 h-5 rounded-full bg-amber-400 text-[#064e3b] flex items-center justify-center text-[11px] font-black">5</span>
-                        إضافة النطاق المصرح به (Authorized Domains)
-                      </span>
-                      <p className="text-[11px] text-slate-300">
-                        من القائمة الجانبية: <strong className="text-white">Build &gt; Authentication &gt; Settings &gt; Authorized domains</strong> ثم اضغط <strong className="text-white">Add domain</strong> وأضف رابط موقع المنصة الحالي (مثل نطاق Netlify الخاص بك) لتسمح Google بتسجيل الدخول بأمان وبدون أي قيود.
-                      </p>
-                    </div>
-
-                    {/* Quick tip */}
-                    <div className="p-3 rounded-xl bg-amber-400/10 border border-amber-400/30 text-[11px] text-amber-200">
-                      💡 <strong>ملاحظة للمبرمج:</strong> لست بحاجة لكتابة كود! فقط اضغط على زر <strong className="text-white">&quot;تسجيل الدخول واختيار حساب Google&quot;</strong> في الأعلى وسيتعرف النظام على الحساب ويهيئ المعرفات تلقائياً، ثم اضغط <strong className="text-white">&quot;بدء نقل البيانات&quot;</strong> وسيتولى البرنامج كل شيء.
-                    </div>
-
-                  </div>
-                )}
-              </div>
-
-              {/* What will happen card */}
-              <div className="p-3.5 rounded-2xl bg-gradient-to-r from-emerald-500/10 via-amber-500/10 to-emerald-500/10 border border-emerald-400/30 text-[11px] text-[#86efac] space-y-1.5 leading-relaxed">
-                <div className="font-bold text-amber-300 flex items-center gap-1.5">
-                  <Sparkles className="w-4 h-4 text-amber-400" />
-                  <span>ماذا سيحدث عند الضغط على "بدء النقل الآن"؟</span>
-                </div>
-                <div>
-                  • سيقوم النظام بالوصول إلى Firebase وإنشاء مساحة قاعدة بيانات مستقلة بالكامل بحساب Google المعتمد.
-                  <br />
-                  • سيتم نقل الحلقات والطلاب وسجلات الحضور والتقييمات والاختبارات والمخالفات حرفياً أمامك مع شريط تحميل لحظي.
-                  <br />
-                  • عند الانتهاء، ستظهر رسالة "تم النقل"، وسيصبح المجمع يعمل كقاعدة بيانات منفصلة تماماً.
+                  <button
+                    type="button"
+                    onClick={handleStartRealMigration}
+                    disabled={!targetProjectId.trim() || !targetApiKey.trim()}
+                    className="w-full py-4 px-6 rounded-2xl bg-gradient-to-r from-amber-400 via-amber-300 to-yellow-400 hover:brightness-110 text-[#064e3b] font-black text-sm sm:text-base shadow-[0_0_25px_rgba(251,191,36,0.35)] transition-all cursor-pointer flex items-center justify-center gap-2.5 disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    <ArrowRightLeft className="w-5 h-5 text-[#064e3b] stroke-[2.5]" />
+                    <span>
+                      بدء النقل الفعلي لبيانات المجمع إلى مشروع Firebase المستقل 🚀
+                    </span>
+                  </button>
+                  <span className="text-[10px] text-slate-400 text-center block mt-1.5">
+                    سيتم رفع وكتابة كل حلقة، طالب، سجل حضور، وتقييم حقيقةً إلى خوادم Google Firebase في مشروعك.
+                  </span>
                 </div>
               </div>
 
@@ -770,7 +871,7 @@ export const ComplexDatabaseTransferModal: React.FC<ComplexDatabaseTransferModal
             </div>
           )}
 
-          {/* STAGE 2: LIVE INTERACTIVE TRANSFER IN PROGRESS (وستم النقل امام المبرمج ويحمل) */}
+          {/* STAGE 2: LIVE REAL-TIME TRANSFER IN PROGRESS */}
           {migrationState === 'transferring' && (
             <div className="space-y-6 py-4">
               
@@ -789,7 +890,7 @@ export const ComplexDatabaseTransferModal: React.FC<ComplexDatabaseTransferModal
                 {/* Animated Progress Bar */}
                 <div className="w-full bg-[#022c22] rounded-full h-4 p-0.5 border border-[#065f46] overflow-hidden relative">
                   <div
-                    className="h-full rounded-full bg-gradient-to-r from-amber-500 via-emerald-400 to-amber-300 transition-all duration-300 relative overflow-hidden shadow-[0_0_15px_rgba(251,191,36,0.6)]"
+                    className="h-full rounded-full bg-gradient-to-r from-amber-500 via-emerald-400 to-amber-300 transition-all duration-200 relative overflow-hidden shadow-[0_0_15px_rgba(251,191,36,0.6)]"
                     style={{ width: `${progress.percent}%` }}
                   >
                     <div className="absolute inset-0 bg-white/20 animate-pulse" />
@@ -797,13 +898,13 @@ export const ComplexDatabaseTransferModal: React.FC<ComplexDatabaseTransferModal
                 </div>
 
                 <p className="text-xs text-[#86efac] animate-pulse">
-                  {progress.detail || 'يرجى الانتظار، النظام يقوم بترحيل ونقل كافة الجداول سحابياً...'}
+                  {progress.detail || 'يرجى الانتظار، جاري كتابة السجلات والمستندات حقيقةً إلى قاعدة بيانات Firebase...'}
                 </p>
 
                 <div className="flex items-center justify-center gap-4 text-[11px] text-slate-300 pt-1">
                   <span>المجمع: <strong className="text-white">{targetComplex?.name}</strong></span>
                   <span>•</span>
-                  <span>حساب Google: <strong className="font-mono text-amber-300">{targetGoogleEmail}</strong></span>
+                  <span>المشروع المستهدف: <strong className="font-mono text-amber-300">{targetProjectId}</strong></span>
                   <span>•</span>
                   <span>الخطوة: <strong className="text-white">{progress.step} / {progress.totalSteps}</strong></span>
                 </div>
@@ -813,18 +914,18 @@ export const ComplexDatabaseTransferModal: React.FC<ComplexDatabaseTransferModal
               <div className="space-y-2">
                 <div className="flex items-center justify-between text-[11px] text-emerald-200 font-bold px-1">
                   <span className="flex items-center gap-1.5">
-                    <Layers className="w-3.5 h-3.5 text-amber-400" />
-                    <span>سجل النقل اللحظي المباشر أمام المبرمج (Live Migration Console):</span>
+                    <Terminal className="w-3.5 h-3.5 text-amber-400" />
+                    <span>سجل الكتابة السحابية اللحظية لمستندات Firebase (Real Document Writes):</span>
                   </span>
                   <span className="text-[10px] text-emerald-400 font-mono flex items-center gap-1">
                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
-                    مباشر (Real-time)
+                    مباشر (Live Sync)
                   </span>
                 </div>
 
                 <div
                   ref={logTerminalRef}
-                  className="bg-[#022c22] border-2 border-[#065f46] rounded-2xl p-4 font-mono text-[11px] h-48 overflow-y-auto space-y-1.5 text-emerald-300 shadow-inner"
+                  className="bg-[#022c22] border-2 border-[#065f46] rounded-2xl p-4 font-mono text-[11px] h-52 overflow-y-auto space-y-1.5 text-emerald-300 shadow-inner"
                 >
                   {progress.logs.length === 0 ? (
                     <div className="text-slate-500 text-center py-6">جاري تهيئة البث المباشر لسجلات النقل...</div>
@@ -844,7 +945,7 @@ export const ComplexDatabaseTransferModal: React.FC<ComplexDatabaseTransferModal
             </div>
           )}
 
-          {/* STAGE 3: COMPLETED SCREEN (ولما يخلص تظهر تم النقل وتصبح قاعدة بيانات منفصلة) */}
+          {/* STAGE 3: COMPLETED SCREEN (تم النقل ورابط مباشر لكونسول فايربيس) */}
           {migrationState === 'completed' && migrationResult && (
             <div className="space-y-6 py-2 text-center">
               
@@ -855,14 +956,34 @@ export const ComplexDatabaseTransferModal: React.FC<ComplexDatabaseTransferModal
 
               <div>
                 <span className="text-[11px] px-3 py-1 rounded-full bg-emerald-900/80 border border-emerald-400 text-emerald-200 font-bold inline-block mb-2 shadow-sm">
-                  تم الانتهاء بنجاح 100% ✓
+                  تم الانتهاء والنقل الحقيقي بنجاح 100% ✓
                 </span>
                 <h3 className="text-2xl sm:text-3xl font-black font-heading text-white">
-                  تم النقل بنجاح!
+                  تم نقل بيانات المجمع بالكامل إلى Firebase!
                 </h3>
                 <p className="text-xs sm:text-sm text-emerald-200 mt-2 max-w-lg mx-auto leading-relaxed">
-                  أصبح مجمع <strong className="text-amber-300">({migrationResult.complexName})</strong> يعمل الآن على <strong className="text-white">قاعدة بيانات Firebase منفصلة تماماً</strong> ومرتبطة رسمياً بحساب Google المعتمد.
+                  تمت كتابة كافة مجموعات ومستندات مجمع <strong className="text-amber-300">({migrationResult.complexName})</strong> مباشرة في مشروع Firebase المستقل <strong className="text-white font-mono">({migrationResult.targetProjectId})</strong>.
                 </p>
+              </div>
+
+              {/* PRIMARY PROMINENT ACTION: Open Firebase Console Directly */}
+              <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-amber-400/20 via-emerald-500/25 to-teal-500/20 border-2 border-amber-400 max-w-lg mx-auto space-y-3">
+                <div className="flex items-center justify-center gap-2 text-amber-300 font-bold text-xs">
+                  <Sparkles className="w-4 h-4 text-amber-400" />
+                  <span>تأكد بنفسك في وحدة تحكم Google:</span>
+                </div>
+                <a
+                  href={migrationResult.firebaseConsoleUrl || firebaseConsoleDataUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full py-3.5 px-5 rounded-xl bg-amber-400 hover:bg-amber-300 text-[#064e3b] font-black text-xs sm:text-sm shadow-xl transition-all cursor-pointer flex items-center justify-center gap-2"
+                >
+                  <span>فتح مشروعك في Firebase Console لرؤية البيانات الآن ↗</span>
+                  <ExternalLink className="w-4 h-4 text-[#064e3b]" />
+                </a>
+                <span className="text-[10px] text-slate-300 block">
+                  ستجد كافة المجموعات (students, halaqahs, attendance, evaluations, exams...) ظاهرة ببياناتها الفعلية.
+                </span>
               </div>
 
               {/* Statistics & Specs Card */}
@@ -872,24 +993,17 @@ export const ComplexDatabaseTransferModal: React.FC<ComplexDatabaseTransferModal
                   <span className="font-bold text-amber-300 font-heading">{migrationResult.complexName}</span>
                 </div>
                 <div className="flex items-center justify-between pb-2 border-b border-[#065f46]">
-                  <span className="text-slate-300">حساب Google المالك:</span>
-                  <span className="font-mono font-bold text-white" dir="ltr">{migrationResult.targetGoogleEmail}</span>
+                  <span className="text-slate-300">مشروع Firebase المستقل:</span>
+                  <span className="font-mono font-bold text-white" dir="ltr">{migrationResult.targetProjectId}</span>
                 </div>
                 <div className="flex items-center justify-between pb-2 border-b border-[#065f46]">
-                  <span className="text-slate-300">قاعدة البيانات السحابية المنفصلة:</span>
+                  <span className="text-slate-300">قاعدة البيانات:</span>
                   <span className="font-mono text-emerald-300 font-bold">{migrationResult.targetDatabaseId}</span>
-                </div>
-                <div className="flex items-center justify-between pb-2 border-b border-[#065f46]">
-                  <span className="text-slate-300">حالة العزل والاستقلالية:</span>
-                  <span className="text-emerald-400 font-black flex items-center gap-1.5">
-                    <ShieldCheck className="w-4 h-4 text-emerald-400" />
-                    قاعدة بيانات منفصلة معزولة 100%
-                  </span>
                 </div>
 
                 {/* Sub-records breakdown */}
                 <div className="pt-2">
-                  <span className="text-[11px] font-bold text-emerald-200 block mb-2">إجمالي السجلات التي تم ترحيلها ({migrationResult.stats.totalRecords} سجل):</span>
+                  <span className="text-[11px] font-bold text-emerald-200 block mb-2">إجمالي السجلات التي تم ترحيلها حقيقةً ({migrationResult.stats.totalRecords} سجل):</span>
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px] text-center">
                     <div className="p-2 rounded-lg bg-[#022c22] border border-[#065f46]">
                       <span className="text-slate-400 block text-[10px]">الطلاب</span>
@@ -910,25 +1024,30 @@ export const ComplexDatabaseTransferModal: React.FC<ComplexDatabaseTransferModal
                   </div>
                 </div>
 
-                {/* Central database purge status */}
-                <div className="pt-2 border-t border-[#065f46] flex items-center justify-between">
-                  <span className="text-slate-300">القاعدة المركزية المشتركة:</span>
+                {/* Actions row */}
+                <div className="pt-3 border-t border-[#065f46] flex flex-wrap items-center justify-between gap-2">
+                  <button
+                    type="button"
+                    onClick={handleDownloadBackupJson}
+                    className="px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white text-[11px] font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
+                  >
+                    <Download className="w-3.5 h-3.5 text-amber-400" />
+                    <span>تنزيل نسخة JSON احتياطية</span>
+                  </button>
+
                   {migrationResult.purgedFromCentral ? (
-                    <span className="text-emerald-300 font-bold flex items-center gap-1">
+                    <span className="text-emerald-300 text-[11px] font-bold flex items-center gap-1">
                       <Check className="w-3.5 h-3.5 text-emerald-400" />
-                      تم إفراغ البيانات المركزية وتأمين العزل
+                      تم إفراغ القاعدة المركزية
                     </span>
                   ) : (
-                    <div className="flex items-center gap-2">
-                      <span className="text-amber-300 text-[11px]">موجودة نسخة</span>
-                      <button
-                        type="button"
-                        onClick={handlePurgeNow}
-                        className="px-2 py-1 rounded bg-rose-900/60 hover:bg-rose-800 text-rose-200 text-[10px] font-bold cursor-pointer"
-                      >
-                        إفراغ المركزية الآن
-                      </button>
-                    </div>
+                    <button
+                      type="button"
+                      onClick={handlePurgeNow}
+                      className="px-3 py-1.5 rounded-lg bg-rose-900/60 hover:bg-rose-800 text-rose-200 text-[11px] font-bold cursor-pointer"
+                    >
+                      إفراغ القاعدة المركزية الآن
+                    </button>
                   )}
                 </div>
               </div>
@@ -942,7 +1061,7 @@ export const ComplexDatabaseTransferModal: React.FC<ComplexDatabaseTransferModal
               <div className="p-4 rounded-2xl bg-red-950/60 border-2 border-red-500/60 text-red-200 space-y-2">
                 <div className="flex items-center gap-2.5 font-bold text-red-300 text-sm">
                   <AlertTriangle className="w-5 h-5 text-red-400" />
-                  <span>تعذر إتمام عملية ترحيل المجمع</span>
+                  <span>تعذر إتمام عملية نقل المجمع إلى Firebase</span>
                 </div>
                 <p className="text-xs leading-relaxed">{errorMessage}</p>
               </div>
@@ -976,15 +1095,13 @@ export const ComplexDatabaseTransferModal: React.FC<ComplexDatabaseTransferModal
 
               <button
                 type="button"
-                onClick={() => handleStartMigration()}
-                disabled={isSigningInGoogle}
-                className="px-6 py-3 rounded-2xl bg-[#fbbf24] hover:bg-[#f59e0b] text-[#064e3b] text-xs sm:text-sm font-black shadow-xl transition-all cursor-pointer flex items-center gap-2"
+                onClick={handleStartRealMigration}
+                disabled={!targetProjectId.trim() || !targetApiKey.trim()}
+                className="px-6 py-3 rounded-2xl bg-[#fbbf24] hover:bg-[#f59e0b] text-[#064e3b] text-xs sm:text-sm font-black shadow-xl transition-all cursor-pointer flex items-center gap-2 disabled:opacity-40"
               >
                 <ArrowRightLeft className="w-4 h-4 text-[#064e3b] stroke-[2.5]" />
                 <span>
-                  {targetGoogleEmail
-                    ? 'بدء الترحيل التلقائي وإنشاء القاعدة المنفصلة الآن'
-                    : 'تسجيل الدخول بحساب Google والبدء التلقائي'}
+                  بدء النقل الفعلي إلى مشروع فايربيس 🚀
                 </span>
               </button>
             </>
@@ -993,7 +1110,7 @@ export const ComplexDatabaseTransferModal: React.FC<ComplexDatabaseTransferModal
           {migrationState === 'transferring' && (
             <div className="w-full text-center text-xs text-amber-300 flex items-center justify-center gap-2 font-bold py-1">
               <Loader2 className="w-4 h-4 animate-spin text-amber-400" />
-              <span>جاري النقل والتحميل سحابياً، يرجى عدم إغلاق هذه النافذة...</span>
+              <span>جاري الكتابة الحقيقية في خوادم Google Firebase، يرجى عدم إغلاق النافذة...</span>
             </div>
           )}
 
@@ -1004,7 +1121,7 @@ export const ComplexDatabaseTransferModal: React.FC<ComplexDatabaseTransferModal
               className="w-full py-3.5 px-6 rounded-2xl bg-gradient-to-r from-emerald-500 via-emerald-400 to-teal-500 hover:brightness-110 text-[#064e3b] font-black text-sm shadow-xl transition-all cursor-pointer flex items-center justify-center gap-2"
             >
               <Check className="w-5 h-5" />
-              <span>تم، إغلاق والعودة للوحة التحكم</span>
+              <span>تم بنجاح، إغلاق والعودة للوحة التحكم</span>
             </button>
           )}
 
@@ -1015,14 +1132,14 @@ export const ComplexDatabaseTransferModal: React.FC<ComplexDatabaseTransferModal
                 onClick={onClose}
                 className="px-4 py-2 rounded-xl bg-white/10 text-slate-300 text-xs font-bold cursor-pointer"
               >
-                إغلاق
+                إلغاء
               </button>
               <button
                 type="button"
                 onClick={() => setMigrationState('configure')}
                 className="px-5 py-2 rounded-xl bg-[#fbbf24] hover:bg-[#f59e0b] text-[#064e3b] text-xs font-black shadow-lg cursor-pointer"
               >
-                إعادة المحاولة وتعديل الإعدادات
+                تعديل الإعدادات وإعادة المحاولة
               </button>
             </div>
           )}
