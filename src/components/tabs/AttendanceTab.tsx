@@ -34,6 +34,7 @@ import {
   QuranComplex
 } from '../../types';
 import { PrintableQuranicReport } from '../reports/PrintableQuranicReport';
+import { LiveSyncButton } from '../loading/ModernLoadingSuite';
 
 const DEFAULT_ABSENCE_TEMPLATES: AbsenceMessageTemplate[] = [
   {
@@ -55,6 +56,8 @@ interface AttendanceTabProps {
   complexName?: string;
   activeComplex?: QuranComplex | null;
   halaqahName?: string;
+  isSyncing?: boolean;
+  onRefreshData?: () => void | Promise<void>;
 }
 
 export const AttendanceTab: React.FC<AttendanceTabProps> = ({
@@ -67,7 +70,9 @@ export const AttendanceTab: React.FC<AttendanceTabProps> = ({
   onUpdateSettings,
   complexName,
   activeComplex,
-  halaqahName
+  halaqahName,
+  isSyncing,
+  onRefreshData
 }) => {
   const [selectedDate, setSelectedDate] = useState<string>(
     new Date().toISOString().split('T')[0]
@@ -427,6 +432,16 @@ export const AttendanceTab: React.FC<AttendanceTabProps> = ({
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
+          {/* Live Sync / Refresh Button */}
+          {onRefreshData && (
+            <LiveSyncButton
+              isSyncing={!!isSyncing}
+              onRefresh={onRefreshData}
+              label="تحديث الحضور والغياب"
+              compact={false}
+            />
+          )}
+
           {/* Date Picker */}
           <div className="flex items-center gap-2 bg-[#022c22] border border-[#fbbf24]/30 px-3.5 py-2 rounded-2xl shadow-inner">
             <Calendar className="w-4 h-4 text-[#fbbf24]" />

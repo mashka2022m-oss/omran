@@ -67,7 +67,12 @@ import { GoogleWorkspaceService, normalizeArabicText } from './lib/googleWorkspa
 import { LoginModal } from './components/LoginModal';
 import { PublicLandingPage } from './components/PublicLandingPage';
 import { PrivacyPolicyPage } from './components/PrivacyPolicyPage';
-import { CloudLoadingScreen } from './components/CloudLoadingScreen';
+import {
+  TopProgressBar,
+  LiveSyncButton,
+  TabSkeleton,
+  GenericTabSkeleton
+} from './components/loading/ModernLoadingSuite';
 import { ParentPortalView } from './components/ParentPortalView';
 import { TeacherManagementModal } from './components/TeacherManagementModal';
 import { SettingsModal } from './components/SettingsModal';
@@ -206,6 +211,9 @@ export function App() {
   const [certificates, setCertificates] = useState<IssuedCertificate[]>([]);
   const [listeningLogs, setListeningLogs] = useState<StudentListeningLog[]>([]);
   const [isLoadingData, setIsLoadingData] = useState(true);
+  const [isTabLoading, setIsTabLoading] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [lastSyncedTime, setLastSyncedTime] = useState<string>('مُحدّث سحابياً');
 
   // Parse URL on initial load and handle hash / search changes
   useEffect(() => {
@@ -275,9 +283,9 @@ export function App() {
     resolvePortalStudent();
   }, [portalStudentId, students]);
 
-  // Load all data from Firestore / LocalCache
-  const loadAllData = async () => {
-    setIsLoadingData(true);
+  // Load all data from Firestore / LocalCache with non-blocking live sync
+  const loadAllData = async (isManualSync = false) => {
+    setIsSyncing(true);
     try {
       const [
         loadedStudents,
@@ -337,10 +345,15 @@ export function App() {
       setComplexes(loadedComplexes);
       setCertificates(loadedCertificates);
       setListeningLogs(loadedListeningLogs);
+
+      const now = new Date();
+      const timeStr = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+      setLastSyncedTime(`مُحدّث (${timeStr})`);
     } catch (e) {
       console.warn('Initial data load notice:', e);
     } finally {
       setIsLoadingData(false);
+      setIsSyncing(false);
     }
   };
 
@@ -1603,9 +1616,16 @@ export function App() {
     setHalaqahs(hList);
   };
 
-  // 15. Navigation Handlers
+  // 15. Navigation Handlers with Smooth Contextual Loading
   const handleNavigateTab = (tab: string) => {
+    if (tab === activeTab) {
+      setIsTabLoading(true);
+      setTimeout(() => setIsTabLoading(false), 200);
+      return;
+    }
+    setIsTabLoading(true);
     setActiveTab(tab);
+    setTimeout(() => setIsTabLoading(false), 220);
   };
 
   const handleSelectStudentForEval = (studentId: string) => {
@@ -1635,18 +1655,20 @@ export function App() {
     };
   }, [settings, scopedSettings, activePortalStudent, halaqahs, complexes]);
 
-  // 1. Universal Blocking Cloud Loading & Verification Screen (Load-Before-Render)
-  if (isLoadingData) {
-    return (
-      <CloudLoadingScreen
-        onRetry={loadAllData}
-        onForceEnter={() => setIsLoadingData(false)}
-      />
-    );
-  }
-
-  // 2. Strict Student Portal Handling: If user is authenticated as STUDENT, MUST NEVER leak to admin dashboard
+  // 1. Strict Student Portal Handling: If user is authenticated as STUDENT, MUST NEVER leak to admin dashboard
   if (currentUser?.role === 'student') {
+    if (isLoadingData && !activePortalStudent) {
+      return (
+        <div className="min-h-screen bg-[#022c22] text-[#f0f9f6] font-sans selection:bg-[#fbbf24] selection:text-[#064e3b]" dir="rtl">
+          <TopProgressBar isLoading={true} />
+          <AnimatedBackground />
+          <div className="max-w-4xl mx-auto px-4 py-12 relative z-10">
+            <GenericTabSkeleton title="جارٍ مزامنة سجل الطالب وبوابة الحفظ سحابياً..." />
+          </div>
+        </div>
+      );
+    }
+
     if (activePortalStudent) {
       if (!isStudentAssigned(activePortalStudent)) {
         return (
@@ -1803,6 +1825,19 @@ export function App() {
     );
   }
 
+  // 2. Direct Portal URL link view (when not logged in as student, e.g. via parent WhatsApp link ?portal=std-1)
+  if (portalStudentId && isLoadingData && !activePortalStudent) {
+    return (
+      <div className="min-h-screen bg-[#022c22] text-[#f0f9f6] font-sans selection:bg-[#fbbf24] selection:text-[#064e3b]" dir="rtl">
+        <TopProgressBar isLoading={true} />
+        <AnimatedBackground />
+        <div className="max-w-4xl mx-auto px-4 py-12 relative z-10">
+          <GenericTabSkeleton title="جارٍ استرجاع سجل الطالب وبوابة ولي الأمر سحابياً..." />
+        </div>
+      </div>
+    );
+  }
+
   // 3. If Portal Link was invalid / not found after data loaded
   if (portalStudentId && !isLoadingData && !activePortalStudent) {
     return (
@@ -1882,8 +1917,8 @@ export function App() {
     );
   }
 
-  // If user is a teacher with no assigned halaqah yet:
-  if (currentUser?.role === 'admin' && !isSupervisor && assignedHalaqahs.length === 0) {
+  // If user is a teacher with no assigned halaqah yet (only checked after data finishes loading):
+  if (currentUser?.role === 'admin' && !isSupervisor && assignedHalaqahs.length === 0 && !isLoadingData) {
     return (
       <div
         data-complex-themed={activeComplex?.theme ? "true" : undefined}
@@ -1967,6 +2002,9 @@ export function App() {
       dir="rtl"
     >
       <AnimatedBackground />
+
+      {/* Modern Global Non-Intrusive Top Progress Bar (مثل المنصات العالمية) */}
+      <TopProgressBar isLoading={isLoadingData || isTabLoading || isSyncing} />
 
       {/* Main Navbar with Settings Button & Halaqah Selector */}
       <Navbar
@@ -2064,8 +2102,16 @@ export function App() {
               </div>
             </div>
 
-            {/* Quick Switching Buttons */}
+            {/* Quick Switching Buttons & Live Cloud Sync */}
             <div className="flex items-center gap-1.5 flex-wrap self-stretch sm:self-auto justify-end">
+              <LiveSyncButton
+                isSyncing={isSyncing}
+                onRefresh={() => loadAllData(true)}
+                lastSyncedText={lastSyncedTime}
+                label="تحديث مباشر"
+                compact={true}
+              />
+
               {canSwitchComplex && scopedComplexes.length > 1 && (
                 <button
                   type="button"
@@ -2162,7 +2208,7 @@ export function App() {
             return (
               <button
                 key={item.id}
-                onClick={() => setActiveTab(item.id)}
+                onClick={() => handleNavigateTab(item.id)}
                 className={`relative flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-bold whitespace-nowrap transition-colors cursor-pointer select-none ${
                   isActive
                     ? 'text-[#064e3b] font-black'
@@ -2206,18 +2252,22 @@ export function App() {
           })}
         </motion.div>
 
-        {/* Tab Views with Buttery Smooth Animated Transitions */}
+        {/* Tab Views with Buttery Smooth Animated Transitions (مثل المنصات العالمية) */}
         <AnimatePresence mode="wait">
           <motion.div
-            key={activeTab}
-            initial={{ opacity: 0, y: 14, scale: 0.995 }}
+            key={activeTab + (isTabLoading || isLoadingData ? '_loading' : '_ready')}
+            initial={{ opacity: 0, y: 10, scale: 0.995 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -10, scale: 0.995 }}
-            transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
+            exit={{ opacity: 0, y: -8, scale: 0.995 }}
+            transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
             className="w-full space-y-6"
           >
-            {activeTab === 'home' && (
-              <HomeTab
+            {isTabLoading || isLoadingData ? (
+              <TabSkeleton activeTab={activeTab} />
+            ) : (
+              <>
+                {activeTab === 'home' && (
+                  <HomeTab
                 students={displayedStudents}
                 attendance={displayedAttendance}
                 evaluations={displayedEvaluations}
@@ -2260,6 +2310,8 @@ export function App() {
                 complexName={activeComplex?.name || scopedSettings.complexName}
                 activeComplex={activeComplex}
                 halaqahName={halaqahs.find(h => h.id === activeHalaqahId)?.name || scopedSettings.halaqahName}
+                isSyncing={isSyncing}
+                onRefreshData={() => loadAllData(true)}
               />
             )}
 
@@ -2412,6 +2464,8 @@ export function App() {
                 complexes={complexes}
                 onSaveComplex={handleSaveComplex}
               />
+            )}
+              </>
             )}
           </motion.div>
         </AnimatePresence>
